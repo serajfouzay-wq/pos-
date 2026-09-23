@@ -1,0 +1,127 @@
+/*
+ * Layout uses logical properties (inline/block, start/end) throughout so the
+ * whole UI mirrors automatically when <html dir="rtl">.
+ */
+:root {
+  --brand-primary: #1f6feb;
+  --brand-accent: #f59e0b;
+  --surface: #0f1115;
+  --surface-raised: #181b22;
+  --text: #e8eaf0;
+  --text-muted: #9aa1b2;
+  --danger: #f87171;
+  --radius: 16px;
+
+  color-scheme: dark;
+  font-family: 'Segoe UI', 'Segoe UI Arabic', Tahoma, system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--surface);
+  -webkit-font-smoothing: antialiased;
+  user-select: none; /* touch-first kiosk UI */
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-block-size: 100vh;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.shell {
+  display: grid;
+  place-items: center;
+  min-block-size: 100vh;
+  padding: 24px;
+  background: radial-gradient(
+    circle at 20% 0%,
+    color-mix(in srgb, var(--brand-primary) 25%, transparent),
+    transparent 60%
+  );
+}
+
+.shell__card {
+  inline-size: min(560px, 100%);
+  padding: 32px;
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  border: 1px solid color-mix(in srgb, var(--brand-primary) 30%, transparent);
+  box-shadow: 0 24px 64px rgb(0 0 0 / 40%);
+}
+
+.shell__header h1 {
+  margin-block: 12px 4px;
+  font-size: 2rem;
+}
+
+.shell__badge {
+  display: inline-block;
+  padding-block: 4px;
+  padding-inline: 12px;
+  border-radius: 999px;
+  background: var(--brand-accent);
+  color: #111;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.shell__muted {
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.shell__facts {
+  display: grid;
+  gap: 16px;
+  margin-block: 28px;
+}
+
+.shell__facts dt {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.shell__facts dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.shell__locales {
+  display: flex;
+  gap: 8px;
+  margin-block-start: 6px;
+}
+
+.shell__locale {
+  min-block-size: 44px; /* touch target */
+  padding-inline: 18px;
+  border-radius: 10px;
+  border: 1px solid var(--text-muted);
+  background: transparent;
+  color: var(--text);
+}
+
+.shell__locale[aria-pressed='true'] {
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
+}
+
+.shell__status {
+  color: var(--text-muted);
+}
+
+.shell__status--error {
+  color: var(--danger);
+  max-inline-size: 480px;
+  text-align: center;
+}

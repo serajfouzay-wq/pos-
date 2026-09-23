@@ -1,0 +1,26 @@
+[package]
+name = "pos-generator"
+description = "POS Factory — master generator app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+default-run = "pos-generator"
+
+[lib]
+name = "pos_generator_lib"
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[dependencies]
+pos-core.workspace = true
+tauri.workspace = true
+tauri-plugin-single-instance.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "Main till window. Grants only the commands the till UI needs.",
+  "windows": ["main"],
+  "permissions": ["core:default", "allow-app-info"]
+}

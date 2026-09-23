@@ -1,0 +1,24 @@
+{
+  "name": "@pos/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared types, Zod schemas, money arithmetic, RBAC matrix and sync/IPC contracts for the POS Factory System.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./contracts/*": "./contracts/*"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "vitest": "^5.0.1"
+  }
+}

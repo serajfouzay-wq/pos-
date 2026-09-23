@@ -1,0 +1,25 @@
+# deps / build
+node_modules/
+dist/
+.turbo/
+target/
+*.tsbuildinfo
+
+# tauri generated
+apps/*/src-tauri/gen/schemas/
+
+# env / secrets — license signing keys must NEVER be committed
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# os / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json

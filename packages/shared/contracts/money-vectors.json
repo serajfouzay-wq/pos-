@@ -1,0 +1,152 @@
+{
+  "div_round": [
+    { "n": 7, "d": 2, "mode": "half_up", "expected": 4 },
+    { "n": 7, "d": 2, "mode": "half_even", "expected": 4 },
+    { "n": 7, "d": 2, "mode": "toward_zero", "expected": 3 },
+    { "n": 5, "d": 2, "mode": "half_up", "expected": 3 },
+    { "n": 5, "d": 2, "mode": "half_even", "expected": 2 },
+    { "n": 5, "d": 2, "mode": "toward_zero", "expected": 2 },
+    { "n": -5, "d": 2, "mode": "half_up", "expected": -3 },
+    { "n": -5, "d": 2, "mode": "half_even", "expected": -2 },
+    { "n": -5, "d": 2, "mode": "toward_zero", "expected": -2 },
+    { "n": -7, "d": 2, "mode": "half_up", "expected": -4 },
+    { "n": -7, "d": 2, "mode": "half_even", "expected": -4 },
+    { "n": -7, "d": 2, "mode": "toward_zero", "expected": -3 },
+    { "n": 10, "d": 3, "mode": "half_up", "expected": 3 },
+    { "n": 11, "d": 3, "mode": "half_up", "expected": 4 },
+    { "n": 11, "d": 3, "mode": "toward_zero", "expected": 3 },
+    { "n": -11, "d": 3, "mode": "half_even", "expected": -4 },
+    { "n": 5, "d": -2, "mode": "half_up", "expected": -3 },
+    { "n": 5, "d": -2, "mode": "half_even", "expected": -2 },
+    { "n": 0, "d": 7, "mode": "half_up", "expected": 0 }
+  ],
+  "apply_bps": [
+    { "amount": 1000, "bps": 500, "mode": "half_up", "expected": 50 },
+    { "amount": 1234, "bps": 500, "mode": "half_up", "expected": 62 },
+    { "amount": 1250, "bps": 1000, "mode": "half_up", "expected": 125 },
+    { "amount": 25, "bps": 5000, "mode": "half_up", "expected": 13 },
+    { "amount": 25, "bps": 5000, "mode": "half_even", "expected": 12 },
+    { "amount": 999, "bps": 1500, "mode": "half_up", "expected": 150 },
+    { "amount": 1, "bps": 5000, "mode": "half_up", "expected": 1 },
+    { "amount": 1, "bps": 5000, "mode": "half_even", "expected": 0 },
+    { "amount": 1, "bps": 5000, "mode": "toward_zero", "expected": 0 }
+  ],
+  "multiply_by_quantity": [
+    { "unit_price": 1250, "quantity_milli": 1000, "mode": "half_up", "expected": 1250 },
+    { "unit_price": 1250, "quantity_milli": 3000, "mode": "half_up", "expected": 3750 },
+    { "unit_price": 1999, "quantity_milli": 250, "mode": "half_up", "expected": 500 },
+    { "unit_price": 3, "quantity_milli": 500, "mode": "half_up", "expected": 2 },
+    { "unit_price": 3, "quantity_milli": 500, "mode": "half_even", "expected": 2 },
+    { "unit_price": 3, "quantity_milli": 500, "mode": "toward_zero", "expected": 1 },
+    { "unit_price": 5, "quantity_milli": 500, "mode": "half_up", "expected": 3 },
+    { "unit_price": 5, "quantity_milli": 500, "mode": "half_even", "expected": 2 }
+  ],
+  "extract_inclusive_tax": [
+    { "gross": 1150, "rate_bps": 1500, "mode": "half_up", "net": 1000, "tax": 150 },
+    { "gross": 1000, "rate_bps": 500, "mode": "half_up", "net": 952, "tax": 48 },
+    { "gross": 105, "rate_bps": 500, "mode": "half_up", "net": 100, "tax": 5 },
+    { "gross": 1, "rate_bps": 500, "mode": "half_up", "net": 1, "tax": 0 },
+    { "gross": 999, "rate_bps": 0, "mode": "half_up", "net": 999, "tax": 0 },
+    { "gross": 5750, "rate_bps": 1500, "mode": "half_up", "net": 5000, "tax": 750 },
+    { "gross": 1000, "rate_bps": 1500, "mode": "half_up", "net": 870, "tax": 130 }
+  ],
+  "convert_currency": [
+    {
+      "amount": 1000,
+      "base": "KWD",
+      "quote": "USD",
+      "numerator": 13,
+      "denominator": 4,
+      "mode": "half_up",
+      "expected": 325
+    },
+    {
+      "amount": 100,
+      "base": "USD",
+      "quote": "KWD",
+      "numerator": 307,
+      "denominator": 1000,
+      "mode": "half_up",
+      "expected": 307
+    },
+    {
+      "amount": 1,
+      "base": "USD",
+      "quote": "KWD",
+      "numerator": 307,
+      "denominator": 1000,
+      "mode": "half_up",
+      "expected": 3
+    },
+    {
+      "amount": 500,
+      "base": "JPY",
+      "quote": "USD",
+      "numerator": 67,
+      "denominator": 10000,
+      "mode": "half_up",
+      "expected": 335
+    },
+    {
+      "amount": 1234,
+      "base": "USD",
+      "quote": "EUR",
+      "numerator": 23,
+      "denominator": 25,
+      "mode": "half_up",
+      "expected": 1135
+    },
+    {
+      "amount": 1,
+      "base": "USD",
+      "quote": "EUR",
+      "numerator": 1,
+      "denominator": 2,
+      "mode": "half_up",
+      "expected": 1
+    },
+    {
+      "amount": 1,
+      "base": "USD",
+      "quote": "EUR",
+      "numerator": 1,
+      "denominator": 2,
+      "mode": "half_even",
+      "expected": 0
+    }
+  ],
+  "allocate": [
+    { "amount": 100, "weights": [1, 1, 1], "expected": [34, 33, 33] },
+    { "amount": 1000, "weights": [1, 1], "expected": [500, 500] },
+    { "amount": 10, "weights": [3, 7], "expected": [3, 7] },
+    { "amount": 1001, "weights": [1, 1], "expected": [501, 500] },
+    { "amount": 7, "weights": [1, 1, 1, 1], "expected": [2, 2, 2, 1] },
+    { "amount": -100, "weights": [1, 1, 1], "expected": [-34, -33, -33] },
+    { "amount": 100, "weights": [0, 1], "expected": [0, 100] },
+    { "amount": 10, "weights": [1, 2], "expected": [3, 7] }
+  ],
+  "to_decimal_string": [
+    { "amount": 1500, "currency": "KWD", "expected": "1.500" },
+    { "amount": 5, "currency": "USD", "expected": "0.05" },
+    { "amount": -5, "currency": "USD", "expected": "-0.05" },
+    { "amount": 0, "currency": "USD", "expected": "0.00" },
+    { "amount": 123456, "currency": "USD", "expected": "1234.56" },
+    { "amount": 500, "currency": "JPY", "expected": "500" },
+    { "amount": 1, "currency": "KWD", "expected": "0.001" },
+    { "amount": -1234, "currency": "JPY", "expected": "-1234" }
+  ],
+  "parse_decimal_string": [
+    { "input": "1.5", "currency": "KWD", "expected": 1500 },
+    { "input": "1", "currency": "USD", "expected": 100 },
+    { "input": "0.05", "currency": "USD", "expected": 5 },
+    { "input": "12.", "currency": "USD", "expected": 1200 },
+    { "input": "-3.25", "currency": "USD", "expected": -325 },
+    { "input": " 2.5 ", "currency": "USD", "expected": 250 },
+    { "input": "500", "currency": "JPY", "expected": 500 },
+    { "input": "1.234", "currency": "USD", "expected": null },
+    { "input": "1.0", "currency": "JPY", "expected": null },
+    { "input": "abc", "currency": "USD", "expected": null },
+    { "input": "", "currency": "USD", "expected": null },
+    { "input": "1e3", "currency": "USD", "expected": null }
+  ]
+}

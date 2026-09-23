@@ -1,0 +1,55 @@
+{
+  "roles": {
+    "cashier": [
+      "catalog.view",
+      "customer.lookup",
+      "sale.create",
+      "receipt.print",
+      "drawer.kick",
+      "loyalty.redeem"
+    ],
+    "manager": [
+      "catalog.view",
+      "customer.lookup",
+      "sale.create",
+      "receipt.print",
+      "drawer.kick",
+      "loyalty.redeem",
+      "sale.refund",
+      "sale.void",
+      "discount.apply",
+      "shift.open",
+      "shift.close",
+      "receipt.reprint",
+      "report.view",
+      "report.z_run",
+      "inventory.view"
+    ],
+    "owner": [
+      "catalog.view",
+      "customer.lookup",
+      "sale.create",
+      "receipt.print",
+      "drawer.kick",
+      "loyalty.redeem",
+      "sale.refund",
+      "sale.void",
+      "discount.apply",
+      "shift.open",
+      "shift.close",
+      "receipt.reprint",
+      "report.view",
+      "report.z_run",
+      "inventory.view",
+      "catalog.manage",
+      "inventory.adjust",
+      "customer.manage",
+      "supplier.manage",
+      "purchase_order.manage",
+      "analytics.view",
+      "audit.view",
+      "user.manage",
+      "settings.manage"
+    ]
+  }
+}

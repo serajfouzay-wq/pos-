@@ -1,0 +1,17 @@
+{
+  "AED": { "exponent": 2 },
+  "BHD": { "exponent": 3 },
+  "EGP": { "exponent": 2 },
+  "EUR": { "exponent": 2 },
+  "GBP": { "exponent": 2 },
+  "IQD": { "exponent": 3 },
+  "JOD": { "exponent": 3 },
+  "JPY": { "exponent": 0 },
+  "KWD": { "exponent": 3 },
+  "MYR": { "exponent": 2 },
+  "OMR": { "exponent": 3 },
+  "QAR": { "exponent": 2 },
+  "SAR": { "exponent": 2 },
+  "TND": { "exponent": 3 },
+  "USD": { "exponent": 2 }
+}

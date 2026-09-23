@@ -1,0 +1,34 @@
+{
+  "name": "@pos/pos-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline-first POS client generated per customer by the POS Factory.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
+    "lint": "eslint .",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@pos/shared": "workspace:*",
+    "@tanstack/react-query": "^5.103.2",
+    "@tauri-apps/api": "^2.11.1",
+    "framer-motion": "^13.4.2",
+    "i18next": "^26.4.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-i18next": "^17.0.15",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.5",
+    "@types/node": "^22.19.0",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "vite": "^8.3.0"
+  }
+}

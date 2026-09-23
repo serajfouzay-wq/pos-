@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "client_id": "8f14e45f-ceea-467a-9a4e-3b2f1c9d0a11",
+  "client_slug": "dev-demo-cafe",
+  "display_name": "Demo Cafe (Development)",
+  "business_type": "cafe",
+  "locale": { "default": "en", "supported": ["en", "ar"] },
+  "currency": { "base": "KWD", "accepted": ["USD"] },
+  "tax": { "registration_number": null, "prices_include_tax": true, "default_rate_bps": 0 },
+  "receipt": {
+    "logo_asset": null,
+    "header_lines": ["Demo Cafe", "Kuwait City"],
+    "footer_text": "Thank you for visiting!",
+    "show_tax_number": false,
+    "paper_width_mm": 80
+  },
+  "branding": { "primary_color": "#1F6FEB", "accent_color": "#F59E0B" },
+  "features": {
+    "loyalty": true,
+    "kitchen_display": false,
+    "multi_currency": true,
+    "purchase_orders": false
+  }
+}

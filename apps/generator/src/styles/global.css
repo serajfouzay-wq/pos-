@@ -1,0 +1,128 @@
+/* Logical properties throughout so the layout mirrors under dir="rtl". */
+:root {
+  --brand: #7c3aed;
+  --surface: #0e0f13;
+  --surface-raised: #16181f;
+  --border: #262a35;
+  --text: #e8eaf0;
+  --text-muted: #9aa1b2;
+  --danger: #f87171;
+
+  color-scheme: dark;
+  font-family: 'Segoe UI', 'Segoe UI Arabic', Tahoma, system-ui, sans-serif;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--surface);
+  -webkit-font-smoothing: antialiased;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-block-size: 100vh;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 20px 12px;
+  background: var(--surface-raised);
+  border-inline-end: 1px solid var(--border);
+}
+
+.sidebar__brand {
+  font-weight: 700;
+  font-size: 1.1rem;
+  padding-inline: 12px;
+  margin-block-end: 16px;
+}
+
+.sidebar__item {
+  position: relative;
+  text-align: start;
+  padding-block: 10px;
+  padding-inline: 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+}
+
+.sidebar__item > span:last-child {
+  position: relative;
+}
+
+.sidebar__indicator {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--brand) 30%, transparent);
+}
+
+.sidebar__footer {
+  display: grid;
+  gap: 8px;
+  margin-block-start: auto;
+  padding-inline: 12px;
+  font-size: 0.85rem;
+}
+
+.sidebar__locales {
+  display: flex;
+  gap: 6px;
+}
+
+.chip {
+  padding-block: 4px;
+  padding-inline: 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+}
+
+.chip[aria-pressed='true'] {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+
+.content {
+  padding: 32px 40px;
+}
+
+.content h1 {
+  margin-block: 0 4px;
+}
+
+.muted {
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.placeholder {
+  margin-block-start: 32px;
+  padding: 48px;
+  border: 1px dashed var(--border);
+  border-radius: 16px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.error {
+  color: var(--danger);
+}
