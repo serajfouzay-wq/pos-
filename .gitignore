@@ -14,6 +14,8 @@ apps/*/src-tauri/gen/schemas/
 !.env.example
 *.pem
 *.key
+# …except the documented, committed DEVELOPMENT key pair
+!keys/dev/*.pem
 secrets/
 
 # os / editor

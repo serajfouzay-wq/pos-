@@ -2,8 +2,9 @@
  * Licensing contract.
  *
  * The generator signs an RS256 JWT with the claims below. The POS binary
- * embeds only the public key and verifies the signature, expiry and hardware
- * fingerprint in Rust before any database access. On mismatch it halts.
+ * embeds only the public key and verifies signature, issuer/audience, client,
+ * expiry and hardware fingerprint in Rust *before* the database is opened.
+ * Any failure halts the till: no data access until it is resolved.
  */
 import { z } from 'zod';
 import { BusinessTypeSchema } from './business';
@@ -12,6 +13,7 @@ import { NonNegativeIntSchema, PositiveIntSchema, TimestampSchema, UuidSchema } 
 
 export const LICENSE_ISSUER = 'pos-factory';
 export const LICENSE_AUDIENCE = 'pos-client';
+export const ACTIVATION_CODE_PREFIX = 'POSACT1.';
 
 /** JWT payload. Standard claims use JWT naming (seconds since epoch). */
 export const LicenseClaimsSchema = z.object({
@@ -19,7 +21,7 @@ export const LicenseClaimsSchema = z.object({
   aud: z.literal(LICENSE_AUDIENCE),
   /** Client id. */
   sub: UuidSchema,
-  /** License id. */
+  /** Token id, unique per issued device token. */
   jti: UuidSchema,
   iat: PositiveIntSchema,
   nbf: PositiveIntSchema.optional(),
@@ -29,40 +31,69 @@ export const LicenseClaimsSchema = z.object({
   fp: Sha256HexSchema,
   client_slug: z.string().min(1),
   business_type: BusinessTypeSchema,
+  /** Enforced by the cloud across all of the client's activations. */
   max_devices: PositiveIntSchema,
 });
 export type LicenseClaims = z.infer<typeof LicenseClaimsSchema>;
 
-/** States in which the app must halt and show the lock screen. */
+/** States in which the till halts and shows the lock / activation screen. */
 export const HALTING_LICENSE_STATES = [
   'missing',
-  'invalid_signature',
+  'invalid_token',
   'fingerprint_mismatch',
   'expired',
   'revoked',
   'grace_exhausted',
+  'hardware_error',
+  'storage_error',
 ] as const;
+export const HaltingLicenseStateSchema = z.enum(HALTING_LICENSE_STATES);
+export type HaltingLicenseState = z.infer<typeof HaltingLicenseStateSchema>;
 
-/** Result of the `verify_license` IPC command. */
+/** States from which entering a new token can recover the till. */
+export const REACTIVATABLE_LICENSE_STATES: readonly HaltingLicenseState[] = [
+  'missing',
+  'invalid_token',
+  'fingerprint_mismatch',
+  'expired',
+  'revoked',
+  'grace_exhausted',
+];
+
+/** Result of `verify_license` / `activate_license`; payload of the `license://status` event. */
 export const LicenseStatusSchema = z.discriminatedUnion('state', [
   z.object({
     state: z.literal('valid'),
+    /** Token id (`jti`). */
     license_id: UuidSchema,
     client_id: UuidSchema,
     expires_at: TimestampSchema.nullable(),
     last_seen_at: TimestampSchema.nullable(),
-    /** Online check failed but the last success is within the 7-day window. */
+    /** The latest cloud validation attempt failed, or none has succeeded yet. */
     offline: z.boolean(),
-    grace_days_remaining: NonNegativeIntSchema,
+    /** Whole days of offline trading left; `null` = not enforced (no cloud configured). */
+    grace_days_remaining: NonNegativeIntSchema.nullable(),
   }),
   z.object({
-    state: z.enum(HALTING_LICENSE_STATES),
-    /** Human-readable reason; never includes the fingerprint inputs. */
+    state: HaltingLicenseStateSchema,
+    /** Human-readable reason; never includes fingerprint inputs or key material. */
     reason: z.string(),
   }),
 ]);
 export type LicenseStatus = z.infer<typeof LicenseStatusSchema>;
 
-export function isLicenseUsable(status: LicenseStatus): boolean {
+export function isLicenseUsable(
+  status: LicenseStatus,
+): status is Extract<LicenseStatus, { state: 'valid' }> {
   return status.state === 'valid';
 }
+
+/** Result of `get_activation_request`: what a new till shows the operator. */
+export const ActivationRequestInfoSchema = z.object({
+  /** Paste into the generator. Contains only public data. */
+  code: z.string().startsWith(ACTIVATION_CODE_PREFIX),
+  client_id: UuidSchema,
+  device_name: z.string(),
+  fingerprint: Sha256HexSchema,
+});
+export type ActivationRequestInfo = z.infer<typeof ActivationRequestInfoSchema>;

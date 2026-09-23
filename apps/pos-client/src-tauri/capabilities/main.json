@@ -3,5 +3,11 @@
   "identifier": "main",
   "description": "Main till window. Grants only the commands the till UI needs.",
   "windows": ["main"],
-  "permissions": ["core:default", "allow-app-info"]
+  "permissions": [
+    "core:default",
+    "allow-app-info",
+    "allow-verify-license",
+    "allow-get-activation-request",
+    "allow-activate-license"
+  ]
 }

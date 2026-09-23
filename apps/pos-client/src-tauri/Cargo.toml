@@ -15,14 +15,29 @@ crate-type = ["rlib"]
 [build-dependencies]
 tauri-build.workspace = true
 pos-core.workspace = true
+pos-license.workspace = true
 serde_json.workspace = true
 
 [dependencies]
 pos-core.workspace = true
+pos-hwid.workspace = true
+pos-license.workspace = true
 tauri.workspace = true
 tauri-plugin-single-instance.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+chrono.workspace = true
+gethostname.workspace = true
+rsa.workspace = true
+rusqlite.workspace = true
+thiserror.workspace = true
+tokio = { version = "1", features = ["time"] }
+ureq.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+pos-license = { workspace = true, features = ["issuer"] }
+tempfile.workspace = true
 
 [lints]
 workspace = true

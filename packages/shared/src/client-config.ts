@@ -62,11 +62,30 @@ export const ClientConfigSchema = z
       multi_currency: z.boolean(),
       purchase_orders: z.boolean(),
     }),
+    /**
+     * Supabase project for license validation (and sync from Phase 4).
+     * Both `null` = fully offline deployment; the offline grace period is then
+     * not enforced because there is nothing to validate against.
+     */
+    cloud: z.object({
+      supabase_url: z
+        .url({ protocol: /^https$/ })
+        .max(200)
+        .nullable(),
+      supabase_anon_key: z.string().min(1).nullable(),
+    }),
   })
   .refine((config) => config.locale.supported.includes(config.locale.default), {
     message: 'locale.default must be one of locale.supported',
     path: ['locale', 'default'],
   })
+  .refine(
+    (config) => (config.cloud.supabase_url === null) === (config.cloud.supabase_anon_key === null),
+    {
+      message: 'supabase_url and supabase_anon_key must both be set or both be null',
+      path: ['cloud'],
+    },
+  )
   .refine((config) => !config.currency.accepted.includes(config.currency.base), {
     message: 'currency.accepted must not repeat the base currency',
     path: ['currency', 'accepted'],

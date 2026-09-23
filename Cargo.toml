@@ -2,6 +2,8 @@
 resolver = "2"
 members = [
   "crates/pos-core",
+  "crates/pos-hwid",
+  "crates/pos-license",
   "apps/pos-client/src-tauri",
   "apps/generator/src-tauri",
 ]
@@ -21,6 +23,23 @@ tauri-plugin-single-instance = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+uuid = { version = "1", features = ["serde", "v4", "v7"] }
+rsa = { version = "0.9", features = ["sha2", "pem"] }
+pkcs8 = { version = "0.10", features = ["pem", "std"] }
+sha2 = "0.10"
+hmac = "0.12"
+hkdf = "0.12"
+hex = "0.4"
+base64 = "0.22"
+rand = "0.8"
+zeroize = { version = "1", features = ["derive"] }
+rusqlite = { version = "0.40", features = ["bundled-sqlcipher-vendored-openssl"] }
+ureq = { version = "3", default-features = false, features = ["rustls", "json", "platform-verifier", "win-system-proxy"] }
+gethostname = "1"
+tempfile = "3"
+pos-hwid = { path = "crates/pos-hwid" }
+pos-license = { path = "crates/pos-license" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
@@ -37,3 +56,15 @@ lto = true
 opt-level = "s"
 panic = "abort"
 strip = true
+
+# RSA key generation / scrypt are unbearably slow unoptimised; keep dev builds usable.
+[profile.dev.package.num-bigint-dig]
+opt-level = 3
+[profile.dev.package.rsa]
+opt-level = 3
+[profile.dev.package.scrypt]
+opt-level = 3
+[profile.dev.package.salsa20]
+opt-level = 3
+[profile.dev.package.sha2]
+opt-level = 3

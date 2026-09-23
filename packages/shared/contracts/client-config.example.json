@@ -4,9 +4,19 @@
   "client_slug": "dev-demo-cafe",
   "display_name": "Demo Cafe (Development)",
   "business_type": "cafe",
-  "locale": { "default": "en", "supported": ["en", "ar"] },
-  "currency": { "base": "KWD", "accepted": ["USD"] },
-  "tax": { "registration_number": null, "prices_include_tax": true, "default_rate_bps": 0 },
+  "locale": {
+    "default": "en",
+    "supported": ["en", "ar"]
+  },
+  "currency": {
+    "base": "KWD",
+    "accepted": ["USD"]
+  },
+  "tax": {
+    "registration_number": null,
+    "prices_include_tax": true,
+    "default_rate_bps": 0
+  },
   "receipt": {
     "logo_asset": null,
     "header_lines": ["Demo Cafe", "Kuwait City"],
@@ -14,11 +24,18 @@
     "show_tax_number": false,
     "paper_width_mm": 80
   },
-  "branding": { "primary_color": "#1F6FEB", "accent_color": "#F59E0B" },
+  "branding": {
+    "primary_color": "#1F6FEB",
+    "accent_color": "#F59E0B"
+  },
   "features": {
     "loyalty": true,
     "kitchen_display": false,
     "multi_currency": true,
     "purchase_orders": false
+  },
+  "cloud": {
+    "supabase_url": null,
+    "supabase_anon_key": null
   }
 }

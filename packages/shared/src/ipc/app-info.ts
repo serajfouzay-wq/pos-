@@ -11,6 +11,10 @@ const AppInfoBaseSchema = z.object({
 export const PosAppInfoSchema = AppInfoBaseSchema.extend({
   app: z.literal('pos-client'),
   client: ClientConfigSchema,
+  /** The committed development public key is embedded: anyone can mint licenses. */
+  dev_license_key: z.boolean(),
+  /** Id of the embedded license public key (JWT `kid`). */
+  license_key_id: z.string(),
 });
 export type PosAppInfo = z.infer<typeof PosAppInfoSchema>;
 

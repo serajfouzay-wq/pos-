@@ -3,6 +3,7 @@ import type { UseQueryResult } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { NotInTauriError } from '../../ipc/queries';
+import { LicensesScreen } from '../licenses/LicensesScreen';
 import { SECTIONS, useNavigationStore } from '../../stores/navigation';
 import { useUiStore } from '../../stores/ui';
 
@@ -83,8 +84,14 @@ export function ShellScreen({ appInfo }: Props) {
             transition={{ duration: 0.18 }}
           >
             <h1>{t(`nav.${section}`)}</h1>
-            <p className="muted">{t('shell.phase')}</p>
-            <div className="placeholder">{t('shell.comingSoon')}</div>
+            {section === 'licenses' ? (
+              <LicensesScreen />
+            ) : (
+              <>
+                <p className="muted">{t('shell.phase')}</p>
+                <div className="placeholder">{t('shell.comingSoon')}</div>
+              </>
+            )}
           </motion.section>
         </AnimatePresence>
       </main>

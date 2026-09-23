@@ -2,3 +2,4 @@
 //! Same conventions as the POS client (see its `commands/mod.rs`).
 
 pub mod app_info;
+pub mod license;

@@ -1,0 +1,6 @@
+# Supabase CLI project config (only what this repo needs; CLI defaults apply otherwise).
+project_id = "pos-factory"
+
+[functions.license-validate]
+# Called by tills with the project's anon key as the bearer token.
+verify_jwt = true

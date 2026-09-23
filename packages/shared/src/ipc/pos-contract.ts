@@ -13,7 +13,7 @@ import {
   PaymentMethodSchema,
   TransactionKindSchema,
 } from '../entities/sales';
-import { LicenseStatusSchema } from '../license';
+import { ActivationRequestInfoSchema, LicenseStatusSchema } from '../license';
 import { MinorUnitsSchema, NonNegativeMinorUnitsSchema } from '../money';
 import {
   BasisPointsSchema,
@@ -169,7 +169,16 @@ const NoArgs = z.object({});
 
 export const POS_IPC = {
   app_info: command(NoArgs, PosAppInfoSchema, 1),
+  /** Re-evaluates the license (signature, hardware, expiry, grace). Pre-authentication. */
   verify_license: command(NoArgs, LicenseStatusSchema, 2),
+  /** The code an unlicensed till shows the operator. Pre-authentication. */
+  get_activation_request: command(NoArgs, ActivationRequestInfoSchema, 2),
+  /** Installs a token from the generator if it verifies for this machine. Pre-authentication. */
+  activate_license: command(
+    z.object({ token: z.string().min(1).max(8192) }),
+    LicenseStatusSchema,
+    2,
+  ),
   create_transaction: command(z.object({ payload: TransactionPayloadSchema }), ReceiptSchema, 3),
   /**
    * Takes a transaction id, not a receipt body: Rust re-renders from the stored,

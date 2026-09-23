@@ -17,10 +17,15 @@ tauri-build.workspace = true
 
 [dependencies]
 pos-core.workspace = true
+pos-license = { workspace = true, features = ["issuer"] }
 tauri.workspace = true
 tauri-plugin-single-instance.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+uuid.workspace = true
 
 [lints]
 workspace = true

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-license-key-status"
+description = "Enables the license_key_status command without any pre-configured scope."
+commands.allow = ["license_key_status"]
+
+[[permission]]
+identifier = "deny-license-key-status"
+description = "Denies the license_key_status command without any pre-configured scope."
+commands.deny = ["license_key_status"]

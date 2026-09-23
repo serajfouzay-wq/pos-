@@ -115,3 +115,18 @@ describe('textDirection', () => {
     expect(textDirection('en')).toBe('ltr');
   });
 });
+
+describe('license contract', () => {
+  it('parses every status shape Rust emits', async () => {
+    const { examples } = (await import('../../contracts/license-status.examples.json')).default;
+    const { LicenseStatusSchema, HALTING_LICENSE_STATES } = await import('../license');
+    const states = examples.map((example) => LicenseStatusSchema.parse(example).state);
+    expect(states).toEqual(['valid', ...HALTING_LICENSE_STATES]);
+  });
+
+  it('parses the fixture token claims', async () => {
+    const fixture = (await import('../../contracts/license-fixture.json')).default;
+    const { LicenseClaimsSchema } = await import('../license');
+    expect(LicenseClaimsSchema.parse(fixture.claims).client_slug).toBe('dev-demo-cafe');
+  });
+});

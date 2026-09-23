@@ -1,0 +1,318 @@
+{
+  "_comment": "Generated from @pos/shared LOCAL_TABLES (POS_REGENERATE_FIXTURES=1 pnpm test). The Rust migrations are tested against this file.",
+  "tables": {
+    "license": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "license_id",
+        "client_id",
+        "token",
+        "fingerprint_hash",
+        "issued_at",
+        "expires_at",
+        "last_seen_at",
+        "revoked_at",
+        "clock_high_water_at"
+      ],
+      "append_only": false
+    },
+    "device": {
+      "columns": ["id", "created_at", "updated_at", "deleted_at", "name"],
+      "append_only": false
+    },
+    "users": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "display_name",
+        "role",
+        "pin_hash",
+        "is_active",
+        "failed_pin_attempts",
+        "locked_until"
+      ],
+      "append_only": false
+    },
+    "categories": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "name",
+        "name_localized",
+        "parent_id",
+        "sort_order",
+        "color"
+      ],
+      "append_only": false
+    },
+    "products": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "name",
+        "name_localized",
+        "category_id",
+        "sku",
+        "barcode",
+        "price",
+        "cost",
+        "tax_rate_bps",
+        "unit",
+        "sold_by_weight",
+        "track_stock",
+        "stock_on_hand_milli",
+        "reorder_threshold_milli",
+        "reorder_quantity_milli",
+        "image_asset",
+        "quick_key_position",
+        "is_active"
+      ],
+      "append_only": false
+    },
+    "stock_movements": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "product_id",
+        "quantity_delta_milli",
+        "reason",
+        "reference_id",
+        "device_id",
+        "user_id",
+        "occurred_at"
+      ],
+      "append_only": true
+    },
+    "discount_rules": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "name",
+        "kind",
+        "value",
+        "scope",
+        "target_id",
+        "min_subtotal",
+        "starts_at",
+        "ends_at",
+        "is_active"
+      ],
+      "append_only": false
+    },
+    "customers": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "display_name",
+        "phone",
+        "email",
+        "loyalty_points",
+        "notes"
+      ],
+      "append_only": false
+    },
+    "loyalty_ledger": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "customer_id",
+        "transaction_id",
+        "points_delta",
+        "reason",
+        "device_id",
+        "user_id"
+      ],
+      "append_only": true
+    },
+    "shifts": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "device_id",
+        "opened_by",
+        "closed_by",
+        "opened_at",
+        "closed_at",
+        "opening_float",
+        "closing_float",
+        "expected_cash",
+        "actual_cash",
+        "variance",
+        "notes"
+      ],
+      "append_only": false
+    },
+    "transactions": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "kind",
+        "original_transaction_id",
+        "receipt_number",
+        "device_id",
+        "shift_id",
+        "cashier_id",
+        "approved_by",
+        "customer_id",
+        "order_type",
+        "table_label",
+        "currency",
+        "subtotal",
+        "discount_total",
+        "tax_total",
+        "total",
+        "loyalty_points_earned",
+        "loyalty_points_redeemed",
+        "notes",
+        "idempotency_key",
+        "occurred_at"
+      ],
+      "append_only": true
+    },
+    "transaction_items": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "transaction_id",
+        "line_number",
+        "product_id",
+        "product_name",
+        "sku",
+        "unit_price",
+        "quantity_milli",
+        "modifiers",
+        "discount_amount",
+        "tax_rate_bps",
+        "tax_amount",
+        "line_total",
+        "course",
+        "note"
+      ],
+      "append_only": true
+    },
+    "transaction_payments": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "transaction_id",
+        "method",
+        "amount",
+        "tendered_currency",
+        "tendered_amount",
+        "rate_numerator",
+        "rate_denominator",
+        "change_given",
+        "reference"
+      ],
+      "append_only": true
+    },
+    "suppliers": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "name",
+        "contact_name",
+        "phone",
+        "email",
+        "tax_number",
+        "notes"
+      ],
+      "append_only": false
+    },
+    "purchase_orders": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "supplier_id",
+        "reference",
+        "status",
+        "currency",
+        "total",
+        "ordered_at",
+        "expected_at",
+        "created_by",
+        "notes"
+      ],
+      "append_only": false
+    },
+    "purchase_order_items": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "purchase_order_id",
+        "product_id",
+        "product_name",
+        "quantity_ordered_milli",
+        "quantity_received_milli",
+        "unit_cost"
+      ],
+      "append_only": false
+    },
+    "audit_log": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "user_id",
+        "role",
+        "action",
+        "entity_type",
+        "entity_id",
+        "before",
+        "after",
+        "device_id",
+        "occurred_at"
+      ],
+      "append_only": true
+    },
+    "sync_queue": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "event_type",
+        "entity_type",
+        "entity_id",
+        "payload",
+        "attempt_count",
+        "sent_at",
+        "next_attempt_at",
+        "last_error"
+      ],
+      "append_only": false
+    }
+  }
+}

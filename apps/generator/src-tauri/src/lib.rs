@@ -1,8 +1,11 @@
-//! POS Factory generator core. Later phases add client management, license
-//! signing (the RSA private key never leaves this process) and GitHub Actions
-//! build triggers — all behind typed IPC commands.
+//! POS Factory generator core. Client management and GitHub Actions build
+//! triggers arrive in Phase 5 — all behind typed IPC commands. License signing
+//! (Phase 2) keeps the private key inside this process.
 
 mod commands;
+mod signing;
+
+use std::sync::Arc;
 
 use tauri::Manager;
 
@@ -14,7 +17,20 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
-        .invoke_handler(tauri::generate_handler![commands::app_info::app_info])
+        .setup(|app| {
+            let dir = app.path().app_data_dir()?.join("keys");
+            app.manage(Arc::new(signing::KeyStore::new(dir)));
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            commands::app_info::app_info,
+            commands::license::license_key_status,
+            commands::license::create_license_key,
+            commands::license::unlock_license_key,
+            commands::license::lock_license_key,
+            commands::license::decode_activation_request,
+            commands::license::issue_license,
+        ])
         .run(tauri::generate_context!())
         .expect("failed to start the POS Factory generator");
 }

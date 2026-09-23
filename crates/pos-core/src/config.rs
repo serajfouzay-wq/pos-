@@ -74,6 +74,26 @@ pub struct Features {
     pub purchase_orders: bool,
 }
 
+/// Supabase project the POS validates its license against (and, from Phase 4,
+/// syncs with). Both `null` = fully offline deployment: no cloud validation,
+/// so the offline grace period is not enforced.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CloudConfig {
+    pub supabase_url: Option<String>,
+    pub supabase_anon_key: Option<String>,
+}
+
+impl CloudConfig {
+    /// `(url, anon_key)` when cloud validation is configured.
+    pub fn endpoint(&self) -> Option<(&str, &str)> {
+        match (&self.supabase_url, &self.supabase_anon_key) {
+            (Some(url), Some(key)) => Some((url.trim_end_matches('/'), key)),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ClientConfig {
@@ -88,6 +108,7 @@ pub struct ClientConfig {
     pub receipt: ReceiptLayout,
     pub branding: Branding,
     pub features: Features,
+    pub cloud: CloudConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -199,6 +220,23 @@ impl ClientConfig {
         }
         if !is_hex_color(&self.branding.accent_color) {
             return Err(invalid("branding.accent_color", "expected #RRGGBB"));
+        }
+        match (&self.cloud.supabase_url, &self.cloud.supabase_anon_key) {
+            (None, None) => {}
+            (Some(url), Some(key)) => {
+                if !url.starts_with("https://") || url.len() > 200 {
+                    return Err(invalid("cloud.supabase_url", "must be an https:// URL"));
+                }
+                if key.is_empty() {
+                    return Err(invalid("cloud.supabase_anon_key", "must not be empty"));
+                }
+            }
+            _ => {
+                return Err(invalid(
+                    "cloud",
+                    "supabase_url and supabase_anon_key must both be set or both be null",
+                ))
+            }
         }
         Ok(())
     }

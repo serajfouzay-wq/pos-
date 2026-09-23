@@ -1,0 +1,30 @@
+[package]
+name = "pos-hwid"
+description = "Hardware fingerprinting for POS licensing and database key derivation."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+hex.workspace = true
+hkdf.workspace = true
+hmac.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+zeroize.workspace = true
+
+# NOTE: wmi accepts windows/windows-core >=0.59,<0.63. Cargo.lock pins its
+# windows-core to 0.61.x so it matches the `windows` 0.61 that Tauri pulls in;
+# a blind `cargo update` can split them and break the Windows build (the
+# windows CI job catches it). Fix with:
+#   cargo update -p windows-core@0.62.x --precise 0.61.2
+[target.'cfg(windows)'.dependencies]
+serde.workspace = true
+winreg = "0.56"
+wmi = { version = "0.18", default-features = false }
+
+[lints]
+workspace = true

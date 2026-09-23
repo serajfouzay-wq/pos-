@@ -3,5 +3,14 @@
   "identifier": "main",
   "description": "Generator dashboard window.",
   "windows": ["main"],
-  "permissions": ["core:default", "allow-app-info"]
+  "permissions": [
+    "core:default",
+    "allow-app-info",
+    "allow-license-key-status",
+    "allow-create-license-key",
+    "allow-unlock-license-key",
+    "allow-lock-license-key",
+    "allow-decode-activation-request",
+    "allow-issue-license"
+  ]
 }

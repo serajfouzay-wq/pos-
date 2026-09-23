@@ -1,6 +1,14 @@
 /// Every `#[tauri::command]` exposed by the generator. Adding one here
 /// generates an `allow-<name>` permission that a capability must grant.
-const COMMANDS: &[&str] = &["app_info"];
+const COMMANDS: &[&str] = &[
+    "app_info",
+    "license_key_status",
+    "create_license_key",
+    "unlock_license_key",
+    "lock_license_key",
+    "decode_activation_request",
+    "issue_license",
+];
 
 fn main() {
     let target = std::env::var("TARGET").expect("cargo sets it");

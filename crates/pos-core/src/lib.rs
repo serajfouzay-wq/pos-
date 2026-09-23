@@ -8,5 +8,6 @@ pub mod currency;
 pub mod error;
 pub mod money;
 pub mod rbac;
+pub mod time;
 
 pub use error::{IpcError, IpcErrorCode, IpcResult};

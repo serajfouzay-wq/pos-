@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-verify-license"
+description = "Enables the verify_license command without any pre-configured scope."
+commands.allow = ["verify_license"]
+
+[[permission]]
+identifier = "deny-verify-license"
+description = "Denies the verify_license command without any pre-configured scope."
+commands.deny = ["verify_license"]

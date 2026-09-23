@@ -31,6 +31,21 @@ jobs:
       - run: pnpm format:check
       - run: pnpm turbo run typecheck lint test build
 
+  edge-functions:
+    name: Supabase Edge Functions (Deno check · test)
+    runs-on: ubuntu-latest
+    env:
+      # Keep Deno from adopting the pnpm workspace's package.json.
+      DENO_NO_PACKAGE_JSON: '1'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno test --no-config --allow-read supabase/functions/_shared
+      - run: deno check --config deno.json index.ts
+        working-directory: supabase/functions/license-validate
+
   rust:
     name: Rust (fmt · clippy · test)
     runs-on: ubuntu-latest
@@ -49,12 +64,32 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
 
+  windows:
+    name: Windows (real WMI fingerprint · SQLCipher on MSVC)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: ilammy/setup-nasm@v1 # vendored OpenSSL (SQLCipher) assembler
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy -p pos-hwid --all-targets -- -D warnings
+      # Reads the runner's actual registry + WMI identifiers.
+      - run: cargo test -p pos-hwid
+      - run: cargo test -p pos-license -p pos-client
+
   windows-installer:
     name: Windows NSIS installer (${{ matrix.app }})
     # Installers are slow to build; produce them for main and on demand.
     if: github.event_name != 'pull_request'
-    needs: [frontend, rust]
+    needs: [frontend, rust, windows]
     runs-on: windows-latest
+    env:
+      # Demo installers embed the committed DEVELOPMENT license key (the app
+      # shows a warning banner). Client builds from the generator (Phase 5)
+      # set POS_LICENSE_PUBLIC_KEY to the real key instead.
+      POS_ALLOW_DEV_LICENSE_KEY: '1'
     strategy:
       fail-fast: false
       matrix:
@@ -67,6 +102,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - uses: dtolnay/rust-toolchain@stable
+      - uses: ilammy/setup-nasm@v1
       - uses: Swatinem/rust-cache@v2
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @pos/${{ matrix.app }} tauri build

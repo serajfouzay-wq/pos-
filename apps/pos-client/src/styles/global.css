@@ -125,3 +125,92 @@ button {
   max-inline-size: 480px;
   text-align: center;
 }
+
+/* ── License gate ─────────────────────────────────────────────────────── */
+
+.license {
+  inline-size: min(720px, 100%);
+}
+
+.license__lock {
+  font-size: 2rem;
+}
+
+.license h1 {
+  margin-block: 8px 4px;
+}
+
+.license__reason {
+  margin-block: 12px 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 5%);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.activation {
+  display: grid;
+  gap: 24px;
+  margin-block-start: 24px;
+}
+
+.activation h2 {
+  font-size: 1rem;
+  margin-block: 0 8px;
+}
+
+.activation__code {
+  inline-size: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--text-muted);
+  background: var(--surface);
+  color: var(--text);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.8rem;
+  word-break: break-all;
+  resize: vertical;
+  user-select: text;
+  direction: ltr; /* codes and tokens are always LTR, even in Arabic */
+}
+
+.button {
+  margin-block-start: 10px;
+  min-block-size: 44px;
+  padding-inline: 20px;
+  border-radius: 10px;
+  border: 1px solid var(--text-muted);
+  background: transparent;
+  color: var(--text);
+}
+
+.button--primary {
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.banner {
+  position: fixed;
+  inset-inline: 0;
+  inset-block-start: 0;
+  z-index: 10;
+  padding: 8px 16px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.banner--warning {
+  background: var(--brand-accent);
+  color: #111;
+}
+
+.banner--danger {
+  background: #b91c1c;
+  color: #fff;
+}

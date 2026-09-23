@@ -21,3 +21,5 @@ export * from './ipc/client';
 export * from './ipc/app-info';
 export * from './ipc/pos-contract';
 export * from './ipc/generator-contract';
+export * from './ipc/events';
+export * from './tables';

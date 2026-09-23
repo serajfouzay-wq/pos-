@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-issue-license"
+description = "Enables the issue_license command without any pre-configured scope."
+commands.allow = ["issue_license"]
+
+[[permission]]
+identifier = "deny-issue-license"
+description = "Denies the issue_license command without any pre-configured scope."
+commands.deny = ["issue_license"]

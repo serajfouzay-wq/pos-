@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { LicenseGate } from '../features/license/LicenseGate';
 import { ShellScreen } from '../features/shell/ShellScreen';
 import { useAppInfo } from '../ipc/queries';
 import { useUiStore } from '../stores/ui';
@@ -16,5 +17,9 @@ export function App() {
     }
   }, [appInfo.data, setLocale]);
 
-  return <ShellScreen appInfo={appInfo} />;
+  return (
+    <LicenseGate>
+      <ShellScreen appInfo={appInfo} />
+    </LicenseGate>
+  );
 }

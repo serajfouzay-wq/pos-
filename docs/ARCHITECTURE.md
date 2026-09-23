@@ -102,12 +102,129 @@ Cashiers get the spec's sales-only set plus what selling needs: `catalog.view`,
 (a customer entitlement, not a discretionary discount). Manual discounts remain
 `discount.apply` (manager+).
 
+### D12 — SQLite access is `rusqlite` + SQLCipher, not `tauri-plugin-sql`
+
+The spec named `tauri-plugin-sql`. We use `rusqlite` with
+`bundled-sqlcipher-vendored-openssl` (SQLCipher 4.14 / SQLite 3.51) from Rust only:
+
+- `tauri-plugin-sql` exists to give **JavaScript** a SQL API. Our rule is that
+  the frontend never touches SQLite; shipping the plugin would put a raw-SQL
+  surface one capability typo away.
+- Its connection is opened from JS (`Database.load("sqlite:…")`), so the
+  SQLCipher key would have to pass **through the webview**. Here the key is
+  derived and used entirely inside Rust and never crosses IPC.
+- SQLite is single-writer anyway: one `Mutex<Connection>` on a blocking thread
+  is simpler and faster than an async pool for a till.
+
+Swapping later is contained to `apps/pos-client/src-tauri/src/db`.
+
+### D13 — Hardware fingerprint: two independent derivations
+
+`pos-hwid` reads CPU brand + `MachineGuid` (registry) + baseboard serial (WMI)
+
+- `C:` volume serial (WMI) — never the MAC — normalises them and encodes them
+  length-prefixed (no boundary collisions).
+
+* **License fingerprint** = `HMAC-SHA256(key = client_id, components)`. It is
+  public (inside the JWT). Keying by client id makes one PC's fingerprints
+  unlinkable across clients.
+* **Database key** = `HKDF-SHA256(components, salt = H(client_id))`. It is _not_
+  derived from the public fingerprint, so a leaked license file doesn't reveal
+  the key. It is zeroized after use and never persisted.
+
+`MachineGuid` is mandatory; other components may be empty (cheap boards often
+report no serial). WMI runs on its own thread (COM apartment isolation).
+
+Threat model, stated plainly: this binds data and licenses to a machine and
+defeats copying the install to other hardware or pulling the `.db` off to read
+it. It does **not** stop an attacker who has the whole disk _and_ reverse-
+engineers the binary, because every input is on that disk. If that becomes a
+requirement, wrap an extra random secret with Windows DPAPI/TPM and mix it in.
+
+### D14 — License verification happens before the database exists
+
+Order in `license::LicenseService`:
+
+1. hardware → 2. `license.jwt` → 3. RS256 signature, issuer/audience, client
+   id, **fingerprint** (`verify_identity`) → 4. only now derive the key and open
+   `pos.db` → 5. revocation, validity window, grace.
+
+The token is kept in a plain file beside the database because it must be read
+before the (fingerprint-keyed) database can be opened. It is signed, so it is
+tamper-evident. Business data is reachable only via `LicenseService::database()`,
+which fails closed unless the status is `valid`. The frontend's `LicenseGate`
+mirrors this for UX only.
+
+Hardware changes: the old token no longer matches, so the till halts with
+`fingerprint_mismatch`. Once the operator issues a new token, the old database
+can't be decrypted. It is renamed to `pos.db.orphaned-<ts>` (never deleted)
+and a fresh one is created; cloud sync (Phase 4) restores the data.
+
+### D15 — RS256 implemented narrowly, not via a JWT library
+
+`pos-license::jwt` accepts exactly `alg: RS256` and checks `kid` against the
+embedded key's id (first 8 bytes of SHA-256(SPKI)). `alg: none` and HS/RS
+confusion can't happen by construction. PKCS#1 v1.5 signatures are
+deterministic, which makes `contracts/license-fixture.json` a reproducible
+golden token. The Rust verifier, the Rust issuer and the edge function's
+WebCrypto verifier are all tested against it.
+
+### D16 — Offline grace, and why the clock can't be wound back
+
+- `last_seen_at` only moves forward on a successful cloud check (server time).
+- The grace deadline is `max(iat, last_seen_at) + 7 days`. Anchoring on `iat`
+  means deleting the local database does **not** reset the window.
+- The database keeps `clock_high_water_at`, the highest time ever observed.
+  All time checks (grace, `exp`, `nbf`) use `max(wall clock, high-water)`. That
+  is why time checks run _after_ the database opens (the regression test
+  `expiry_halts_and_cannot_be_dodged_by_winding_the_clock_back` pins this).
+  Server time resets the mark, which forgives a clock that ran fast.
+- Revocation is persisted locally, so going offline cannot undo it.
+- No cloud configured (`cloud: null`) = fully offline deployment; grace is not
+  enforced because there is nothing to validate against.
+- The till re-evaluates every 15 minutes and validates every 6 h (every 15 min
+  while unreachable). Status changes are pushed to the UI as
+  `license://status` events.
+
+### D17 — Cloud validation contract
+
+`POST /functions/v1/license-validate` with `{ token, fingerprint, device_name,
+app_version }`. The function verifies the signature (WebCrypto), then calls
+`validate_device_activation` (plpgsql, advisory lock per client) to:
+
+- enforce `max_devices` across the client's non-revoked activations;
+- honour client-level and device-level revocation;
+- record `last_seen_at`.
+
+Seat limits only move with a _newer_ token (`limits_issued_at`), so replaying an
+old token can't raise them. A database failure returns 5xx, which the till
+treats as "unreachable" and never as "revoked". Tables have RLS with no
+policies; only the service role touches them.
+
+### D18 — Signing key custody (generator)
+
+RSA-3072, stored only as encrypted PKCS#8 (scrypt + AES-256-CBC), unlocked per
+session by passphrase (≥ 12 chars), never overwritten. Signing uses blinding
+(`RandomizedSigner`) as a mitigation for RUSTSEC-2023-0071 ("Marvin"), which
+needs an attacker timing many private-key operations. That doesn't fit a
+local, operator-driven signer, but the note stays here until `rsa` ships a
+constant-time release.
+
+### D19 — The development key is committed, and fenced off
+
+`keys/dev/` holds a documented development key pair so builds and tests work
+out of the box. `build.rs` recognises it by key id. Release builds refuse to
+embed it unless `POS_ALLOW_DEV_LICENSE_KEY=1` (used for CI demo installers),
+and the app shows a red "development license key" banner whenever it's
+embedded.
+
 ## Open items for upcoming phases
 
-- **SQLCipher driver (Phase 2).** `tauri-plugin-sql` is designed around a
-  JavaScript API, which our rule forbids the frontend from using. The plan is to
-  use the database layer from Rust only and link SQLite with SQLCipher
-  (`libsqlite3-sys` `bundled-sqlcipher`); we'll confirm keying works with the
-  plugin's sqlx pool or drop to sqlx/rusqlite directly, and record the outcome here.
 - **User PIN hashing (Phase 3).** Argon2id; `pin_hash` never crosses IPC
-  (`UserSchema` omits it).
+  (`UserSchema` omits it). Data commands obtain the DB only through
+  `state.license.database()?`, then `rbac::authorize`.
+- **Supabase mirror tables (Phase 4).** Everything in `contracts/db-schema.json`
+  except `license`, `device` and `sync_queue`.
+- **Delivering tokens (Phase 5).** Today the activation code and token are
+  copy-pasted. The generator can push issued tokens to Supabase so tills fetch
+  them online, with copy-paste as the offline fallback.

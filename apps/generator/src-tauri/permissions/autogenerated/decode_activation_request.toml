@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-decode-activation-request"
+description = "Enables the decode_activation_request command without any pre-configured scope."
+commands.allow = ["decode_activation_request"]
+
+[[permission]]
+identifier = "deny-decode-activation-request"
+description = "Denies the decode_activation_request command without any pre-configured scope."
+commands.deny = ["decode_activation_request"]
