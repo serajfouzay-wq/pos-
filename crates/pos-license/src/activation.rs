@@ -16,6 +16,8 @@ pub const PREFIX: &str = "POSACT1.";
 pub struct ActivationRequest {
     pub client_id: Uuid,
     pub fingerprint: String,
+    /// SHA-256 of the till's sync key; signed into the license as `dkh`.
+    pub device_key_hash: String,
     pub device_name: String,
     pub app_version: String,
 }
@@ -64,6 +66,9 @@ impl ActivationRequest {
         if !is_fingerprint_hash(&self.fingerprint) {
             return Err(ActivationError::InvalidField("fingerprint"));
         }
+        if !is_fingerprint_hash(&self.device_key_hash) {
+            return Err(ActivationError::InvalidField("device key"));
+        }
         let name_len = self.device_name.chars().count();
         if name_len == 0 || name_len > 120 {
             return Err(ActivationError::InvalidField("device name"));
@@ -83,6 +88,7 @@ mod tests {
         ActivationRequest {
             client_id: Uuid::from_u128(0x8f14e45f_ceea_467a_9a4e_3b2f1c9d0a11),
             fingerprint: "ab".repeat(32),
+            device_key_hash: "cd".repeat(32),
             device_name: "TILL-01".into(),
             app_version: "0.1.0".into(),
         }

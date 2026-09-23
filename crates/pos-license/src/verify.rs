@@ -14,6 +14,8 @@ pub const CLOCK_SKEW: Duration = Duration::minutes(5);
 pub struct Expected<'a> {
     pub client_id: Uuid,
     pub fingerprint: &'a str,
+    /// This machine's `DeviceKey::public_hash()`.
+    pub device_key_hash: &'a str,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -82,7 +84,7 @@ pub fn verify_identity(
     if claims.sub != expected.client_id {
         return Err(Rejection::WrongClient);
     }
-    if claims.fp != expected.fingerprint {
+    if claims.fp != expected.fingerprint || claims.dkh != expected.device_key_hash {
         return Err(Rejection::FingerprintMismatch);
     }
 

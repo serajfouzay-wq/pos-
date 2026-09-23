@@ -9,6 +9,7 @@ use crate::license::cloud::{CloudValidator, SupabaseValidator};
 use crate::license::{LicenseEnv, LicenseService};
 use crate::printing::{template_for, PrintService, SystemPrinters};
 use crate::session::SessionStore;
+use crate::sync::{HttpTransport, SyncEngine, SyncTransport};
 
 /// Validated at build time by `build.rs`; parsed again at startup.
 const EMBEDDED_CLIENT_CONFIG: &str = include_str!(concat!(env!("OUT_DIR"), "/client_config.json"));
@@ -40,6 +41,7 @@ pub struct AppState {
     pub license: Arc<LicenseService>,
     pub session: SessionStore,
     pub printer: Arc<PrintService>,
+    pub sync: Arc<SyncEngine>,
 }
 
 /// Receipt logo from the client's bundled assets (`<resources>/client-assets/`).
@@ -71,6 +73,10 @@ impl AppState {
         let cloud = client.cloud.endpoint().map(|(url, key)| {
             Arc::new(SupabaseValidator::new(url, key)) as Arc<dyn CloudValidator>
         });
+        let transport = client
+            .cloud
+            .endpoint()
+            .map(|(url, key)| Arc::new(HttpTransport::new(url, key)) as Arc<dyn SyncTransport>);
 
         let license = LicenseService::new(LicenseEnv {
             client: Arc::clone(&client),
@@ -92,6 +98,7 @@ impl AppState {
             license: Arc::new(license),
             session: SessionStore::default(),
             printer: Arc::new(printer),
+            sync: Arc::new(SyncEngine::new(transport, Arc::new(SystemClock))),
         })
     }
 }

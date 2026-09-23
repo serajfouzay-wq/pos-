@@ -79,6 +79,7 @@ pub async fn open_shift(state: State<'_, AppState>, opening_float: i64) -> IpcRe
         Ok(summary)
     })
     .await
+    .inspect(|_| state.sync.nudge())
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -129,4 +130,5 @@ pub async fn close_shift(
         Ok(summary)
     })
     .await
+    .inspect(|_| state.sync.nudge())
 }

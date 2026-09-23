@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { SYNC_ENTITY_STRATEGY } from '../sync';
 import { APPEND_ONLY_TABLES, LOCAL_TABLES } from '../tables';
 
 const CONTRACT = fileURLToPath(new URL('../../contracts/db-schema.json', import.meta.url));
@@ -12,6 +13,8 @@ function derived() {
       {
         columns: Object.keys(schema.shape),
         append_only: (APPEND_ONLY_TABLES as readonly string[]).includes(name),
+        /** Conflict strategy when synced; `null` = local-only table. */
+        sync: (SYNC_ENTITY_STRATEGY as Record<string, string | undefined>)[name] ?? null,
       },
     ]),
   );
@@ -28,6 +31,12 @@ describe('db-schema contract', () => {
       writeFileSync(CONTRACT, `${JSON.stringify(derived(), null, 2)}\n`);
     }
     expect(JSON.parse(readFileSync(CONTRACT, 'utf8'))).toEqual(derived());
+  });
+
+  it('only syncs tables that exist locally', () => {
+    for (const entity of Object.keys(SYNC_ENTITY_STRATEGY)) {
+      expect(Object.keys(LOCAL_TABLES)).toContain(entity);
+    }
   });
 
   it('gives every table the soft-delete base columns', () => {

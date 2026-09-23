@@ -139,6 +139,18 @@ fn is_kebab_slug(s: &str) -> bool {
             .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
 }
 
+/// https anywhere; plain http only on loopback (local development stack).
+fn is_allowed_cloud_url(url: &str) -> bool {
+    if url.starts_with("https://") {
+        return true;
+    }
+    let Some(rest) = url.strip_prefix("http://") else {
+        return false;
+    };
+    let host = rest.split(['/', ':']).next().unwrap_or_default();
+    matches!(host, "localhost" | "127.0.0.1")
+}
+
 fn is_hex_color(s: &str) -> bool {
     s.len() == 7 && s.starts_with('#') && s.bytes().skip(1).all(|b| b.is_ascii_hexdigit())
 }
@@ -224,8 +236,11 @@ impl ClientConfig {
         match (&self.cloud.supabase_url, &self.cloud.supabase_anon_key) {
             (None, None) => {}
             (Some(url), Some(key)) => {
-                if !url.starts_with("https://") || url.len() > 200 {
-                    return Err(invalid("cloud.supabase_url", "must be an https:// URL"));
+                if !is_allowed_cloud_url(url) || url.len() > 200 {
+                    return Err(invalid(
+                        "cloud.supabase_url",
+                        "must be an https:// URL (http is allowed for localhost only)",
+                    ));
                 }
                 if key.is_empty() {
                     return Err(invalid("cloud.supabase_anon_key", "must not be empty"));

@@ -7,6 +7,12 @@
 //! | ----------------------- | ---------------------------------------------------- | ------------------------------ |
 //! | [`FingerprintHash`]     | `HMAC-SHA256(key = client_id, canonical components)` | the license token (`fp` claim) |
 //! | [`DatabaseKey`]         | `HKDF-SHA256(ikm = components, salt = H(client_id))` | SQLCipher, never persisted     |
+//! | [`DeviceKey`]           | `HKDF-SHA256(…, info = "device-key")`                | sync API credential            |
+//!
+//! The device key authenticates the till to the cloud sync API. Only its
+//! SHA-256 travels in the activation code and gets signed into the license
+//! (`dkh` claim), so a license token seen in a chat app is not enough to
+//! reach a client's data.
 //!
 //! The fingerprint hash is public (it is inside a readable JWT), so the
 //! database key must not be derivable from it — hence a separate derivation
@@ -40,6 +46,8 @@ mod windows;
 const DOMAIN: &[u8] = b"pos-factory/hwid/v1";
 const DB_KEY_INFO: &[u8] = b"pos-factory/sqlcipher-key/v1";
 const DB_SALT_DOMAIN: &[u8] = b"pos-factory/sqlcipher-salt/v1";
+const DEVICE_KEY_INFO: &[u8] = b"pos-factory/device-key/v1";
+const DEVICE_KEY_SALT_DOMAIN: &[u8] = b"pos-factory/device-key-salt/v1";
 const COLLECT_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -157,6 +165,39 @@ impl HardwareComponents {
         hkdf.expand(DB_KEY_INFO, &mut key)
             .expect("32 bytes is a valid HKDF-SHA256 output length");
         DatabaseKey(Zeroizing::new(key))
+    }
+
+    /// The till's sync API credential (independent of the database key).
+    pub fn device_key(&self, client_id: Uuid) -> DeviceKey {
+        let salt = Sha256::new()
+            .chain_update(DEVICE_KEY_SALT_DOMAIN)
+            .chain_update(client_id.as_bytes())
+            .finalize();
+        let hkdf = Hkdf::<Sha256>::new(Some(&salt), &self.canonical());
+        let mut key = [0u8; 32];
+        hkdf.expand(DEVICE_KEY_INFO, &mut key)
+            .expect("32 bytes is a valid HKDF-SHA256 output length");
+        DeviceKey(Zeroizing::new(key))
+    }
+}
+
+/// 256-bit sync API secret. Sent (over TLS) only to the sync endpoints.
+pub struct DeviceKey(Zeroizing<[u8; 32]>);
+
+impl DeviceKey {
+    pub fn secret_hex(&self) -> Zeroizing<String> {
+        Zeroizing::new(hex::encode(*self.0))
+    }
+
+    /// SHA-256 of the raw key, hex — public; signed into the license as `dkh`.
+    pub fn public_hash(&self) -> String {
+        hex::encode(Sha256::digest(*self.0))
+    }
+}
+
+impl fmt::Debug for DeviceKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("DeviceKey(..)")
     }
 }
 
@@ -309,6 +350,27 @@ mod tests {
             *sample()
                 .database_key(Uuid::from_u128(1))
                 .sqlcipher_pragma_value()
+        );
+    }
+
+    #[test]
+    fn device_key_is_independent_and_its_hash_is_public_safe() {
+        let hw = sample();
+        let key = hw.device_key(CLIENT);
+        assert_eq!(key.secret_hex().len(), 64);
+        assert_ne!(*key.secret_hex(), key.public_hash());
+        assert_ne!(
+            *key.secret_hex(),
+            *hw.database_key(CLIENT).sqlcipher_pragma_value()[2..66].to_owned()
+        );
+        assert_ne!(key.public_hash(), hw.fingerprint(CLIENT).to_string());
+        assert_eq!(key.public_hash(), sample().device_key(CLIENT).public_hash());
+        use sha2::Digest;
+        let raw = hex::decode(key.secret_hex().as_str()).expect("hex");
+        assert_eq!(
+            hex::encode(Sha256::digest(raw)),
+            key.public_hash(),
+            "server recomputes the hash"
         );
     }
 

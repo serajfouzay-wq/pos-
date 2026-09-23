@@ -173,6 +173,7 @@ pub fn issue_license(
         nbf: None,
         exp: options.expires_at.map(Timestamp::unix_seconds),
         fp: request.fingerprint.clone(),
+        dkh: request.device_key_hash.clone(),
         client_slug: options.client_slug.clone(),
         business_type: options.business_type,
         max_devices: options.max_devices,

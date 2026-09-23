@@ -8,6 +8,7 @@ import type {
   QuoteRequest,
   Role,
   SessionStatus,
+  SyncStatus,
   TransactionPayloadInput,
 } from '@pos/shared';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -29,6 +30,7 @@ export const queryKeys = {
   printerStatus: ['printer_status'] as const,
   printerSettings: ['printer_settings'] as const,
   printers: ['printers'] as const,
+  syncStatus: ['sync_status'] as const,
 };
 
 /** Raised when the UI is loaded in a plain browser instead of the Tauri shell. */
@@ -319,5 +321,53 @@ export function useSavePrinterSettings() {
 export function useTestPrinter() {
   return useMutation({
     mutationFn: (target: PrinterTarget) => ipc.call('test_printer', { target }),
+  });
+}
+
+// ── Cloud sync ─────────────────────────────────────────────────────────────
+
+/** Local data another till may have changed; refetched after a sync round. */
+const SYNCED_QUERIES = [
+  ['products'],
+  queryKeys.categories,
+  queryKeys.users,
+  queryKeys.loginUsers,
+  queryKeys.session,
+] as const;
+
+/**
+ * Keeps the UI in step with the background sync worker: every completed
+ * round refetches synced data (a new till gets the shop's users and
+ * catalogue without a restart). Mounted once, above the session gate.
+ */
+export function useSyncEvents() {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    let previous: SyncStatus['state'] | undefined;
+    return subscribe('sync_status', (status) => {
+      queryClient.setQueryData<SyncStatus>(queryKeys.syncStatus, status);
+      if (status.state === 'idle' && previous === 'syncing') {
+        for (const queryKey of SYNCED_QUERIES) void queryClient.invalidateQueries({ queryKey });
+      }
+      previous = status.state;
+    });
+  }, [queryClient]);
+}
+
+export function useSyncStatus() {
+  return useQuery({
+    queryKey: queryKeys.syncStatus,
+    queryFn: () => ipc.call('sync_status'),
+    refetchInterval: 60_000,
+  });
+}
+
+export function useSyncNow() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => ipc.call('sync_to_cloud'),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.syncStatus });
+    },
   });
 }

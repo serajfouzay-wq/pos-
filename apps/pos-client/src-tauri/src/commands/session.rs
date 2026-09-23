@@ -29,8 +29,17 @@ pub struct SessionStatus {
 pub async fn session_status(state: State<'_, AppState>) -> IpcResult<SessionStatus> {
     let db = state.license.database()?;
     let session = state.session.current();
+    let (license, engine) = (Arc::clone(&state.license), Arc::clone(&state.sync));
     blocking(move || {
-        let needs_setup = users::count_active(&db.conn()).ipc()? == 0;
+        let mut needs_setup = users::count_active(&db.conn()).ipc()? == 0;
+        // A new till of an existing shop: fetch the shop's users before
+        // offering owner setup. Best effort and once — offline falls through
+        // to setup, and the worker's later rounds still bring the users in
+        // (the UI re-checks on `sync://status`).
+        if needs_setup && engine.enabled() && !engine.attempted() {
+            let _ = crate::sync::round(&license, &engine);
+            needs_setup = users::count_active(&db.conn()).ipc()? == 0;
+        }
         Ok(SessionStatus {
             needs_setup,
             session,
@@ -130,6 +139,7 @@ pub async fn bootstrap_owner(
     })
     .await?;
     state.session.set(session.clone());
+    state.sync.nudge();
     Ok(session)
 }
 
@@ -181,6 +191,7 @@ pub async fn login(state: State<'_, AppState>, user_id: Uuid, pin: String) -> Ip
     })
     .await?;
     state.session.set(session.clone());
+    state.sync.nudge();
     Ok(session)
 }
 
@@ -208,6 +219,7 @@ pub async fn logout(state: State<'_, AppState>) -> IpcResult<()> {
             .ipc()
         })
         .await;
+        state.sync.nudge();
     }
     state.session.clear();
     Ok(())

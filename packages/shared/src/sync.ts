@@ -35,7 +35,6 @@ export const SYNC_ENTITY_STRATEGY = {
   suppliers: 'last_write_wins',
   purchase_orders: 'last_write_wins',
   purchase_order_items: 'last_write_wins',
-  device_activations: 'last_write_wins',
   transactions: 'append_only',
   transaction_items: 'append_only',
   transaction_payments: 'append_only',
@@ -50,6 +49,12 @@ export const SYNC_ENTITY_TYPES = Object.keys(SYNC_ENTITY_STRATEGY) as [
   ...SyncEntityType[],
 ];
 export const SyncEntityTypeSchema = z.enum(SYNC_ENTITY_TYPES);
+
+/** Aggregates kept as caches of additive-delta tables; never taken from a synced row. */
+export const DERIVED_COLUMNS = {
+  products: ['stock_on_hand_milli'],
+  customers: ['loyalty_points'],
+} as const satisfies Partial<Record<SyncEntityType, readonly string[]>>;
 
 /**
  * `upsert` — full-row snapshot for LWW tables (soft deletes are upserts that set `deleted_at`).
@@ -137,12 +142,36 @@ export const SyncPullResponseSchema = z.object({
     z.object({
       entity_type: SyncEntityTypeSchema,
       row: RowPayloadSchema,
+      /**
+       * Event that produced the server's current version of a LWW row (its
+       * tie-breaker); `null` for append-only rows. The device compares
+       * `(updated_at, event_id)` against its own pending edit exactly as the
+       * server does, so both sides always pick the same winner.
+       */
+      event_id: UuidSchema.nullable(),
     }),
   ),
   next_cursor: z.string().nullable(),
   has_more: z.boolean(),
 });
 export type SyncPullResponse = z.infer<typeof SyncPullResponseSchema>;
+
+/** Result of `sync_status` and payload of the `sync://status` event. */
+export const SyncStatusSchema = z.object({
+  /**
+   * - `disabled`: no cloud configured for this client (offline-only install).
+   * - `idle`: last attempt succeeded. `syncing`: a round is running.
+   * - `offline`: the cloud could not be reached; changes are kept locally.
+   * - `error`: the cloud refused the device (e.g. license needs re-activation).
+   */
+  state: z.enum(['disabled', 'idle', 'syncing', 'offline', 'error']),
+  pending: NonNegativeIntSchema,
+  /** Events the server permanently rejected (kept locally for diagnosis). */
+  parked: NonNegativeIntSchema,
+  last_synced_at: TimestampSchema.nullable(),
+  last_error: z.string().nullable(),
+});
+export type SyncStatus = z.infer<typeof SyncStatusSchema>;
 
 /** Result of the `sync_to_cloud` IPC command. */
 export const SyncReportSchema = z.object({

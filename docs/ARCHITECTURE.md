@@ -293,6 +293,101 @@ key. Enter completes the scan (≥ 4 chars), and the buffer also clears on
 Enter or a 300 ms timeout. While focus is in a text field the keys belong to
 the field (a barcode input simply receives the scan).
 
+### D27 — Sync rounds: outbox in, pages out
+
+A round pushes, then pulls. It runs every 60 s, right after any change (the
+commands nudge the worker), when the webview reports `online`, and from the
+status-bar "Sync now".
+
+- **Push.** Pending `sync_queue` rows go out in outbox order, 500 per request,
+  and `event_id` is the server's dedupe key. The row is marked `sent_at` only
+  on an explicit acknowledgement, so a lost response simply replays.
+- **Rejections.** A retryable rejection backs off `min(2^n · 30 s, 1 h)`. A
+  permanent one (SQLSTATE 22xxx/23xxx: bad data) is **parked**: it gets
+  `deleted_at` and `last_error`, stays on disk for diagnosis, and never blocks
+  the queue. The status shows the parked count.
+- **Pull.** Pages are applied after a server cursor. Each page commits in one
+  SQLite transaction with the cursor advance, and re-applying a page is
+  harmless.
+- **Pulled rows bypass the repo layer.** They produce no outbox event, so
+  nothing echoes back. One bad row is skipped, reported, and doesn't wedge
+  the shop.
+- **Locking.** The database lock is never held across a network call. An
+  offline round is a cheap no-op, and changes wait in the outbox.
+
+### D28 — A license token is not a sync credential
+
+Tokens travel through chat apps and email, so possession must not grant access
+to a shop's data. Activation now binds a **device key** as well:
+`HKDF(hardware components, client_id, "pos-factory/device-key/v1")`, which is
+independent of both the fingerprint and the database key.
+
+- The activation code carries `sha256(device key)`, and the signed token
+  pins it as the `dkh` claim.
+- Every sync request sends the token (`x-pos-license`) and the raw key
+  (`x-pos-device-key`). The edge function verifies the signature, then
+  checks `sha256(key) == dkh` in constant time.
+- The till also re-checks `dkh` locally, so a token can never unlock a
+  different machine.
+
+A stolen token without the hardware gets `401`, and the live E2E asserts
+this. Revocation and seat checks come from `device_activations`
+(`28000` → `403`).
+
+### D29 — Server: mirror tables, one global sequence, no foreign keys
+
+Every synced table has a Postgres mirror, generated from the same schema.
+Each mirror has the same columns, plus `client_id`, `server_seq`,
+`origin_device_id`, `last_event_id` and `received_at`.
+
+- **Applying events.** `sync_push` applies events through one generic
+  plpgsql function:
+  - LWW is `ON CONFLICT … DO UPDATE WHERE (updated_at, last_event_id) <
+(excluded…)`, guarded by `client_id`;
+  - appends are `DO NOTHING`;
+  - `sync_received_events` dedupes.
+- **Sequence ordering.** A per-client advisory lock makes `server_seq`
+  values commit in order, so a pull cursor can never skip a row that commits
+  late.
+- **Pulls.** `sync_pull` excludes the caller's own versions (by origin), but
+  its cursor moves past them.
+- **No foreign keys.** There are none server-side: rows arrive in any order
+  from many tills.
+- **Direct Postgres.** Edge functions talk to Postgres directly
+  (`SUPABASE_DB_URL`, `npm:postgres`) through a small `Db` interface. This
+  lets `supabase/functions/dev-server.ts` serve the real handlers locally for
+  E2E.
+
+### D30 — Both sides pick the same LWW winner
+
+A pull carries the server version's `event_id`. The till keeps its own row
+only if it holds a **pending** edit whose `(updated_at, event_id)` beats the
+incoming pair: the same tuple comparison the server makes. When that edit is
+pushed, the server reaches the same verdict, so tills converge regardless of
+push order. The tests cover both orders, equal timestamps, and pending edits.
+
+### D31 — Aggregates are derived on both sides
+
+`products.stock_on_hand_milli` and `customers.loyalty_points` are never
+taken from a synced row (`DERIVED_COLUMNS`).
+
+- **Server.** Triggers maintain them from `stock_movements` and
+  `loyalty_ledger`.
+- **Till.** It recomputes them from its local deltas when a product or
+  customer arrives, and adds each newly inserted delta.
+
+Concurrent offline sales on two tills therefore always sum correctly.
+
+### D32 — Reinstalls and second tills
+
+- **Reinstalls.** A different `device_id` on an existing activation means
+  that till's database was recreated (the device key already proved it's
+  the same hardware). The activation is rebound, and the new database
+  bootstraps everything, including rows the old one pushed.
+- **Second tills.** On a new till of an existing shop, `session_status`
+  runs one sync round before offering owner setup, so staff sign in with
+  their existing PINs. Argon2id hashes sync, and so do lockouts.
+
 ## Open items for upcoming phases
 
 - **Arabic receipts (next).** Text-mode ESC/POS cannot render Arabic.
@@ -305,10 +400,12 @@ the field (a barcode input simply receives the scan).
   engine supports discount rules (tested); creating them needs back-office
   UI. Customer and loyalty payloads and foreign-currency tenders are
   rejected with a clear message until their phases.
-- **Supabase mirror tables (Phase 4).** Everything in `contracts/db-schema.json`
-  except `license`, `device`, `sync_queue`, `settings` and `print_jobs`. The
-  server derives `products.stock_on_hand_milli` from `stock_movements` and
-  ignores the device's cached value.
+- **Outbox retention.** Acknowledged `sync_queue` rows are kept (no hard
+  deletes). A later phase can compact old sent rows into an archive table,
+  or soft-delete them, once the Z-report period is closed.
+- **Cloud back office.** The mirror tables are ready for dashboards (Phase 7)
+  but are service-role only. Reads for owners need their own RLS policies and
+  an auth story.
 - **Delivering tokens (Phase 5).** Today the activation code and token are
   copy-pasted. The generator can push issued tokens to Supabase so tills fetch
   them online, with copy-paste as the offline fallback.

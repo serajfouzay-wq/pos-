@@ -45,6 +45,16 @@ export const ar: Translation = {
     noPrinter: 'لا توجد طابعة',
     pending: '{{count}} بالانتظار',
   },
+  sync: {
+    synced: 'تمت المزامنة',
+    syncing: 'جارٍ المزامنة…',
+    waiting: 'بانتظار المزامنة',
+    offline: 'غير متصل',
+    error: 'خطأ في المزامنة',
+    never: 'أبدًا',
+    lastSynced: 'آخر مزامنة: {{when}}',
+    parked: '{{count}} تغيير رفضته السحابة',
+  },
   session: {
     signIn: 'دخول',
     signOut: 'خروج',

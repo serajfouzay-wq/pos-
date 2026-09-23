@@ -31,6 +31,8 @@
     "allow-list-printers",
     "allow-get-printer-settings",
     "allow-save-printer-settings",
-    "allow-test-printer"
+    "allow-test-printer",
+    "allow-sync-to-cloud",
+    "allow-sync-status"
   ]
 }

@@ -43,8 +43,45 @@ jobs:
         with:
           deno-version: v2.x
       - run: deno test --no-config --allow-read supabase/functions/_shared
-      - run: deno check --config deno.json index.ts
-        working-directory: supabase/functions/license-validate
+      - name: Type-check every function and the local dev router
+        run: |
+          for fn in license-validate sync-push sync-pull; do
+            (cd "supabase/functions/$fn" && deno check --config deno.json index.ts)
+          done
+          deno check --no-config supabase/functions/dev-server.ts
+
+  cloud:
+    name: Cloud sync (SQL tests · live two-till E2E)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      DENO_NO_PACKAGE_JSON: '1'
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install WebKitGTK (the POS crate links Tauri)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libsoup-3.0-dev libayatana-appindicator3-dev librsvg2-dev
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Migrations + LWW / dedupe / isolation / revocation / parity tests.
+      - run: ./scripts/test-supabase.sh
+      # Real edge functions over HTTP, two tills, sales + stock + LWW converge.
+      - run: ./scripts/e2e-sync.sh
 
   rust:
     name: Rust (fmt · clippy · test)

@@ -20,6 +20,7 @@ pub mod license;
 pub mod sales;
 pub mod session;
 pub mod shifts;
+pub mod sync;
 pub mod users;
 
 use std::sync::Arc;

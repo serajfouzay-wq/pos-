@@ -33,6 +33,7 @@ const PassphraseArgs = z.object({
 export const DecodedActivationRequestSchema = z.object({
   client_id: UuidSchema,
   fingerprint: Sha256HexSchema,
+  device_key_hash: Sha256HexSchema,
   device_name: z.string(),
   app_version: z.string(),
 });

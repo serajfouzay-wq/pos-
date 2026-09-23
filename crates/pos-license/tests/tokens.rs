@@ -27,6 +27,10 @@ fn fp() -> String {
     "3f".repeat(32)
 }
 
+fn dkh() -> String {
+    "5e".repeat(32)
+}
+
 fn at(s: &str) -> Timestamp {
     s.parse().expect("timestamp")
 }
@@ -39,8 +43,11 @@ fn expected(fingerprint: &str) -> Expected<'_> {
     Expected {
         client_id: CLIENT,
         fingerprint,
+        device_key_hash: DKH,
     }
 }
+
+const DKH: &str = "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e";
 
 fn fixture_claims() -> LicenseClaims {
     LicenseClaims {
@@ -52,6 +59,7 @@ fn fixture_claims() -> LicenseClaims {
         nbf: None,
         exp: Some(4_102_444_800), // 2100-01-01
         fp: fp(),
+        dkh: dkh(),
         client_slug: "dev-demo-cafe".into(),
         business_type: BusinessType::Cafe,
         max_devices: 3,
@@ -97,6 +105,7 @@ fn issue(expires_at: Option<Timestamp>) -> String {
     let request = ActivationRequest {
         client_id: CLIENT,
         fingerprint: fp(),
+        device_key_hash: dkh(),
         device_name: "TILL-01".into(),
         app_version: "0.1.0".into(),
     };
@@ -155,9 +164,11 @@ fn tokens_issued_in_the_future_are_rejected() {
 #[test]
 fn wrong_client_is_rejected() {
     let public = parse_public_key_pem(DEV_PUBLIC).expect("public key");
+    let fingerprint = fp();
     let other = Expected {
         client_id: Uuid::from_u128(7),
-        fingerprint: &fp(),
+        fingerprint: &fingerprint,
+        device_key_hash: DKH,
     };
     assert_eq!(
         verify_license(
@@ -233,6 +244,7 @@ fn issuing_validates_options() {
     let request = ActivationRequest {
         client_id: CLIENT,
         fingerprint: fp(),
+        device_key_hash: dkh(),
         device_name: "TILL-01".into(),
         app_version: "0.1.0".into(),
     };

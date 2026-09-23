@@ -24,7 +24,7 @@ import {
   TimestampSchema,
   UuidSchema,
 } from '../primitives';
-import { SyncReportSchema } from '../sync';
+import { SyncReportSchema, SyncStatusSchema } from '../sync';
 import { PosAppInfoSchema } from './app-info';
 import { command } from './contract';
 import {
@@ -279,7 +279,10 @@ export const POS_IPC = {
   ),
   test_printer: command(z.object({ target: PrinterTargetSchema }), z.null(), 3),
 
+  // Sync — any signed-in user may trigger a round or read the status.
+  /** Runs a push + pull round now (the worker also runs every 60 s). */
   sync_to_cloud: command(NoArgs, SyncReportSchema, 4),
+  sync_status: command(NoArgs, SyncStatusSchema, 4),
   get_dashboard_metrics: command(z.object({ range: DateRangeSchema }), DashboardDataSchema, 7),
 } as const;
 

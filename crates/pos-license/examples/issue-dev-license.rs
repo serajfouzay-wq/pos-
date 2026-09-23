@@ -26,12 +26,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let arg = std::env::args()
         .nth(1)
         .ok_or("usage: issue-dev-license <CODE | --this-machine>")?;
-    let config = ClientConfig::parse(EXAMPLE_CONFIG)?;
+    // POS_CLIENT_CONFIG selects another client config (same as the POS build).
+    let config_json = match std::env::var("POS_CLIENT_CONFIG") {
+        Ok(path) => std::fs::read_to_string(path)?,
+        Err(_) => EXAMPLE_CONFIG.to_owned(),
+    };
+    let config = ClientConfig::parse(&config_json)?;
     let request = if arg == "--this-machine" || arg == "--print-code" {
         let hardware = HardwareComponents::collect()?;
         ActivationRequest {
             client_id: config.client_id,
             fingerprint: hardware.fingerprint(config.client_id).to_string(),
+            device_key_hash: hardware.device_key(config.client_id).public_hash(),
             device_name: "dev-machine".into(),
             app_version: env!("CARGO_PKG_VERSION").into(),
         }

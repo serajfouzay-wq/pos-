@@ -34,9 +34,12 @@ gethostname.workspace = true
 rsa.workspace = true
 rusqlite.workspace = true
 thiserror.workspace = true
-tokio = { version = "1", features = ["time"] }
+tokio = { version = "1", features = ["time", "sync", "macros"] }
 ureq.workspace = true
 uuid.workspace = true
+zeroize.workspace = true
+sha2.workspace = true
+hex.workspace = true
 
 [dev-dependencies]
 pos-license = { workspace = true, features = ["issuer"] }

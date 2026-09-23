@@ -93,6 +93,7 @@ pub async fn create_transaction(
         })
     })
     .await
+    .inspect(|_| state.sync.nudge())
 }
 
 /// Mirrors `PrintOutcomeSchema`.

@@ -45,6 +45,8 @@ const COMMANDS: &[&str] = &[
     "get_printer_settings",
     "save_printer_settings",
     "test_printer",
+    "sync_to_cloud",
+    "sync_status",
 ];
 
 fn main() {

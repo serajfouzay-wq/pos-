@@ -9,6 +9,7 @@ mod repo;
 mod sample_catalog;
 mod session;
 mod state;
+mod sync;
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -17,12 +18,19 @@ use tauri::{Emitter, Manager};
 
 use crate::license::{CloudCheck, LicenseService};
 use crate::printing::PrintService;
+use crate::sync::SyncEngine;
 
 /// Event name of `POS_EVENTS.license_status`.
 const LICENSE_STATUS_EVENT: &str = "license://status";
 /// Event name of `POS_EVENTS.printer_status`.
 const PRINTER_STATUS_EVENT: &str = "printer://status";
+/// Event name of `POS_EVENTS.sync_status`.
+const SYNC_STATUS_EVENT: &str = "sync://status";
 const PRINT_QUEUE_EVERY: Duration = Duration::from_secs(30);
+/// `SYNC_INTERVAL_MS`; changes also nudge the worker immediately.
+const SYNC_EVERY: Duration = Duration::from_secs(60);
+/// Lets the license worker read hardware and open the database first.
+const SYNC_FIRST_AFTER: Duration = Duration::from_secs(5);
 /// How often the gate is re-evaluated, so expiry and grace take effect on a
 /// till that is never restarted.
 const REEVALUATE_EVERY: Duration = Duration::from_secs(15 * 60);
@@ -48,7 +56,12 @@ pub fn run() {
             state.printer.set_listener(move |status| {
                 let _ = handle.emit(PRINTER_STATUS_EVENT, status);
             });
+            let handle = app.handle().clone();
+            state.sync.set_listener(move |status| {
+                let _ = handle.emit(SYNC_STATUS_EVENT, status);
+            });
             spawn_license_worker(Arc::clone(&state.license));
+            spawn_sync_worker(Arc::clone(&state.license), Arc::clone(&state.sync));
             spawn_print_queue_worker(Arc::clone(&state.license), Arc::clone(&state.printer));
             app.manage(state);
             Ok(())
@@ -81,6 +94,8 @@ pub fn run() {
             commands::hardware::get_printer_settings,
             commands::hardware::save_printer_settings,
             commands::hardware::test_printer,
+            commands::sync::sync_to_cloud,
+            commands::sync::sync_status,
         ])
         .run(tauri::generate_context!())
         .expect("failed to start the POS client");
@@ -124,6 +139,27 @@ fn spawn_print_queue_worker(license: Arc<LicenseService>, printer: Arc<PrintServ
                 }
             })
             .await;
+        }
+    });
+}
+
+/// Offline sync: a round every 60 s, and right away when a change is made
+/// (nudge) or the UI reports the network is back (`sync_to_cloud`). Rounds
+/// while unlicensed or offline are cheap no-ops; changes wait in the outbox.
+fn spawn_sync_worker(license: Arc<LicenseService>, sync: Arc<SyncEngine>) {
+    if !sync.enabled() {
+        return;
+    }
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(SYNC_FIRST_AFTER).await;
+        loop {
+            let (service, engine) = (Arc::clone(&license), Arc::clone(&sync));
+            let _ =
+                tauri::async_runtime::spawn_blocking(move || sync::round(&service, &engine)).await;
+            tokio::select! {
+                () = tokio::time::sleep(SYNC_EVERY) => {}
+                () = sync.nudged() => {}
+            }
         }
     });
 }

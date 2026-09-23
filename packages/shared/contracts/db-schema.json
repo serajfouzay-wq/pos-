@@ -17,15 +17,18 @@
         "revoked_at",
         "clock_high_water_at"
       ],
-      "append_only": false
+      "append_only": false,
+      "sync": null
     },
     "device": {
       "columns": ["id", "created_at", "updated_at", "deleted_at", "name"],
-      "append_only": false
+      "append_only": false,
+      "sync": null
     },
     "settings": {
       "columns": ["id", "created_at", "updated_at", "deleted_at", "key", "value"],
-      "append_only": false
+      "append_only": false,
+      "sync": null
     },
     "print_jobs": {
       "columns": [
@@ -39,7 +42,8 @@
         "printed_at",
         "last_error"
       ],
-      "append_only": false
+      "append_only": false,
+      "sync": null
     },
     "users": {
       "columns": [
@@ -54,7 +58,8 @@
         "failed_pin_attempts",
         "locked_until"
       ],
-      "append_only": false
+      "append_only": false,
+      "sync": "last_write_wins"
     },
     "categories": {
       "columns": [
@@ -68,7 +73,8 @@
         "sort_order",
         "color"
       ],
-      "append_only": false
+      "append_only": false,
+      "sync": "last_write_wins"
     },
     "products": {
       "columns": [
@@ -94,7 +100,8 @@
         "quick_key_position",
         "is_active"
       ],
-      "append_only": false
+      "append_only": false,
+      "sync": "last_write_wins"
     },
     "stock_movements": {
       "columns": [
@@ -110,7 +117,8 @@
         "user_id",
         "occurred_at"
       ],
-      "append_only": true
+      "append_only": true,
+      "sync": "additive_delta"
     },
     "discount_rules": {
       "columns": [
@@ -128,7 +136,8 @@
         "ends_at",
         "is_active"
       ],
-      "append_only": false
+      "append_only": false,
+      "sync": "last_write_wins"
     },
     "customers": {
       "columns": [
@@ -142,7 +151,8 @@
         "loyalty_points",
         "notes"
       ],
-      "append_only": false
+      "append_only": false,
+      "sync": "last_write_wins"
     },
     "loyalty_ledger": {
       "columns": [
@@ -157,7 +167,8 @@
         "device_id",
         "user_id"
       ],
-      "append_only": true
+      "append_only": true,
+      "sync": "additive_delta"
     },
     "shifts": {
       "columns": [
@@ -177,7 +188,8 @@
         "variance",
         "notes"
       ],
-      "append_only": false
+      "append_only": false,
+      "sync": "last_write_wins"
     },
     "transactions": {
       "columns": [
@@ -206,7 +218,8 @@
         "idempotency_key",
         "occurred_at"
       ],
-      "append_only": true
+      "append_only": true,
+      "sync": "append_only"
     },
     "transaction_items": {
       "columns": [
@@ -229,7 +242,8 @@
         "course",
         "note"
       ],
-      "append_only": true
+      "append_only": true,
+      "sync": "append_only"
     },
     "transaction_payments": {
       "columns": [
@@ -247,7 +261,8 @@
         "change_given",
         "reference"
       ],
-      "append_only": true
+      "append_only": true,
+      "sync": "append_only"
     },
     "suppliers": {
       "columns": [
@@ -262,7 +277,8 @@
         "tax_number",
         "notes"
       ],
-      "append_only": false
+      "append_only": false,
+      "sync": "last_write_wins"
     },
     "purchase_orders": {
       "columns": [
@@ -280,7 +296,8 @@
         "created_by",
         "notes"
       ],
-      "append_only": false
+      "append_only": false,
+      "sync": "last_write_wins"
     },
     "purchase_order_items": {
       "columns": [
@@ -295,7 +312,8 @@
         "quantity_received_milli",
         "unit_cost"
       ],
-      "append_only": false
+      "append_only": false,
+      "sync": "last_write_wins"
     },
     "audit_log": {
       "columns": [
@@ -313,7 +331,8 @@
         "device_id",
         "occurred_at"
       ],
-      "append_only": true
+      "append_only": true,
+      "sync": "append_only"
     },
     "sync_queue": {
       "columns": [
@@ -330,7 +349,8 @@
         "next_attempt_at",
         "last_error"
       ],
-      "append_only": false
+      "append_only": false,
+      "sync": null
     }
   }
 }

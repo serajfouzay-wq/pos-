@@ -16,8 +16,9 @@ crates/
   pos-license/    RS256 license tokens: verify, offline grace, activation codes, signing (`issuer`)
   pos-hardware/   ESC/POS encoder, receipt layout, logo raster, TCP / serial / Windows-spooler printers
 supabase/
-  migrations/     Cloud tables (client_licenses, device_activations) + validation function
-  functions/      Edge Functions (license-validate) — Deno, WebCrypto
+  migrations/     Licensing (client_licenses, device_activations) + sync mirror tables & functions
+  functions/      Edge Functions (license-validate, sync-push, sync-pull) — Deno + a local dev router
+  tests/          SQL tests for the sync functions (scripts/test-supabase.sh)
 keys/dev/         DEVELOPMENT license key pair (never for real customers)
 ```
 
@@ -100,6 +101,45 @@ Phase 5 the generator drives this through a GitHub Actions workflow.
 | `POS_LICENSE_PUBLIC_KEY`      | Public key PEM to embed (default: dev key)                       |
 | `POS_ALLOW_DEV_LICENSE_KEY=1` | Let a **release** build embed the dev key (throwaway demos only) |
 
+## Cloud sync
+
+Tills work fully offline. Each change is written to the local outbox in the
+same SQLite transaction as the change itself.
+
+- **When it syncs.** A background round pushes the outbox and pulls other
+  tills' changes:
+  - every minute;
+  - right after a sale or edit;
+  - when the network comes back;
+  - when you tap the status-bar pill.
+- **Status pill.** It shows the state: `Synced`, `Sync pending`, `Offline`
+  (changes wait locally) or `Sync error`. Hover it to see the last sync time.
+- **Conflicts.** Sales and stock movements are append-only, so every till's
+  sales count. Edits to the same product resolve to the newest (see
+  ARCHITECTURE D27–D32).
+- **Requirements.** Sync needs `cloud.supabase_url` and
+  `cloud.supabase_anon_key` in the client config, plus a license issued
+  with this version, since tokens now carry the device-key hash. Deploy with:
+
+  ```
+  supabase db push
+  supabase secrets set LICENSE_PUBLIC_KEY_PEM="$(cat license-public-key.pem)"
+  supabase functions deploy license-validate sync-push sync-pull
+  ```
+
+**Local cloud for development** (Postgres ≥ 15 and Deno 2):
+
+```bash
+PGHOST=localhost PGUSER=postgres ./scripts/test-supabase.sh   # SQL tests
+PGHOST=localhost PGUSER=postgres ./scripts/e2e-sync.sh        # two tills over real HTTP
+
+# Run the edge functions against a local database, then build a POS whose
+# config has "supabase_url": "http://127.0.0.1:54321" (loopback http is allowed):
+SUPABASE_DB_URL=postgres://postgres@127.0.0.1:5432/pos \
+LICENSE_PUBLIC_KEY_PEM="$(cat keys/dev/license-dev.public.pem)" \
+DENO_NO_PACKAGE_JSON=1 deno run --no-config -A supabase/functions/dev-server.ts
+```
+
 ## Using the till
 
 1. **Activate** (see Licensing). 2. The first person creates the **owner**
@@ -142,9 +182,9 @@ These are enforced by tooling where possible — see [`docs/ARCHITECTURE.md`](do
 | Phase | Scope                                                                   | Status |
 | ----- | ----------------------------------------------------------------------- | ------ |
 | 1     | Monorepo, shared types/contracts, Tauri 2 shells for both apps          | ✅     |
-| 2     | Hardware fingerprint, RS256 licensing, SQLCipher, `verify_license`      |        |
-| 3     | Core POS UI: products, cart, payment, receipt print, cash drawer        |        |
-| 4     | Offline sync engine: outbox, background worker, conflict resolution     |        |
+| 2     | Hardware fingerprint, RS256 licensing, SQLCipher, `verify_license`      | ✅     |
+| 3     | Core POS UI: products, cart, payment, receipt print, cash drawer        | ✅     |
+| 4     | Offline sync engine: outbox, background worker, conflict resolution     | ✅     |
 | 5     | Generator: client dashboard, asset upload, GitHub Actions build trigger |        |
 | 6     | Business-type layouts: retail / cafe / restaurant                       |        |
 | 7     | Analytics, Z-reports, audit trail, role-based views                     |        |

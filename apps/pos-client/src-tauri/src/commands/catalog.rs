@@ -124,6 +124,7 @@ pub async fn save_product(state: State<'_, AppState>, product: ProductInput) -> 
         Ok(saved)
     })
     .await
+    .inspect(|_| state.sync.nudge())
 }
 
 /// Seeds a starter catalogue for the client's business type (empty catalogue only).
@@ -166,4 +167,5 @@ pub async fn load_sample_catalog(state: State<'_, AppState>) -> IpcResult<usize>
         Ok(created)
     })
     .await
+    .inspect(|_| state.sync.nudge())
 }

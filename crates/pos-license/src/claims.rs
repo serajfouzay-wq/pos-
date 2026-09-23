@@ -23,6 +23,9 @@ pub struct LicenseClaims {
     pub exp: Option<i64>,
     /// Hardware fingerprint of the device this token is bound to.
     pub fp: String,
+    /// SHA-256 of the device's sync key (`pos_hwid::DeviceKey`). The sync
+    /// API accepts a request only with the key whose hash is signed here.
+    pub dkh: String,
     pub client_slug: String,
     pub business_type: BusinessType,
     pub max_devices: u32,

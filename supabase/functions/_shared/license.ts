@@ -24,6 +24,8 @@ export interface LicenseClaims {
   nbf?: number;
   exp?: number;
   fp: string;
+  /** SHA-256 of the device's sync key. */
+  dkh: string;
   client_slug: string;
   business_type: 'retail' | 'cafe' | 'restaurant';
   max_devices: number;
@@ -89,6 +91,8 @@ function isClaims(value: unknown): value is LicenseClaims {
     (c['exp'] === undefined || Number.isSafeInteger(c['exp'])) &&
     typeof c['fp'] === 'string' &&
     FINGERPRINT.test(c['fp']) &&
+    typeof c['dkh'] === 'string' &&
+    FINGERPRINT.test(c['dkh']) &&
     typeof c['client_slug'] === 'string' &&
     ['retail', 'cafe', 'restaurant'].includes(c['business_type'] as string) &&
     Number.isSafeInteger(c['max_devices']) &&

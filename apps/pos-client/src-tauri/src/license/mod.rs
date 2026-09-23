@@ -55,6 +55,12 @@ pub struct LicenseEnv {
     pub device_name: String,
 }
 
+/// What the sync client presents to the cloud.
+pub struct SyncCredentials {
+    pub token: String,
+    pub device_key: zeroize::Zeroizing<String>,
+}
+
 /// Outcome of a background cloud check, used to schedule the next one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CloudCheck {
@@ -143,6 +149,26 @@ impl LicenseService {
             .map(|hw| hw.fingerprint(self.env.client.client_id).to_string())
     }
 
+    fn device_key_hash(&self) -> Result<String, HwidError> {
+        self.hardware()
+            .map(|hw| hw.device_key(self.env.client.client_id).public_hash())
+    }
+
+    /// Credentials for the sync API: the active token plus this machine's
+    /// device key. `None` unless the license is currently valid.
+    pub fn sync_credentials(&self) -> Option<SyncCredentials> {
+        let inner = self.lock();
+        if !inner.status.is_valid() {
+            return None;
+        }
+        let active = inner.active.clone()?;
+        let hardware = self.hardware.get()?;
+        Some(SyncCredentials {
+            token: active.token,
+            device_key: hardware.device_key(self.env.client.client_id).secret_hex(),
+        })
+    }
+
     #[cfg_attr(not(test), allow(dead_code))] // read by Phase 3 session commands
     pub fn status(&self) -> LicenseStatus {
         self.lock().status.clone()
@@ -222,6 +248,7 @@ impl LicenseService {
         // database's high-water clock, which must be updated first.
         let client_id = self.env.client.client_id;
         let fingerprint = hardware.fingerprint(client_id);
+        let device_key_hash = hardware.device_key(client_id).public_hash();
         let verified = verify_identity(
             &token,
             &self.env.public_key,
@@ -229,6 +256,7 @@ impl LicenseService {
             &Expected {
                 client_id,
                 fingerprint: fingerprint.as_str(),
+                device_key_hash: &device_key_hash,
             },
         )
         .map_err(rejection_status)?;
@@ -351,6 +379,7 @@ impl LicenseService {
         Ok(ActivationRequest {
             client_id: self.env.client.client_id,
             fingerprint: self.fingerprint()?,
+            device_key_hash: self.device_key_hash()?,
             device_name: self.env.device_name.clone(),
             app_version: self.env.app_version.clone(),
         })
@@ -360,9 +389,11 @@ impl LicenseService {
     /// A rejected token never replaces the current one.
     pub fn activate(&self, token: &str) -> LicenseStatus {
         let mut inner = self.lock();
-        let fingerprint = match self.fingerprint() {
-            Ok(fp) => fp,
-            Err(e) => return LicenseStatus::halted(HaltState::HardwareError, e.to_string()),
+        let (fingerprint, device_key_hash) = match (self.fingerprint(), self.device_key_hash()) {
+            (Ok(fp), Ok(dkh)) => (fp, dkh),
+            (Err(e), _) | (_, Err(e)) => {
+                return LicenseStatus::halted(HaltState::HardwareError, e.to_string())
+            }
         };
         let check = verify_license(
             token,
@@ -371,6 +402,7 @@ impl LicenseService {
             &Expected {
                 client_id: self.env.client.client_id,
                 fingerprint: &fingerprint,
+                device_key_hash: &device_key_hash,
             },
             self.env.clock.now(),
         );

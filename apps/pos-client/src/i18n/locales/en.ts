@@ -43,6 +43,16 @@ export const en = {
     noPrinter: 'No printer set up',
     pending: '{{count}} waiting',
   },
+  sync: {
+    synced: 'Synced',
+    syncing: 'Syncing…',
+    waiting: 'Sync pending',
+    offline: 'Offline',
+    error: 'Sync error',
+    never: 'never',
+    lastSynced: 'Last synced: {{when}}',
+    parked: '{{count}} change(s) refused by the cloud',
+  },
   session: {
     signIn: 'Sign in',
     signOut: 'Sign out',

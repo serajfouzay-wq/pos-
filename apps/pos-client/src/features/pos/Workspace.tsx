@@ -14,6 +14,7 @@ import { PrinterAdmin } from '../admin/PrinterAdmin';
 import { ProductsAdmin } from '../admin/ProductsAdmin';
 import { UsersAdmin } from '../admin/UsersAdmin';
 import { SellScreen } from '../sell/SellScreen';
+import { SyncIndicator } from '../sync/SyncIndicator';
 import { CloseShiftDialog } from '../shift/CloseShiftDialog';
 import { ShiftGate } from '../shift/ShiftGate';
 
@@ -81,6 +82,7 @@ export function Workspace({ session }: { session: Session }) {
             ))}
         </nav>
         <div className="topbar__status">
+          <SyncIndicator />
           <span className={printerClass} title={printerState?.last_error ?? ''}>
             {!printerState?.configured
               ? t('status.noPrinter')

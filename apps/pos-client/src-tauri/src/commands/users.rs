@@ -55,4 +55,5 @@ pub async fn create_user(
         Ok(public)
     })
     .await
+    .inspect(|_| state.sync.nudge())
 }

@@ -220,6 +220,7 @@ mod tests {
         ActivationRequest {
             client_id: Uuid::from_u128(42),
             fingerprint: fp.into(),
+            device_key_hash: "5e".repeat(32),
             device_name: "TILL-01".into(),
             app_version: "0.1.0".into(),
         }
@@ -267,6 +268,7 @@ mod tests {
             &Expected {
                 client_id: Uuid::from_u128(42),
                 fingerprint: &fp,
+                device_key_hash: &"5e".repeat(32),
             },
             now,
         )

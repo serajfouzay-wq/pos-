@@ -29,6 +29,8 @@ export const LicenseClaimsSchema = z.object({
   exp: PositiveIntSchema.optional(),
   /** HMAC-SHA256 hardware fingerprint of the activated device. */
   fp: Sha256HexSchema,
+  /** SHA-256 of the device's sync key: the sync API requires the matching key. */
+  dkh: Sha256HexSchema,
   client_slug: z.string().min(1),
   business_type: BusinessTypeSchema,
   /** Enforced by the cloud across all of the client's activations. */

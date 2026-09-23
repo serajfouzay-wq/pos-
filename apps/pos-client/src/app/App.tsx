@@ -2,13 +2,14 @@ import { useEffect, useRef } from 'react';
 import { LicenseGate } from '../features/license/LicenseGate';
 import { Workspace } from '../features/pos/Workspace';
 import { SessionGate } from '../features/session/SessionGate';
-import { useAppInfo } from '../ipc/queries';
+import { useAppInfo, useSyncEvents } from '../ipc/queries';
 import { useUiStore } from '../stores/ui';
 
 export function App() {
   const appInfo = useAppInfo();
   const setLocale = useUiStore((s) => s.setLocale);
   const localeInitialised = useRef(false);
+  useSyncEvents();
 
   // Adopt the client's configured default language once the core reports it.
   useEffect(() => {
