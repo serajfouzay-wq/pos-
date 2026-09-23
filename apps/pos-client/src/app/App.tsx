@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { LicenseGate } from '../features/license/LicenseGate';
-import { ShellScreen } from '../features/shell/ShellScreen';
+import { Workspace } from '../features/pos/Workspace';
+import { SessionGate } from '../features/session/SessionGate';
 import { useAppInfo } from '../ipc/queries';
 import { useUiStore } from '../stores/ui';
 
@@ -19,7 +20,9 @@ export function App() {
 
   return (
     <LicenseGate>
-      <ShellScreen appInfo={appInfo} />
+      <SessionGate>
+        {(session) => <Workspace key={session.user_id} session={session} />}
+      </SessionGate>
     </LicenseGate>
   );
 }

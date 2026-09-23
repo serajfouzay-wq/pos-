@@ -74,10 +74,11 @@ jobs:
           components: clippy
       - uses: ilammy/setup-nasm@v1 # vendored OpenSSL (SQLCipher) assembler
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy -p pos-hwid --all-targets -- -D warnings
+      - run: cargo clippy -p pos-hwid -p pos-hardware --all-targets -- -D warnings
       # Reads the runner's actual registry + WMI identifiers.
       - run: cargo test -p pos-hwid
-      - run: cargo test -p pos-license -p pos-client
+      # Includes the Win32 spooler transport (the workspace's only `unsafe`).
+      - run: cargo test -p pos-hardware -p pos-license -p pos-client
 
   windows-installer:
     name: Windows NSIS installer (${{ matrix.app }})

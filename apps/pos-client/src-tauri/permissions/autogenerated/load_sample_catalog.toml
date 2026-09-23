@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-load-sample-catalog"
+description = "Enables the load_sample_catalog command without any pre-configured scope."
+commands.allow = ["load_sample_catalog"]
+
+[[permission]]
+identifier = "deny-load-sample-catalog"
+description = "Denies the load_sample_catalog command without any pre-configured scope."
+commands.deny = ["load_sample_catalog"]

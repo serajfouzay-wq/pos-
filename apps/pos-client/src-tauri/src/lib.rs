@@ -4,6 +4,10 @@
 mod commands;
 mod db;
 mod license;
+mod printing;
+mod repo;
+mod sample_catalog;
+mod session;
 mod state;
 
 use std::sync::Arc;
@@ -12,9 +16,13 @@ use std::time::{Duration, Instant};
 use tauri::{Emitter, Manager};
 
 use crate::license::{CloudCheck, LicenseService};
+use crate::printing::PrintService;
 
 /// Event name of `POS_EVENTS.license_status`.
 const LICENSE_STATUS_EVENT: &str = "license://status";
+/// Event name of `POS_EVENTS.printer_status`.
+const PRINTER_STATUS_EVENT: &str = "printer://status";
+const PRINT_QUEUE_EVERY: Duration = Duration::from_secs(30);
 /// How often the gate is re-evaluated, so expiry and grace take effect on a
 /// till that is never restarted.
 const REEVALUATE_EVERY: Duration = Duration::from_secs(15 * 60);
@@ -36,7 +44,12 @@ pub fn run() {
             state.license.set_listener(move |status| {
                 let _ = handle.emit(LICENSE_STATUS_EVENT, status);
             });
+            let handle = app.handle().clone();
+            state.printer.set_listener(move |status| {
+                let _ = handle.emit(PRINTER_STATUS_EVENT, status);
+            });
             spawn_license_worker(Arc::clone(&state.license));
+            spawn_print_queue_worker(Arc::clone(&state.license), Arc::clone(&state.printer));
             app.manage(state);
             Ok(())
         })
@@ -45,6 +58,29 @@ pub fn run() {
             commands::license::verify_license,
             commands::license::get_activation_request,
             commands::license::activate_license,
+            commands::session::session_status,
+            commands::session::list_login_users,
+            commands::session::bootstrap_owner,
+            commands::session::login,
+            commands::session::logout,
+            commands::users::list_users,
+            commands::users::create_user,
+            commands::catalog::get_products,
+            commands::catalog::get_categories,
+            commands::catalog::save_product,
+            commands::catalog::load_sample_catalog,
+            commands::shifts::current_shift,
+            commands::shifts::open_shift,
+            commands::shifts::close_shift,
+            commands::sales::quote_transaction,
+            commands::sales::create_transaction,
+            commands::sales::print_receipt,
+            commands::sales::kick_cash_drawer,
+            commands::hardware::printer_status,
+            commands::hardware::list_printers,
+            commands::hardware::get_printer_settings,
+            commands::hardware::save_printer_settings,
+            commands::hardware::test_printer,
         ])
         .run(tauri::generate_context!())
         .expect("failed to start the POS client");
@@ -71,6 +107,23 @@ fn spawn_license_worker(license: Arc<LicenseService>) {
                 let _ = tauri::async_runtime::spawn_blocking(move || service.evaluate()).await;
             }
             tokio::time::sleep(REEVALUATE_EVERY).await;
+        }
+    });
+}
+
+/// Offline receipt queue: retries pending receipts every 30 s while licensed,
+/// so tickets printed during an outage come out once the printer is back.
+fn spawn_print_queue_worker(license: Arc<LicenseService>, printer: Arc<PrintService>) {
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(PRINT_QUEUE_EVERY).await;
+            let (license, printer) = (Arc::clone(&license), Arc::clone(&printer));
+            let _ = tauri::async_runtime::spawn_blocking(move || {
+                if let Ok(db) = license.database() {
+                    let _ = printer.drain(&db, None);
+                }
+            })
+            .await;
         }
     });
 }

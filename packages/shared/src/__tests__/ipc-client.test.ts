@@ -7,9 +7,12 @@ const uuid = '00000000-0000-4000-8000-000000000001';
 
 describe('createIpcClient', () => {
   it('forwards validated snake_case args and returns the parsed result', async () => {
-    const invoke = vi.fn<InvokeFn>().mockResolvedValue(null);
+    const invoke = vi.fn<InvokeFn>().mockResolvedValue({ printed: true, queued: false });
     const ipc = createIpcClient(POS_IPC, invoke);
-    await expect(ipc.call('print_receipt', { transaction_id: uuid })).resolves.toBeNull();
+    await expect(ipc.call('print_receipt', { transaction_id: uuid })).resolves.toEqual({
+      printed: true,
+      queued: false,
+    });
     expect(invoke).toHaveBeenCalledWith('print_receipt', { transaction_id: uuid });
   });
 

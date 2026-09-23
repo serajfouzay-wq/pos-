@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "crates/pos-core",
+  "crates/pos-hardware",
   "crates/pos-hwid",
   "crates/pos-license",
   "apps/pos-client/src-tauri",
@@ -37,6 +38,8 @@ zeroize = { version = "1", features = ["derive"] }
 rusqlite = { version = "0.40", features = ["bundled-sqlcipher-vendored-openssl"] }
 ureq = { version = "3", default-features = false, features = ["rustls", "json", "platform-verifier", "win-system-proxy"] }
 gethostname = "1"
+argon2 = { version = "0.5", features = ["std"] }
+pos-hardware = { path = "crates/pos-hardware" }
 tempfile = "3"
 pos-hwid = { path = "crates/pos-hwid" }
 pos-license = { path = "crates/pos-license" }
@@ -67,4 +70,8 @@ opt-level = 3
 [profile.dev.package.salsa20]
 opt-level = 3
 [profile.dev.package.sha2]
+opt-level = 3
+[profile.dev.package.argon2]
+opt-level = 3
+[profile.dev.package.blake2]
 opt-level = 3

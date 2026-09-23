@@ -13,7 +13,12 @@ import {
   ProductSchema,
   StockMovementSchema,
 } from './entities/catalog';
-import { DeviceRowSchema, LicenseRowSchema } from './entities/licensing';
+import {
+  DeviceRowSchema,
+  LicenseRowSchema,
+  PrintJobRowSchema,
+  SettingRowSchema,
+} from './entities/licensing';
 import { CustomerSchema, LoyaltyLedgerEntrySchema, UserRowSchema } from './entities/people';
 import {
   PurchaseOrderItemSchema,
@@ -31,6 +36,8 @@ import { SyncQueueRowSchema } from './sync';
 export const LOCAL_TABLES = {
   license: LicenseRowSchema,
   device: DeviceRowSchema,
+  settings: SettingRowSchema,
+  print_jobs: PrintJobRowSchema,
   users: UserRowSchema,
   categories: CategorySchema,
   products: ProductSchema,

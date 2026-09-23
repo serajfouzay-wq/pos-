@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-current-shift"
+description = "Enables the current_shift command without any pre-configured scope."
+commands.allow = ["current_shift"]
+
+[[permission]]
+identifier = "deny-current-shift"
+description = "Denies the current_shift command without any pre-configured scope."
+commands.deny = ["current_shift"]

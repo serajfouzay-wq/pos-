@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-list-login-users"
+description = "Enables the list_login_users command without any pre-configured scope."
+commands.allow = ["list_login_users"]
+
+[[permission]]
+identifier = "deny-list-login-users"
+description = "Denies the list_login_users command without any pre-configured scope."
+commands.deny = ["list_login_users"]

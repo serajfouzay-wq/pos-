@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-quote-transaction"
+description = "Enables the quote_transaction command without any pre-configured scope."
+commands.allow = ["quote_transaction"]
+
+[[permission]]
+identifier = "deny-quote-transaction"
+description = "Denies the quote_transaction command without any pre-configured scope."
+commands.deny = ["quote_transaction"]

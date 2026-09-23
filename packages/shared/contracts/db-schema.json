@@ -23,6 +23,24 @@
       "columns": ["id", "created_at", "updated_at", "deleted_at", "name"],
       "append_only": false
     },
+    "settings": {
+      "columns": ["id", "created_at", "updated_at", "deleted_at", "key", "value"],
+      "append_only": false
+    },
+    "print_jobs": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "transaction_id",
+        "copy",
+        "attempt_count",
+        "printed_at",
+        "last_error"
+      ],
+      "append_only": false
+    },
     "users": {
       "columns": [
         "id",

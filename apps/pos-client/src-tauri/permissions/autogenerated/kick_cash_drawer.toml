@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-kick-cash-drawer"
+description = "Enables the kick_cash_drawer command without any pre-configured scope."
+commands.allow = ["kick_cash_drawer"]
+
+[[permission]]
+identifier = "deny-kick-cash-drawer"
+description = "Denies the kick_cash_drawer command without any pre-configured scope."
+commands.deny = ["kick_cash_drawer"]

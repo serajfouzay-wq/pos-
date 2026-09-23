@@ -52,3 +52,20 @@ export const DeviceActivationSchema = EntityBaseSchema.extend({
   revoked_at: TimestampSchema.nullable(),
 });
 export type DeviceActivation = z.infer<typeof DeviceActivationSchema>;
+
+/** `settings` — device-local key/value configuration (JSON values). Local-only. */
+export const SettingRowSchema = EntityBaseSchema.extend({
+  key: z.string().min(1).max(64),
+  value: z.json(),
+});
+export type SettingRow = z.infer<typeof SettingRowSchema>;
+
+/** `print_jobs` — offline receipt queue; printed when the printer is reachable. Local-only. */
+export const PrintJobRowSchema = EntityBaseSchema.extend({
+  transaction_id: UuidSchema,
+  copy: z.boolean(),
+  attempt_count: z.int().nonnegative(),
+  printed_at: TimestampSchema.nullable(),
+  last_error: z.string().nullable(),
+});
+export type PrintJobRow = z.infer<typeof PrintJobRowSchema>;

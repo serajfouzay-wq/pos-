@@ -14,6 +14,7 @@ crates/
   pos-core/       Rust twin of the domain rules (RBAC enforcement, money, config, time, IPC errors)
   pos-hwid/       Hardware fingerprint (registry + WMI) → license fingerprint & SQLCipher key
   pos-license/    RS256 license tokens: verify, offline grace, activation codes, signing (`issuer`)
+  pos-hardware/   ESC/POS encoder, receipt layout, logo raster, TCP / serial / Windows-spooler printers
 supabase/
   migrations/     Cloud tables (client_licenses, device_activations) + validation function
   functions/      Edge Functions (license-validate) — Deno, WebCrypto
@@ -98,6 +99,25 @@ Phase 5 the generator drives this through a GitHub Actions workflow.
 | `POS_CLIENT_CONFIG`           | Client config JSON to embed (default: example config)            |
 | `POS_LICENSE_PUBLIC_KEY`      | Public key PEM to embed (default: dev key)                       |
 | `POS_ALLOW_DEV_LICENSE_KEY=1` | Let a **release** build embed the dev key (throwaway demos only) |
+
+## Using the till
+
+1. **Activate** (see Licensing). 2. The first person creates the **owner**
+   (name + 4–6 digit PIN). 3. The owner opens **Products → Start with a sample
+   catalogue** (or adds products), **Staff** to add managers/cashiers, and
+   **Printer** to choose printers: detected USB/Bluetooth ones, or a network
+   printer by IP. Up to 3 are tried in order, and the cash drawer can open
+   automatically on cash sales. 4. A manager or the owner **opens the shift**
+   with the opening float. 5. Sell: tap products or scan barcodes, **Pay**
+   (cash / card / wallet, split allowed), and the receipt prints. If the printer
+   is down, receipts queue and print once it's back. 6. **Close shift**: count
+   the drawer blind, then see expected cash and variance.
+
+| Role    | Can                                                                    |
+| ------- | ---------------------------------------------------------------------- |
+| Cashier | Sell, print the receipt, "No sale" drawer open                         |
+| Manager | + open/close shifts, reprint receipts, discounts, refunds/voids (soon) |
+| Owner   | Everything: products, staff, printer settings, reports                 |
 
 ## Ground rules
 

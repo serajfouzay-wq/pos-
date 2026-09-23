@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-open-shift"
+description = "Enables the open_shift command without any pre-configured scope."
+commands.allow = ["open_shift"]
+
+[[permission]]
+identifier = "deny-open-shift"
+description = "Denies the open_shift command without any pre-configured scope."
+commands.deny = ["open_shift"]

@@ -218,13 +218,97 @@ embed it unless `POS_ALLOW_DEV_LICENSE_KEY=1` (used for CI demo installers),
 and the app shows a red "development license key" banner whenever it's
 embedded.
 
+### D20 — Every business command passes one guard, in this order
+
+`commands::authorize(state, permission)`: **license** (`license.database()`
+— no valid license, no database handle) → **session** (signed in) →
+**`rbac::authorize(role, permission)`**. Extra permissions are checked inline
+where they depend on the request (`discount.apply` when discounts are sent,
+`receipt.reprint` when a receipt was already printed). The only commands
+without a role check are app info, licensing and sign-in, and those still sit
+behind the license gate wherever they touch data.
+
+### D21 — PIN sign-in: Argon2id, lockout, tap-then-PIN
+
+Users are tapped on a tile, then enter a 4–6 digit PIN on the numpad (no
+keyboard). PINs are hashed with Argon2id (19 MiB, t = 2). Five consecutive
+misses lock that user for 5 minutes. Selecting the user first, rather than
+searching every hash for a matching PIN, keeps login O(1) and lets PINs
+repeat across staff. The first person to open a new till creates the owner
+(`bootstrap_owner`, refused once any user exists). Sessions live in memory
+only: restarting the app signs everyone out. `pin_hash` syncs (Phase 4) so
+staff can sign in on any till, but it never crosses IPC.
+
+### D22 — The UI never totals money
+
+The cart asks Rust for a quote (`quote_transaction`) on every change;
+`create_transaction` runs the same `pos_core::pricing::price` on catalogue
+prices read inside the write transaction. Discounts: line-scoped first
+(capped at the line), then order-scoped, allocated by largest remainder so
+per-line tax stays exact. Tenders (`pos_core::tender::settle`): card/wallet
+cannot exceed what is owed, change comes only from cash, and the applied
+amounts always sum to the total. The payment dialog's running "remaining /
+change" is guidance; Rust re-validates.
+
+### D23 — A sale is one SQLite transaction
+
+Transaction row, lines (with price/name snapshots), payments, additive stock
+movements for tracked items, outbox events for every synced row, the audit
+entry and the receipt print job all commit together or not at all. The
+idempotency key makes a retried `create_transaction` return the original sale.
+Receipt numbers are `<first 4 hex of device id>-<per-device sequence>`, which
+is unique without coordination.
+
+### D24 — Printing: transports, fallback chain, offline queue
+
+- **USB** goes through the Windows spooler in RAW mode, which works with the
+  driver Windows installs. The spec said `hidapi`, but thermal printers are
+  USB _printer_ class, not HID, so `hidapi` can't reach them without swapping
+  the driver (Zadig). That isn't acceptable for a zero-terminal install.
+  **Bluetooth SPP** and USB-serial appear as COM ports on Windows.
+  **Network** printers use TCP/9100.
+- Settings hold an ordered chain of up to 3 printers (primary + fallbacks).
+  Discovery lists spooler printers and COM ports (Bluetooth labelled).
+- Every receipt is a `print_jobs` row, rendered from the stored transaction
+  at print time and printed oldest-first. The queue drains after each sale,
+  on printer-settings save and every 30 s. A failure stops the drain, so
+  order is kept. The DB lock is never held during printer I/O.
+- The drawer kick (`1B 70 00 19 19`) is sent right after a cash sale commits
+  (if enabled), or on "No sale" (`drawer.kick`, audited). It is **never
+  queued**: a drawer popping open later, unattended, is worse than an error.
+- Text-mode ESC/POS uses code page WPC1252. **Arabic text cannot print in
+  this mode** (it becomes `?`). See open items.
+
+### D25 — The database enforces the invariants too
+
+`STRICT` tables reject floats in money columns. Triggers abort `DELETE` on
+every table and `UPDATE` on append-only tables. One open shift per device is
+a partial unique index. These back up the Rust code; they don't replace it.
+
+### D26 — Scanner detection
+
+A capture-phase `keydown` listener feeds a pure `ScanDetector`. Keys < 100 ms
+apart are a scanner burst; a gap of ≥ 100 ms restarts the buffer from that
+key. Enter completes the scan (≥ 4 chars), and the buffer also clears on
+Enter or a 300 ms timeout. While focus is in a text field the keys belong to
+the field (a barcode input simply receives the scan).
+
 ## Open items for upcoming phases
 
-- **User PIN hashing (Phase 3).** Argon2id; `pin_hash` never crosses IPC
-  (`UserSchema` omits it). Data commands obtain the DB only through
-  `state.license.database()?`, then `rbac::authorize`.
+- **Arabic receipts (next).** Text-mode ESC/POS cannot render Arabic.
+  The plan is to rasterise the receipt layout (shaping + bidi, a bundled
+  OFL font) through the existing `GS v 0` path, which logos already use.
+- **Refunds and voids.** The permissions and the append-only model are ready
+  (`kind = refund | void` + `original_transaction_id`); the flow and UI are
+  still to build.
+- **Discount rules UI, customers and loyalty, multi-currency tenders.** The
+  engine supports discount rules (tested); creating them needs back-office
+  UI. Customer and loyalty payloads and foreign-currency tenders are
+  rejected with a clear message until their phases.
 - **Supabase mirror tables (Phase 4).** Everything in `contracts/db-schema.json`
-  except `license`, `device` and `sync_queue`.
+  except `license`, `device`, `sync_queue`, `settings` and `print_jobs`. The
+  server derives `products.stock_on_hand_milli` from `stock_movements` and
+  ignores the device's cached value.
 - **Delivering tokens (Phase 5).** Today the activation code and token are
   copy-pasted. The generator can push issued tokens to Supabase so tills fetch
   them online, with copy-paste as the offline fallback.

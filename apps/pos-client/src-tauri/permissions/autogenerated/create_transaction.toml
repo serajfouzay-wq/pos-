@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-create-transaction"
+description = "Enables the create_transaction command without any pre-configured scope."
+commands.allow = ["create_transaction"]
+
+[[permission]]
+identifier = "deny-create-transaction"
+description = "Denies the create_transaction command without any pre-configured scope."
+commands.deny = ["create_transaction"]

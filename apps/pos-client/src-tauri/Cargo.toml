@@ -19,7 +19,10 @@ pos-license.workspace = true
 serde_json.workspace = true
 
 [dependencies]
+argon2.workspace = true
 pos-core.workspace = true
+pos-hardware.workspace = true
+rand.workspace = true
 pos-hwid.workspace = true
 pos-license.workspace = true
 tauri.workspace = true

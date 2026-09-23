@@ -6,7 +6,8 @@
  */
 import { z } from 'zod';
 import { CurrencyCodeSchema } from '../currency';
-import { ProductSchema } from '../entities/catalog';
+import { CategorySchema, ProductSchema } from '../entities/catalog';
+import { UserSchema } from '../entities/people';
 import {
   ModifierSnapshotSchema,
   OrderTypeSchema,
@@ -26,6 +27,22 @@ import {
 import { SyncReportSchema } from '../sync';
 import { PosAppInfoSchema } from './app-info';
 import { command } from './contract';
+import {
+  DiscoveredPrinterSchema,
+  DisplayNameSchema,
+  LoginUserSchema,
+  PrinterSettingsSchema,
+  PrinterStatusSchema,
+  PrinterTargetSchema,
+  PrintOutcomeSchema,
+  ProductInputSchema,
+  QuoteRequestSchema,
+  QuoteSchema,
+  SessionSchema,
+  SessionStatusSchema,
+  ShiftSummarySchema,
+} from './pos-types';
+import { PinSchema, RoleSchema } from '../rbac';
 
 // ── create_transaction ─────────────────────────────────────────────────────
 
@@ -67,6 +84,8 @@ export const TransactionPayloadSchema = z.object({
   notes: z.string().max(500).nullable(),
 });
 export type TransactionPayload = z.infer<typeof TransactionPayloadSchema>;
+/** What the UI sends (plain strings; Zod brands ids on parse). */
+export type TransactionPayloadInput = z.input<typeof TransactionPayloadSchema>;
 
 export const ReceiptSchema = z.object({
   transaction_id: UuidSchema,
@@ -116,6 +135,13 @@ export const ReceiptSchema = z.object({
   printed: z.boolean(),
 });
 export type Receipt = z.infer<typeof ReceiptSchema>;
+
+/** `create_transaction` result: the receipt plus what the hardware did. */
+export const SaleReceiptSchema = ReceiptSchema.extend({
+  /** Cash sale and the drawer kick reached the printer. */
+  drawer_opened: z.boolean(),
+});
+export type SaleReceipt = z.infer<typeof SaleReceiptSchema>;
 
 // ── get_products ───────────────────────────────────────────────────────────
 
@@ -169,25 +195,91 @@ const NoArgs = z.object({});
 
 export const POS_IPC = {
   app_info: command(NoArgs, PosAppInfoSchema, 1),
-  /** Re-evaluates the license (signature, hardware, expiry, grace). Pre-authentication. */
+
+  // Licensing (pre-authentication).
+  /** Re-evaluates the license (signature, hardware, expiry, grace). */
   verify_license: command(NoArgs, LicenseStatusSchema, 2),
-  /** The code an unlicensed till shows the operator. Pre-authentication. */
+  /** The code an unlicensed till shows the operator. */
   get_activation_request: command(NoArgs, ActivationRequestInfoSchema, 2),
-  /** Installs a token from the generator if it verifies for this machine. Pre-authentication. */
+  /** Installs a token from the generator if it verifies for this machine. */
   activate_license: command(
     z.object({ token: z.string().min(1).max(8192) }),
     LicenseStatusSchema,
     2,
   ),
-  create_transaction: command(z.object({ payload: TransactionPayloadSchema }), ReceiptSchema, 3),
+
+  // Sessions (pre-authentication, behind the license gate).
+  session_status: command(NoArgs, SessionStatusSchema, 3),
+  list_login_users: command(NoArgs, z.array(LoginUserSchema), 3),
+  /** Creates the first owner; refused once any user exists. */
+  bootstrap_owner: command(
+    z.object({ display_name: DisplayNameSchema, pin: PinSchema }),
+    SessionSchema,
+    3,
+  ),
+  login: command(z.object({ user_id: UuidSchema, pin: PinSchema }), SessionSchema, 3),
+  logout: command(NoArgs, z.null(), 3),
+
+  // Users — user.manage.
+  list_users: command(NoArgs, z.array(UserSchema), 3),
+  create_user: command(
+    z.object({ display_name: DisplayNameSchema, role: RoleSchema, pin: PinSchema }),
+    UserSchema,
+    3,
+  ),
+
+  // Catalogue — catalog.view / catalog.manage.
+  get_products: command(z.object({ filter: ProductFilterSchema }), z.array(ProductSchema), 3),
+  get_categories: command(NoArgs, z.array(CategorySchema), 3),
+  save_product: command(z.object({ product: ProductInputSchema }), ProductSchema, 3),
+  /** Starter catalogue for the business type; empty catalogue only. Returns products created. */
+  load_sample_catalog: command(NoArgs, NonNegativeIntSchema, 3),
+
+  // Shifts — sale.create (view) / shift.open / shift.close.
+  current_shift: command(NoArgs, ShiftSummarySchema.nullable(), 3),
+  open_shift: command(
+    z.object({ opening_float: NonNegativeMinorUnitsSchema }),
+    ShiftSummarySchema,
+    3,
+  ),
+  close_shift: command(
+    z.object({
+      actual_cash: NonNegativeMinorUnitsSchema,
+      closing_float: NonNegativeMinorUnitsSchema,
+      notes: z.string().max(500).nullable(),
+    }),
+    ShiftSummarySchema,
+    3,
+  ),
+
+  // Sales — sale.create (+ discount.apply when discounts are requested).
+  /** Prices the cart exactly as `create_transaction` will; the UI never totals. */
+  quote_transaction: command(z.object({ request: QuoteRequestSchema }), QuoteSchema, 3),
+  create_transaction: command(
+    z.object({ payload: TransactionPayloadSchema }),
+    SaleReceiptSchema,
+    3,
+  ),
   /**
    * Takes a transaction id, not a receipt body: Rust re-renders from the stored,
-   * immutable transaction so the UI can never print a receipt that doesn't exist.
+   * immutable transaction. A second print is a COPY and needs `receipt.reprint`.
    */
-  print_receipt: command(z.object({ transaction_id: UuidSchema }), z.null(), 3),
+  print_receipt: command(z.object({ transaction_id: UuidSchema }), PrintOutcomeSchema, 3),
+  /** "No sale" drawer open — `drawer.kick`, audited. */
   kick_cash_drawer: command(NoArgs, z.null(), 3),
+
+  // Printers — status: any signed-in user; configuration: settings.manage.
+  printer_status: command(NoArgs, PrinterStatusSchema, 3),
+  list_printers: command(NoArgs, z.array(DiscoveredPrinterSchema), 3),
+  get_printer_settings: command(NoArgs, PrinterSettingsSchema, 3),
+  save_printer_settings: command(
+    z.object({ settings: PrinterSettingsSchema }),
+    PrinterSettingsSchema,
+    3,
+  ),
+  test_printer: command(z.object({ target: PrinterTargetSchema }), z.null(), 3),
+
   sync_to_cloud: command(NoArgs, SyncReportSchema, 4),
-  get_products: command(z.object({ filter: ProductFilterSchema }), z.array(ProductSchema), 3),
   get_dashboard_metrics: command(z.object({ range: DateRangeSchema }), DashboardDataSchema, 7),
 } as const;
 

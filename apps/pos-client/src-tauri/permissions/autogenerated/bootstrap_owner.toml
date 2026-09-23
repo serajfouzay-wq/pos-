@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-bootstrap-owner"
+description = "Enables the bootstrap_owner command without any pre-configured scope."
+commands.allow = ["bootstrap_owner"]
+
+[[permission]]
+identifier = "deny-bootstrap-owner"
+description = "Denies the bootstrap_owner command without any pre-configured scope."
+commands.deny = ["bootstrap_owner"]
