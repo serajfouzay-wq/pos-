@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-check-build-settings"
+description = "Enables the check_build_settings command without any pre-configured scope."
+commands.allow = ["check_build_settings"]
+
+[[permission]]
+identifier = "deny-check-build-settings"
+description = "Denies the check_build_settings command without any pre-configured scope."
+commands.deny = ["check_build_settings"]

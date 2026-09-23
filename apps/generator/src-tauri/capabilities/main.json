@@ -11,6 +11,26 @@
     "allow-unlock-license-key",
     "allow-lock-license-key",
     "allow-decode-activation-request",
-    "allow-issue-license"
+    "allow-issue-license",
+    "allow-list-issued-licenses",
+    "allow-list-clients",
+    "allow-get-client",
+    "allow-create-client",
+    "allow-save-client",
+    "allow-archive-client",
+    "allow-upload-client-asset",
+    "allow-remove-client-asset",
+    "allow-get-client-asset",
+    "allow-preview-receipt",
+    "allow-get-build-settings",
+    "allow-save-build-settings",
+    "allow-clear-github-token",
+    "allow-check-build-settings",
+    "allow-start-build",
+    "allow-list-builds",
+    "allow-refresh-builds",
+    "allow-download-build",
+    "allow-open-build-run",
+    "allow-reveal-build-download"
   ]
 }

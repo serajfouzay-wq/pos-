@@ -30,6 +30,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm format:check
       - run: pnpm turbo run typecheck lint test build
+      - run: node --test scripts/*.test.mjs
 
   edge-functions:
     name: Supabase Edge Functions (Deno check · test)
@@ -111,11 +112,12 @@ jobs:
           components: clippy
       - uses: ilammy/setup-nasm@v1 # vendored OpenSSL (SQLCipher) assembler
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy -p pos-hwid -p pos-hardware --all-targets -- -D warnings
+      # The generator is included for its Windows Credential Manager path.
+      - run: cargo clippy -p pos-hwid -p pos-hardware -p pos-generator --all-targets -- -D warnings
       # Reads the runner's actual registry + WMI identifiers.
       - run: cargo test -p pos-hwid
       # Includes the Win32 spooler transport (the workspace's only `unsafe`).
-      - run: cargo test -p pos-hardware -p pos-license -p pos-client
+      - run: cargo test -p pos-hardware -p pos-license -p pos-client -p pos-generator
 
   windows-installer:
     name: Windows NSIS installer (${{ matrix.app }})

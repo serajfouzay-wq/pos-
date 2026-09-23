@@ -19,6 +19,8 @@ supabase/
   migrations/     Licensing (client_licenses, device_activations) + sync mirror tables & functions
   functions/      Edge Functions (license-validate, sync-push, sync-pull) — Deno + a local dev router
   tests/          SQL tests for the sync functions (scripts/test-supabase.sh)
+clients/          Client build inputs, committed by the generator (one folder per client)
+scripts/          prepare-client-build.mjs (CI), Supabase test and E2E runners
 keys/dev/         DEVELOPMENT license key pair (never for real customers)
 ```
 
@@ -65,8 +67,35 @@ POS_CLIENT_CONFIG=/path/to/acme.json pnpm --filter @pos/pos-client tauri build
 ```
 
 `build.rs` validates it with the same rules as the Zod schema; an invalid config
-fails the build. Without the variable, the example (dev) config is used. In
-Phase 5 the generator drives this through a GitHub Actions workflow.
+fails the build. Without the variable, the example (dev) config is used.
+Normally the generator drives all of this (see below).
+
+## The generator: clients → installers
+
+1. **Licenses → Create signing key** (once). Back up the key file and remember
+   the passphrase.
+2. **Settings → Build repository**: the GitHub repository with this code base,
+   plus a fine-grained token for that repository only, with **Contents** and
+   **Actions** set to read and write. The token is kept in the Windows
+   Credential Manager. Use **Test connection** to check it.
+3. **Clients → New client**: name, slug, business type and currency. Then edit:
+   - **Details**: languages, extra currencies, tax, features, Supabase
+     project, notes.
+   - **Receipt & branding**: header and footer, paper width, tax number,
+     colours, the receipt logo and the app icon. The live preview is the
+     till's own receipt layout, with the logo dithered exactly as printed.
+4. **Builds → Build installer**: the generator commits `clients/<slug>/` in
+   one commit and runs [`build-client.yml`](.github/workflows/build-client.yml)
+   on GitHub Actions. It follows the run and offers **Download installer**
+   when it's done (about 15–25 min). Each client gets its own app identity
+   (`com.posfactory.pos.<slug>`), name, icon and embedded config.
+5. **Licenses** (on the client, or in the Licenses section): paste the till's
+   activation code and sign. A code from another client's till is refused,
+   and every license is kept in the client's history.
+
+`build-client.yml` must be on the repository's default branch for dispatch to
+work. It can also be run by hand from the Actions tab for any committed
+client.
 
 ## Licensing
 
@@ -185,7 +214,7 @@ These are enforced by tooling where possible — see [`docs/ARCHITECTURE.md`](do
 | 2     | Hardware fingerprint, RS256 licensing, SQLCipher, `verify_license`      | ✅     |
 | 3     | Core POS UI: products, cart, payment, receipt print, cash drawer        | ✅     |
 | 4     | Offline sync engine: outbox, background worker, conflict resolution     | ✅     |
-| 5     | Generator: client dashboard, asset upload, GitHub Actions build trigger |        |
+| 5     | Generator: client dashboard, asset upload, GitHub Actions build trigger | ✅     |
 | 6     | Business-type layouts: retail / cafe / restaurant                       |        |
 | 7     | Analytics, Z-reports, audit trail, role-based views                     |        |
 | 8     | Polish: animations, KDS window, loyalty, auto-updater                   |        |

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-reveal-build-download"
+description = "Enables the reveal_build_download command without any pre-configured scope."
+commands.allow = ["reveal_build_download"]
+
+[[permission]]
+identifier = "deny-reveal-build-download"
+description = "Denies the reveal_build_download command without any pre-configured scope."
+commands.deny = ["reveal_build_download"]

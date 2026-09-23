@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-refresh-builds"
+description = "Enables the refresh_builds command without any pre-configured scope."
+commands.allow = ["refresh_builds"]
+
+[[permission]]
+identifier = "deny-refresh-builds"
+description = "Denies the refresh_builds command without any pre-configured scope."
+commands.deny = ["refresh_builds"]

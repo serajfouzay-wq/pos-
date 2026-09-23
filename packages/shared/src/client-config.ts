@@ -68,9 +68,15 @@ export const ClientConfigSchema = z
      * not enforced because there is nothing to validate against.
      */
     cloud: z.object({
+      /** https; plain http only on loopback (the local development stack). */
       supabase_url: z
-        .url({ protocol: /^https$/ })
+        .url({ protocol: /^https?$/ })
         .max(200)
+        .refine(
+          (url) =>
+            url.startsWith('https://') || /^http:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(url),
+          'https only (plain http is allowed for localhost)',
+        )
         .nullable(),
       supabase_anon_key: z.string().min(1).nullable(),
     }),

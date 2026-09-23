@@ -11,7 +11,6 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use pos_core::config::BusinessType;
 use pos_core::time::Timestamp;
 use pos_core::{IpcError, IpcErrorCode, IpcResult};
 use pos_license::activation::ActivationRequest;
@@ -19,6 +18,9 @@ use pos_license::issuer::{issue_license, IssueOptions, IssuerError, SigningKey, 
 use pos_license::keys::{key_id, parse_public_key_pem};
 use pos_license::LicenseClaims;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+use crate::store::{IssuedLicenseRecord, Store};
 
 pub const PRIVATE_KEY_FILE: &str = "license-signing-key.pem";
 pub const PUBLIC_KEY_FILE: &str = "license-public-key.pem";
@@ -40,12 +42,12 @@ pub struct SigningKeyStatus {
     pub key_path: Option<String>,
 }
 
-/// Mirrors `IssueLicenseRequestSchema`.
+/// Mirrors `IssueLicenseRequestSchema`. Slug and business type come from
+/// the client record, never from the form.
 #[derive(Debug, Clone, Deserialize)]
 pub struct IssueLicenseRequest {
     pub activation_code: String,
-    pub client_slug: String,
-    pub business_type: BusinessType,
+    pub client_id: Uuid,
     pub max_devices: u32,
     pub expires_at: Option<Timestamp>,
 }
@@ -160,28 +162,63 @@ impl KeyStore {
         self.status()
     }
 
-    pub fn issue(&self, request: &IssueLicenseRequest, now: Timestamp) -> IpcResult<IssuedLicense> {
+    /// Signs a license for one till of a known client and records it. The
+    /// activation code must come from a build of THAT client (its embedded
+    /// client id), so a code pasted into the wrong client is refused.
+    pub fn issue(
+        &self,
+        store: &Store,
+        request: &IssueLicenseRequest,
+        now: Timestamp,
+    ) -> IpcResult<IssuedLicense> {
         let activation = ActivationRequest::decode(&request.activation_code)
             .map_err(|e| IpcError::validation(e.to_string()))?;
-        let slot = self.slot();
-        let key = slot.as_ref().ok_or_else(|| {
-            IpcError::new(
-                IpcErrorCode::Unauthenticated,
-                "Unlock the signing key first.",
+        let client = store.client(request.client_id)?;
+        if activation.client_id != client.client_id {
+            return Err(IpcError::validation(format!(
+                "This activation code comes from a till built for another client ({}), not {}.",
+                activation.client_id, client.config.display_name
+            )));
+        }
+        if request.expires_at.is_some_and(|e| e <= now) {
+            return Err(IpcError::validation(
+                "The expiry date must be in the future.",
+            ));
+        }
+        let issued = {
+            let slot = self.slot();
+            let key = slot.as_ref().ok_or_else(|| {
+                IpcError::new(
+                    IpcErrorCode::Unauthenticated,
+                    "Unlock the signing key first.",
+                )
+            })?;
+            issue_license(
+                key,
+                &activation,
+                &IssueOptions {
+                    client_slug: client.config.client_slug.clone(),
+                    business_type: client.config.business_type,
+                    max_devices: request.max_devices,
+                    expires_at: request.expires_at,
+                },
+                now,
             )
-        })?;
-        let issued = issue_license(
-            key,
-            &activation,
-            &IssueOptions {
-                client_slug: request.client_slug.clone(),
-                business_type: request.business_type,
+            .map_err(to_ipc)?
+        };
+        store.record_license(
+            &IssuedLicenseRecord {
+                license_id: issued.claims.jti,
+                client_id: client.client_id,
+                device_name: activation.device_name.clone(),
+                fingerprint_hash: activation.fingerprint.clone(),
                 max_devices: request.max_devices,
+                issued_at: now,
                 expires_at: request.expires_at,
+                token: issued.token.clone(),
             },
             now,
-        )
-        .map_err(to_ipc)?;
+        )?;
         Ok(IssuedLicense {
             token: issued.token,
             claims: issued.claims,
@@ -210,15 +247,14 @@ fn write_new(path: &Path, contents: &[u8]) -> IpcResult<()> {
 #[cfg(test)]
 mod tests {
     use pos_license::verify::{verify_license, Expected};
-    use uuid::Uuid;
 
     use super::*;
 
     const PASSPHRASE: &str = "correct horse battery staple";
 
-    fn activation_code(fp: &str) -> String {
+    fn activation_code(client_id: Uuid, fp: &str) -> String {
         ActivationRequest {
-            client_id: Uuid::from_u128(42),
+            client_id,
             fingerprint: fp.into(),
             device_key_hash: "5e".repeat(32),
             device_name: "TILL-01".into(),
@@ -227,38 +263,53 @@ mod tests {
         .encode()
     }
 
+    fn client(store: &Store, now: Timestamp) -> Uuid {
+        let config = crate::clients::new_client_config(&crate::clients::NewClientInput {
+            display_name: "Acme Retail".into(),
+            client_slug: "acme-retail".into(),
+            business_type: pos_core::config::BusinessType::Retail,
+            base_currency: pos_core::currency::CurrencyCode::KWD,
+        });
+        store.create_client(&config, now).expect("client").client_id
+    }
+
     #[test]
     fn key_lifecycle_and_issuing() {
         let dir = tempfile::TempDir::new().expect("tempdir");
-        let store = KeyStore::new(dir.path().to_path_buf());
-        assert_eq!(store.status().expect("status").state, KeyState::Absent);
+        let store = Store::open_in_memory().expect("store");
+        let keys = KeyStore::new(dir.path().to_path_buf());
+        assert_eq!(keys.status().expect("status").state, KeyState::Absent);
 
-        assert!(store.create("short").is_err(), "weak passphrase refused");
-        let created = store.create(PASSPHRASE).expect("create");
+        assert!(keys.create("short").is_err(), "weak passphrase refused");
+        let created = keys.create(PASSPHRASE).expect("create");
         assert_eq!(created.state, KeyState::Unlocked);
-        assert!(store.create(PASSPHRASE).is_err(), "never overwritten");
+        assert!(keys.create(PASSPHRASE).is_err(), "never overwritten");
 
         let on_disk = std::fs::read_to_string(dir.path().join(PRIVATE_KEY_FILE)).expect("file");
         assert!(on_disk.starts_with("-----BEGIN ENCRYPTED PRIVATE KEY-----"));
 
-        store.lock().expect("lock");
+        keys.lock().expect("lock");
         let now: Timestamp = "2026-09-23T10:00:00.000Z".parse().expect("ts");
+        let client_id = client(&store, now);
         let fp = "ab".repeat(32);
         let request = IssueLicenseRequest {
-            activation_code: activation_code(&fp),
-            client_slug: "acme-retail".into(),
-            business_type: BusinessType::Retail,
+            activation_code: activation_code(client_id, &fp),
+            client_id,
             max_devices: 2,
             expires_at: None,
         };
         assert!(
-            store.issue(&request, now).is_err(),
+            keys.issue(&store, &request, now).is_err(),
             "locked key cannot sign"
         );
-        assert!(store.unlock("wrong passphrase!!").is_err());
-        store.unlock(PASSPHRASE).expect("unlock");
+        assert!(keys.unlock("wrong passphrase!!").is_err());
+        keys.unlock(PASSPHRASE).expect("unlock");
 
-        let issued = store.issue(&request, now).expect("issue");
+        let issued = keys.issue(&store, &request, now).expect("issue");
+        assert_eq!(
+            issued.claims.client_slug, "acme-retail",
+            "from the client record"
+        );
         let public = parse_public_key_pem(created.public_key_pem.as_deref().expect("pem"))
             .expect("public key");
         verify_license(
@@ -266,12 +317,40 @@ mod tests {
             &public,
             created.key_id.as_deref().expect("kid"),
             &Expected {
-                client_id: Uuid::from_u128(42),
+                client_id,
                 fingerprint: &fp,
                 device_key_hash: &"5e".repeat(32),
             },
             now,
         )
         .expect("the POS would accept it");
+        let history = store.licenses(client_id).expect("history");
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].license_id, issued.claims.jti);
+        assert_eq!(history[0].device_name, "TILL-01");
+    }
+
+    #[test]
+    fn a_code_from_another_clients_till_is_refused() {
+        let dir = tempfile::TempDir::new().expect("tempdir");
+        let store = Store::open_in_memory().expect("store");
+        let keys = KeyStore::new(dir.path().to_path_buf());
+        keys.create(PASSPHRASE).expect("create");
+        let now: Timestamp = "2026-09-23T10:00:00.000Z".parse().expect("ts");
+        let client_id = client(&store, now);
+        let err = keys
+            .issue(
+                &store,
+                &IssueLicenseRequest {
+                    activation_code: activation_code(Uuid::from_u128(42), &"ab".repeat(32)),
+                    client_id,
+                    max_devices: 1,
+                    expires_at: None,
+                },
+                now,
+            )
+            .expect_err("wrong client");
+        assert!(err.message.contains("another client"));
+        assert!(store.licenses(client_id).expect("history").is_empty());
     }
 }

@@ -1,0 +1,81 @@
+# Builds one client's Windows installer. Dispatched by the generator app
+# (Builds → Build installer) after it commits `clients/<slug>/`; can also be
+# run by hand from the Actions tab.
+#
+# Must exist on the repository's default branch for workflow_dispatch to be
+# available.
+name: Build client
+
+run-name: Build ${{ inputs.client }} · ${{ inputs.build_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      client:
+        description: Client slug (folder under clients/)
+        required: true
+        type: string
+      build_id:
+        description: Build id from the generator (names the artifact)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-client-${{ inputs.client }}
+  cancel-in-progress: false
+
+jobs:
+  installer:
+    name: Windows installer (${{ inputs.client }})
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      # Inputs reach scripts only through the environment (never interpolated
+      # into shell code).
+      CLIENT: ${{ inputs.client }}
+      BUILD_ID: ${{ inputs.build_id }}
+    steps:
+      - name: Validate inputs
+        shell: bash
+        run: |
+          [[ "$CLIENT" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ && ${#CLIENT} -le 40 ]] \
+            || { echo "::error::invalid client slug"; exit 1; }
+          [[ "$BUILD_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] \
+            || { echo "::error::invalid build id"; exit 1; }
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: ilammy/setup-nasm@v1 # vendored OpenSSL (SQLCipher) assembler
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: client-installer
+      - run: pnpm install --frozen-lockfile
+      - name: Prepare client build
+        id: prepare
+        shell: bash
+        run: node scripts/prepare-client-build.mjs "$CLIENT"
+      - name: Client icons
+        if: steps.prepare.outputs.has_icon == 'true'
+        shell: bash
+        run: >
+          pnpm --filter @pos/pos-client exec tauri icon
+          "$GITHUB_WORKSPACE/clients/$CLIENT/app-icon.png"
+          -o "$GITHUB_WORKSPACE/apps/pos-client/src-tauri/client-icons"
+      # POS_CLIENT_CONFIG and POS_LICENSE_PUBLIC_KEY come from the prepare
+      # step; build.rs refuses the development key in release builds.
+      - name: Build installer
+        shell: bash
+        run: pnpm --filter @pos/pos-client tauri build --config src-tauri/tauri.client.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pos-${{ inputs.client }}-${{ inputs.build_id }}
+          path: target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 30

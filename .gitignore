@@ -7,6 +7,10 @@ target/
 
 # tauri generated
 apps/*/src-tauri/gen/schemas/
+# per-client build inputs written by scripts/prepare-client-build.mjs
+apps/pos-client/src-tauri/tauri.client.json
+apps/pos-client/src-tauri/client-assets/
+apps/pos-client/src-tauri/client-icons/
 
 # env / secrets — license signing keys must NEVER be committed
 .env
@@ -14,8 +18,10 @@ apps/*/src-tauri/gen/schemas/
 !.env.example
 *.pem
 *.key
-# …except the documented, committed DEVELOPMENT key pair
+# …except the documented, committed DEVELOPMENT key pair, and the PUBLIC keys
+# the generator commits next to each client
 !keys/dev/*.pem
+!clients/*/license-public-key.pem
 secrets/
 
 # os / editor

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-list-builds"
+description = "Enables the list_builds command without any pre-configured scope."
+commands.allow = ["list_builds"]
+
+[[permission]]
+identifier = "deny-list-builds"
+description = "Denies the list_builds command without any pre-configured scope."
+commands.deny = ["list_builds"]

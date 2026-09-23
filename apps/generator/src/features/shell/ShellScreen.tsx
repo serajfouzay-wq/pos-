@@ -1,11 +1,23 @@
 import { LOCALES, type GeneratorAppInfo, type Locale } from '@pos/shared';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
+import type { JSX } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NotInTauriError } from '../../ipc/queries';
+import { SECTIONS, useNavigationStore, type Section } from '../../stores/navigation';
+import { BuildsScreen } from '../builds/BuildsScreen';
+import { ClientsScreen } from '../clients/ClientsScreen';
 import { LicensesScreen } from '../licenses/LicensesScreen';
-import { SECTIONS, useNavigationStore } from '../../stores/navigation';
+import { SettingsScreen } from '../settings/SettingsScreen';
+
 import { useUiStore } from '../../stores/ui';
+
+const SCREENS: Record<Section, () => JSX.Element | null> = {
+  clients: ClientsScreen,
+  builds: BuildsScreen,
+  licenses: LicensesScreen,
+  settings: SettingsScreen,
+};
 
 const LOCALE_LABELS: Record<Locale, string> = { en: 'English', ar: 'العربية' };
 
@@ -16,7 +28,8 @@ interface Props {
 export function ShellScreen({ appInfo }: Props) {
   const { t } = useTranslation();
   const { locale, setLocale } = useUiStore();
-  const { section, navigate } = useNavigationStore();
+  const { section, navigate, closeClient } = useNavigationStore();
+  const Screen = SCREENS[section];
 
   return (
     <div className="layout">
@@ -29,6 +42,7 @@ export function ShellScreen({ appInfo }: Props) {
             className="sidebar__item"
             aria-current={candidate === section ? 'page' : undefined}
             onClick={() => {
+              if (candidate === 'clients' && section === 'clients') closeClient();
               navigate(candidate);
             }}
           >
@@ -84,14 +98,7 @@ export function ShellScreen({ appInfo }: Props) {
             transition={{ duration: 0.18 }}
           >
             <h1>{t(`nav.${section}`)}</h1>
-            {section === 'licenses' ? (
-              <LicensesScreen />
-            ) : (
-              <>
-                <p className="muted">{t('shell.phase')}</p>
-                <div className="placeholder">{t('shell.comingSoon')}</div>
-              </>
-            )}
+            <Screen />
           </motion.section>
         </AnimatePresence>
       </main>

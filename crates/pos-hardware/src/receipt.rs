@@ -1,6 +1,7 @@
 //! Receipt layout. One layout, two outputs: ESC/POS bytes for the printer and
 //! plain text (tests, on-screen preview) — so what is tested is what prints.
 
+use pos_core::config::ClientConfig;
 use pos_core::currency::CurrencyCode;
 use pos_core::money::{to_decimal_string, MinorUnits};
 use pos_core::receipt::Receipt;
@@ -31,6 +32,25 @@ enum Block {
         double: bool,
     },
     Rule,
+}
+
+impl ReceiptTemplate {
+    /// The client's receipt settings, exactly as the till prints them (also
+    /// used by the generator's preview).
+    pub fn for_client(client: &ClientConfig, logo: Option<MonoImage>) -> Self {
+        let receipt = &client.receipt;
+        Self {
+            business_name: client.display_name.clone(),
+            header_lines: receipt.header_lines.clone(),
+            footer_text: receipt.footer_text.clone(),
+            tax_number: receipt
+                .show_tax_number
+                .then(|| client.tax.registration_number.clone())
+                .flatten(),
+            paper_width_mm: receipt.paper_width_mm,
+            logo,
+        }
+    }
 }
 
 /// Characters per line in font A.

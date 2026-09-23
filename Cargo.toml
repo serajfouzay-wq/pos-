@@ -43,6 +43,10 @@ pos-hardware = { path = "crates/pos-hardware" }
 tempfile = "3"
 pos-hwid = { path = "crates/pos-hwid" }
 pos-license = { path = "crates/pos-license" }
+tauri-plugin-opener = "2"
+# OS credential store: Windows Credential Manager (macOS Keychain).
+keyring = { version = "3", features = ["windows-native", "apple-native"] }
+png = "0.17"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

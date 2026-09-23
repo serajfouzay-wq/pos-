@@ -84,18 +84,7 @@ pub struct PrintService {
 }
 
 pub fn template_for(client: &ClientConfig, logo: Option<MonoImage>) -> ReceiptTemplate {
-    let receipt = &client.receipt;
-    ReceiptTemplate {
-        business_name: client.display_name.clone(),
-        header_lines: receipt.header_lines.clone(),
-        footer_text: receipt.footer_text.clone(),
-        tax_number: receipt
-            .show_tax_number
-            .then(|| client.tax.registration_number.clone())
-            .flatten(),
-        paper_width_mm: receipt.paper_width_mm,
-        logo,
-    }
+    ReceiptTemplate::for_client(client, logo)
 }
 
 impl PrintService {

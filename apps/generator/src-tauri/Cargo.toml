@@ -16,16 +16,29 @@ crate-type = ["rlib"]
 tauri-build.workspace = true
 
 [dependencies]
+base64.workspace = true
+chrono.workspace = true
+hex.workspace = true
 pos-core.workspace = true
+pos-hardware.workspace = true
 pos-license = { workspace = true, features = ["issuer"] }
-tauri.workspace = true
-tauri-plugin-single-instance.workspace = true
+rusqlite.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
+tauri.workspace = true
+tauri-plugin-opener.workspace = true
+tauri-plugin-single-instance.workspace = true
+thiserror.workspace = true
+ureq.workspace = true
+uuid.workspace = true
+
+[target.'cfg(any(windows, target_os = "macos"))'.dependencies]
+keyring.workspace = true
 
 [dev-dependencies]
+png.workspace = true
 tempfile.workspace = true
-uuid.workspace = true
 
 [lints]
 workspace = true

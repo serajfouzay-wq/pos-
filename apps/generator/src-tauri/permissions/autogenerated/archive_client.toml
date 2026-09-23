@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-archive-client"
+description = "Enables the archive_client command without any pre-configured scope."
+commands.allow = ["archive_client"]
+
+[[permission]]
+identifier = "deny-archive-client"
+description = "Denies the archive_client command without any pre-configured scope."
+commands.deny = ["archive_client"]

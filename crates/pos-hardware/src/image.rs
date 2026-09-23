@@ -13,6 +13,38 @@ impl MonoImage {
     pub fn bytes_per_row(&self) -> usize {
         self.width.div_ceil(8)
     }
+
+    /// 1-bit grayscale PNG of exactly what the printer receives (on-screen
+    /// preview in the generator).
+    pub fn to_png(&self) -> Result<Vec<u8>, ImageError> {
+        let mut out = Vec::new();
+        {
+            let width = u32::try_from(self.width).map_err(|e| ImageError::Encode(e.to_string()))?;
+            let height =
+                u32::try_from(self.height).map_err(|e| ImageError::Encode(e.to_string()))?;
+            let mut encoder = png::Encoder::new(&mut out, width, height);
+            encoder.set_color(png::ColorType::Grayscale);
+            encoder.set_depth(png::BitDepth::One);
+            let mut writer = encoder
+                .write_header()
+                .map_err(|e| ImageError::Encode(e.to_string()))?;
+            // PNG grayscale: 1 = white; ours: 1 = black.
+            let inverted: Vec<u8> = self.data.iter().map(|b| !b).collect();
+            writer
+                .write_image_data(&inverted)
+                .map_err(|e| ImageError::Encode(e.to_string()))?;
+        }
+        Ok(out)
+    }
+}
+
+/// Width and height of a PNG without decoding the pixels.
+pub fn png_dimensions(bytes: &[u8]) -> Result<(u32, u32), ImageError> {
+    let reader = png::Decoder::new(bytes)
+        .read_info()
+        .map_err(|e| ImageError::Decode(e.to_string()))?;
+    let info = reader.info();
+    Ok((info.width, info.height))
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -21,6 +53,8 @@ pub enum ImageError {
     Decode(String),
     #[error("logo is empty")]
     Empty,
+    #[error("cannot encode preview: {0}")]
+    Encode(String),
 }
 
 /// Printable dot width: 384 dots on 58 mm paper, 576 on 80 mm (203 dpi heads).
@@ -141,5 +175,16 @@ mod tests {
     #[test]
     fn garbage_is_rejected() {
         assert!(logo_from_png(b"not a png", 384).is_err());
+    }
+
+    #[test]
+    fn preview_png_round_trips_the_printed_dots() {
+        let source = png(2, 1, &[0, 0, 0, 255, 0, 0, 0, 0]);
+        assert_eq!(png_dimensions(&source).expect("dims"), (2, 1));
+        let img = logo_from_png(&source, 576).expect("decodes");
+        let preview = img.to_png().expect("encode");
+        assert_eq!(png_dimensions(&preview).expect("dims"), (2, 1));
+        // Decoding the preview gives the same dots back.
+        assert_eq!(logo_from_png(&preview, 576).expect("decode preview"), img);
     }
 }

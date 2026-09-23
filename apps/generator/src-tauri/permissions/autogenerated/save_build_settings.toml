@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-save-build-settings"
+description = "Enables the save_build_settings command without any pre-configured scope."
+commands.allow = ["save_build_settings"]
+
+[[permission]]
+identifier = "deny-save-build-settings"
+description = "Denies the save_build_settings command without any pre-configured scope."
+commands.deny = ["save_build_settings"]
