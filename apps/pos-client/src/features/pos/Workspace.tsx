@@ -7,18 +7,22 @@ import {
   useKickDrawer,
   useLogout,
   usePrinterStatus,
+  useProducts,
 } from '../../ipc/queries';
 import { can } from '../../lib/permissions';
 import { useUiStore } from '../../stores/ui';
+import { FloorAdmin } from '../admin/FloorAdmin';
+import { MenuAdmin } from '../admin/MenuAdmin';
 import { PrinterAdmin } from '../admin/PrinterAdmin';
 import { ProductsAdmin } from '../admin/ProductsAdmin';
+import { StockAdmin } from '../admin/StockAdmin';
 import { UsersAdmin } from '../admin/UsersAdmin';
 import { SellScreen } from '../sell/SellScreen';
 import { SyncIndicator } from '../sync/SyncIndicator';
 import { CloseShiftDialog } from '../shift/CloseShiftDialog';
 import { ShiftGate } from '../shift/ShiftGate';
 
-type View = 'sell' | 'products' | 'users' | 'printer';
+type View = 'sell' | 'products' | 'menu' | 'floor' | 'stock' | 'users' | 'printer';
 const LOCALE_LABELS: Record<Locale, string> = { en: 'EN', ar: 'ع' };
 
 export function Workspace({ session }: { session: Session }) {
@@ -30,6 +34,10 @@ export function Workspace({ session }: { session: Session }) {
   const shift = useCurrentShift();
   const { locale, setLocale } = useUiStore();
   const [view, setView] = useState<View>('sell');
+  const business = info.data?.client.business_type;
+  const mayViewStock = can(session, 'inventory.view');
+  const lowStock = useProducts({ low_stock_only: true, limit: 1000 }, mayViewStock);
+  const lowCount = lowStock.data?.length ?? 0;
   // Snapshot of the shift being closed: the dialog must outlive the shift
   // itself so the reconciliation result stays on screen after closing.
   const [closingShift, setClosingShift] = useState<ShiftSummary | null>(null);
@@ -37,6 +45,9 @@ export function Workspace({ session }: { session: Session }) {
   const views: { id: View; allowed: boolean }[] = [
     { id: 'sell', allowed: true },
     { id: 'products', allowed: can(session, 'catalog.manage') },
+    { id: 'menu', allowed: business !== 'retail' && can(session, 'catalog.manage') },
+    { id: 'floor', allowed: business !== 'retail' && can(session, 'catalog.manage') },
+    { id: 'stock', allowed: mayViewStock },
     { id: 'users', allowed: can(session, 'user.manage') },
     { id: 'printer', allowed: can(session, 'settings.manage') },
   ];
@@ -46,6 +57,12 @@ export function Workspace({ session }: { session: Session }) {
     switch (view) {
       case 'products':
         return <ProductsAdmin />;
+      case 'menu':
+        return <MenuAdmin />;
+      case 'floor':
+        return <FloorAdmin />;
+      case 'stock':
+        return <StockAdmin session={session} />;
       case 'users':
         return <UsersAdmin />;
       case 'printer':
@@ -83,6 +100,17 @@ export function Workspace({ session }: { session: Session }) {
         </nav>
         <div className="topbar__status">
           <SyncIndicator />
+          {lowCount > 0 && (
+            <button
+              type="button"
+              className="chip chip--warn"
+              onClick={() => {
+                setView('stock');
+              }}
+            >
+              {t('status.lowStock', { count: lowCount })}
+            </button>
+          )}
           <span className={printerClass} title={printerState?.last_error ?? ''}>
             {!printerState?.configured
               ? t('status.noPrinter')

@@ -8,6 +8,7 @@ use rusqlite::Connection;
 
 use crate::repo::audit::Actor;
 use crate::repo::catalog::{self, Product, StockReason, Unit};
+use crate::repo::menu::{self, Combo, ComboItem, DiningTable, Modifier, ModifierGroup, TableShape};
 use crate::repo::Meta;
 
 struct Item {
@@ -122,9 +123,9 @@ fn catalogue(business: BusinessType) -> Vec<(&'static str, &'static str, Vec<Ite
                 "Groceries",
                 "#2F855A",
                 vec![
-                    stocked("Rice 5kg", 3_250, "6281000000017", 40),
-                    stocked("Sugar 2kg", 950, "6281000000024", 60),
-                    stocked("Olive Oil 1L", 2_750, "6281000000031", 25),
+                    stocked("Rice 5kg", 3_250, "6281000000014", 40),
+                    stocked("Sugar 2kg", 950, "6281000000021", 60),
+                    stocked("Olive Oil 1L", 2_750, "6281000000038", 25),
                     Item {
                         name: "Dates (loose)",
                         price_fils: 2_500,
@@ -138,18 +139,18 @@ fn catalogue(business: BusinessType) -> Vec<(&'static str, &'static str, Vec<Ite
                 "Drinks",
                 "#2B6CB0",
                 vec![
-                    stocked("Water 1.5L", 150, "6281000000048", 200),
-                    stocked("Orange Juice 1L", 750, "6281000000055", 50),
-                    stocked("Cola 330ml", 200, "6281000000062", 150),
+                    stocked("Water 1.5L", 150, "6281000000045", 200),
+                    stocked("Orange Juice 1L", 750, "6281000000052", 50),
+                    stocked("Cola 330ml", 200, "6281000000069", 150),
                 ],
             ),
             (
                 "Household",
                 "#718096",
                 vec![
-                    stocked("Dish Soap", 850, "6281000000079", 30),
-                    stocked("Paper Towels", 1_250, "6281000000086", 30),
-                    stocked("Laundry Detergent", 3_500, "6281000000093", 20),
+                    stocked("Dish Soap", 850, "6281000000076", 30),
+                    stocked("Paper Towels", 1_250, "6281000000083", 30),
+                    stocked("Laundry Detergent", 3_500, "6281000000090", 20),
                 ],
             ),
         ],
@@ -169,7 +170,287 @@ fn scale(price_fils: i64, currency: CurrencyCode) -> i64 {
     }
 }
 
-/// Inserts the starter catalogue. Returns the number of products created.
+/// A modifier group: name, min, max, options (name, fils, default?), and the
+/// products that ask it.
+struct GroupSpec {
+    name: &'static str,
+    min: i64,
+    max: i64,
+    options: &'static [(&'static str, i64, bool)],
+    products: &'static [&'static str],
+}
+
+fn groups(business: BusinessType) -> Vec<GroupSpec> {
+    const COFFEE: &[&str] = &[
+        "Espresso",
+        "Americano",
+        "Cappuccino",
+        "Flat White",
+        "Spanish Latte",
+        "Iced Latte",
+    ];
+    const MILKY: &[&str] = &[
+        "Cappuccino",
+        "Flat White",
+        "Spanish Latte",
+        "Iced Latte",
+        "Hot Chocolate",
+    ];
+    match business {
+        BusinessType::Cafe => vec![
+            GroupSpec {
+                name: "Size",
+                min: 1,
+                max: 1,
+                options: &[
+                    ("Small", 0, false),
+                    ("Medium", 250, true),
+                    ("Large", 500, false),
+                ],
+                products: COFFEE,
+            },
+            GroupSpec {
+                name: "Milk",
+                min: 0,
+                max: 1,
+                options: &[
+                    ("Full cream", 0, true),
+                    ("Oat", 200, false),
+                    ("Almond", 200, false),
+                    ("Lactose-free", 150, false),
+                ],
+                products: MILKY,
+            },
+            GroupSpec {
+                name: "Sugar",
+                min: 0,
+                max: 1,
+                options: &[
+                    ("No sugar", 0, false),
+                    ("Less sugar", 0, false),
+                    ("Normal", 0, false),
+                    ("Extra sugar", 0, false),
+                ],
+                products: &[
+                    "Espresso",
+                    "Americano",
+                    "Cappuccino",
+                    "Flat White",
+                    "Spanish Latte",
+                    "Iced Latte",
+                    "Karak Tea",
+                ],
+            },
+            GroupSpec {
+                name: "Extras",
+                min: 0,
+                max: 3,
+                options: &[
+                    ("Extra shot", 300, false),
+                    ("Vanilla syrup", 250, false),
+                    ("Caramel syrup", 250, false),
+                ],
+                products: COFFEE,
+            },
+        ],
+        BusinessType::Restaurant => vec![
+            GroupSpec {
+                name: "Doneness",
+                min: 1,
+                max: 1,
+                options: &[
+                    ("Rare", 0, false),
+                    ("Medium rare", 0, false),
+                    ("Medium", 0, true),
+                    ("Well done", 0, false),
+                ],
+                products: &["Mixed Grill"],
+            },
+            GroupSpec {
+                name: "Side",
+                min: 1,
+                max: 1,
+                options: &[
+                    ("Rice", 0, true),
+                    ("Fries", 0, false),
+                    ("Salad", 0, false),
+                    ("Bread", 0, false),
+                ],
+                products: &["Mixed Grill", "Grilled Hammour"],
+            },
+            GroupSpec {
+                name: "Spice level",
+                min: 0,
+                max: 1,
+                options: &[("Mild", 0, false), ("Medium", 0, false), ("Hot", 0, false)],
+                products: &["Chicken Machboos", "Lamb Kabsa", "Vegetable Biryani"],
+            },
+        ],
+        BusinessType::Retail => vec![],
+    }
+}
+
+/// Combo name, price in fils, components.
+fn combos(business: BusinessType) -> Vec<(&'static str, i64, &'static [&'static str])> {
+    match business {
+        BusinessType::Cafe => vec![
+            ("Breakfast Set", 1_750, &["Cappuccino", "Croissant"]),
+            (
+                "Afternoon Treat",
+                2_750,
+                &["Spanish Latte", "Cheesecake Slice"],
+            ),
+        ],
+        BusinessType::Restaurant => vec![(
+            "Lunch Set",
+            4_250,
+            &["Lentil Soup", "Chicken Machboos", "Soft Drink"],
+        )],
+        BusinessType::Retail => vec![],
+    }
+}
+
+/// (label, area, seats, shape, x, y) on the 24 × 16 floor grid.
+fn tables(business: BusinessType) -> Vec<(String, &'static str, i64, TableShape, i64, i64)> {
+    let mut out = Vec::new();
+    match business {
+        BusinessType::Restaurant => {
+            for i in 0..8 {
+                out.push((
+                    format!("T{}", i + 1),
+                    "Main hall",
+                    4,
+                    TableShape::Square,
+                    2 + (i % 4) * 4,
+                    2 + (i / 4) * 4,
+                ));
+            }
+            for i in 0..4 {
+                out.push((
+                    format!("P{}", i + 1),
+                    "Terrace",
+                    2,
+                    TableShape::Round,
+                    19 + (i % 2) * 3,
+                    2 + (i / 2) * 4,
+                ));
+            }
+            for i in 0..4 {
+                out.push((
+                    format!("B{}", i + 1),
+                    "Bar",
+                    1,
+                    TableShape::Bar,
+                    3 + i * 3,
+                    12,
+                ));
+            }
+        }
+        BusinessType::Cafe => {
+            for i in 0..6 {
+                out.push((
+                    format!("{}", i + 1),
+                    "Seating",
+                    2,
+                    TableShape::Round,
+                    2 + (i % 3) * 4,
+                    3 + (i / 3) * 4,
+                ));
+            }
+        }
+        BusinessType::Retail => {}
+    }
+    out
+}
+
+fn load_menu(
+    conn: &Connection,
+    business: BusinessType,
+    currency: CurrencyCode,
+    products: &[(String, uuid::Uuid)],
+    now: Timestamp,
+) -> rusqlite::Result<()> {
+    let id_of = |name: &str| products.iter().find(|(n, _)| n == name).map(|(_, id)| *id);
+    let mut asked: Vec<(uuid::Uuid, Vec<uuid::Uuid>)> = Vec::new();
+    for (sort, spec) in groups(business).into_iter().enumerate() {
+        let group = ModifierGroup {
+            meta: Meta::new(now),
+            name: spec.name.to_owned(),
+            name_localized: serde_json::json!({}),
+            min_select: spec.min,
+            max_select: spec.max,
+            sort_order: i64::try_from(sort).unwrap_or(0),
+            is_active: true,
+        };
+        let options: Vec<Modifier> = spec
+            .options
+            .iter()
+            .enumerate()
+            .map(|(i, (name, fils, default))| Modifier {
+                meta: Meta::new(now),
+                group_id: group.meta.id,
+                name: (*name).to_owned(),
+                name_localized: serde_json::json!({}),
+                price_delta: scale(*fils, currency),
+                is_default: *default,
+                sort_order: i64::try_from(i).unwrap_or(0),
+                is_active: true,
+            })
+            .collect();
+        menu::save_group(conn, &group, &options, now)?;
+        for product in spec.products.iter().filter_map(|p| id_of(p)) {
+            match asked.iter_mut().find(|(p, _)| *p == product) {
+                Some((_, list)) => list.push(group.meta.id),
+                None => asked.push((product, vec![group.meta.id])),
+            }
+        }
+    }
+    for (product, group_ids) in asked {
+        menu::set_product_groups(conn, product, &group_ids, now)?;
+    }
+    for (sort, (name, fils, parts)) in combos(business).into_iter().enumerate() {
+        let combo = Combo {
+            meta: Meta::new(now),
+            name: name.to_owned(),
+            name_localized: serde_json::json!({}),
+            price: scale(fils, currency),
+            color: Some("#B7791F".to_owned()),
+            sort_order: i64::try_from(sort).unwrap_or(0),
+            is_active: true,
+        };
+        let items: Vec<ComboItem> = parts
+            .iter()
+            .filter_map(|p| id_of(p))
+            .enumerate()
+            .map(|(i, product_id)| ComboItem {
+                meta: Meta::new(now),
+                combo_id: combo.meta.id,
+                product_id,
+                quantity_milli: 1000,
+                sort_order: i64::try_from(i).unwrap_or(0),
+            })
+            .collect();
+        menu::save_combo(conn, &combo, &items, now)?;
+    }
+    for (label, area, seats, shape, x, y) in tables(business) {
+        let table = DiningTable {
+            meta: Meta::new(now),
+            sort_order: y * 24 + x,
+            label,
+            area: area.to_owned(),
+            seats,
+            shape,
+            grid_x: x,
+            grid_y: y,
+            is_active: true,
+        };
+        menu::save_table(conn, &table, now)?;
+    }
+    Ok(())
+}
+
+/// Inserts the starter catalogue (and, for cafes and restaurants, options,
+/// combos and a floor plan). Returns the number of products created.
 pub fn load(
     conn: &Connection,
     business: BusinessType,
@@ -180,6 +461,7 @@ pub fn load(
 ) -> rusqlite::Result<usize> {
     let mut created = 0;
     let mut position = 0;
+    let mut products = Vec::new();
     for (sort, (category_name, color, items)) in catalogue(business).into_iter().enumerate() {
         let category = catalog::new_category(
             category_name,
@@ -210,6 +492,7 @@ pub fn load(
                 is_active: true,
             };
             catalog::save(conn, &product, now)?;
+            products.push((product.name.clone(), product.meta.id));
             if let Some(stock) = item.stock {
                 catalog::move_stock(
                     conn,
@@ -225,6 +508,7 @@ pub fn load(
             created += 1;
         }
     }
+    load_menu(conn, business, currency, &products, now)?;
     Ok(created)
 }
 
@@ -238,5 +522,87 @@ mod tests {
         assert_eq!(scale(1_250, CurrencyCode::USD), 125);
         assert_eq!(scale(1_255, CurrencyCode::USD), 126);
         assert_eq!(scale(1_250, CurrencyCode::JPY), 1);
+    }
+
+    #[test]
+    fn every_sample_catalogue_prices_its_combos_and_options() {
+        use pos_core::config::ClientConfig;
+        use pos_hwid::HardwareComponents;
+
+        use crate::db::Database;
+        use crate::repo::sales::{self, ComboRef, PayloadItem};
+
+        let now: Timestamp = "2026-09-24T12:00:00.000Z".parse().expect("ts");
+        let config = ClientConfig::parse(include_str!(
+            "../../../../packages/shared/contracts/client-config.example.json"
+        ))
+        .expect("config");
+        for business in [
+            BusinessType::Retail,
+            BusinessType::Cafe,
+            BusinessType::Restaurant,
+        ] {
+            let hw = HardwareComponents::new("CPU", "GUID", "BOARD", "VOL").expect("hw");
+            let db = Database::open_in_memory(&hw.database_key(uuid::Uuid::nil())).expect("db");
+            let conn = db.conn();
+            let actor = Actor {
+                user_id: uuid::Uuid::nil(),
+                role: pos_core::rbac::Role::Owner,
+                device_id: uuid::Uuid::nil(),
+            };
+            load(&conn, business, CurrencyCode::KWD, 0, &actor, now).expect("load");
+            let menu = menu::menu(&conn, false).expect("menu");
+            for combo in &menu.combos {
+                let instance = uuid::Uuid::now_v7();
+                // Each component with the default choice of every group it asks.
+                let items: Vec<PayloadItem> = combo
+                    .items
+                    .iter()
+                    .map(|c| PayloadItem {
+                        product_id: c.product_id,
+                        quantity_milli: c.quantity_milli,
+                        modifier_ids: menu
+                            .product_modifier_groups
+                            .get(&c.product_id)
+                            .into_iter()
+                            .flatten()
+                            .filter_map(|g| {
+                                menu.modifier_groups.iter().find(|x| x.group.meta.id == *g)
+                            })
+                            .flat_map(|g| {
+                                g.modifiers
+                                    .iter()
+                                    .filter(|m| m.is_default)
+                                    .map(|m| m.meta.id)
+                            })
+                            .collect(),
+                        course: None,
+                        note: None,
+                        combo: Some(ComboRef {
+                            combo_id: combo.combo.meta.id,
+                            instance,
+                        }),
+                    })
+                    .collect();
+                let quote = sales::quote(&conn, &items, &[], &config, now).expect("combo prices");
+                assert!(quote.total >= combo.combo.price, "{}", combo.combo.name);
+                assert!(quote.discount_total > 0, "{} saves money", combo.combo.name);
+            }
+            let expected_tables = match business {
+                BusinessType::Restaurant => 16,
+                BusinessType::Cafe => 6,
+                BusinessType::Retail => 0,
+            };
+            assert_eq!(menu.dining_tables.len(), expected_tables);
+        }
+        for (_, _, items) in catalogue(BusinessType::Retail) {
+            for code in items.iter().filter_map(|i| i.barcode) {
+                assert_eq!(
+                    pos_hardware::label::symbology(code),
+                    Some(pos_hardware::label::Symbology::Ean13),
+                    "{code} is a valid EAN-13"
+                );
+            }
+        }
     }
 }

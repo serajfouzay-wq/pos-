@@ -9,10 +9,13 @@
 //! Order of operations
 //! 1. `gross = unit_price × quantity` per line.
 //! 2. Line-scoped discounts (product / category), capped at the line's gross.
-//! 3. Order-scoped discounts on the remaining subtotal (if `min_subtotal` is
+//! 3. Group discounts (combos): a group of lines sold together is brought
+//!    down to its set price, spread across the group's lines (largest
+//!    remainder). A combo never makes its items dearer.
+//! 4. Order-scoped discounts on the remaining subtotal (if `min_subtotal` is
 //!    met), spread across lines in proportion to their remaining value
 //!    (largest remainder), so per-line tax stays exact.
-//! 4. Tax per line on the discounted amount, extracted (tax-inclusive
+//! 5. Tax per line on the discounted amount, extracted (tax-inclusive
 //!    prices) or added (exclusive).
 
 use serde::Serialize;
@@ -31,6 +34,8 @@ pub struct PriceLine {
     pub unit_price: MinorUnits,
     pub quantity_milli: i64,
     pub tax_rate_bps: i64,
+    /// Lines sold together (one combo instance) share a group id.
+    pub group: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,6 +44,8 @@ pub enum DiscountValue {
     Percentage(i64),
     /// Minor units, once per matching line (line scope) or once per order.
     Fixed(MinorUnits),
+    /// Group scope only: reduce the group's remaining total to this price.
+    Target(MinorUnits),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,6 +53,8 @@ pub enum DiscountScope {
     Order,
     Product(Uuid),
     Category(Uuid),
+    /// Every line with this `group` (a combo instance).
+    Group(Uuid),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -107,7 +116,7 @@ pub enum PricingError {
 
 fn line_matches(scope: DiscountScope, line: &PriceLine) -> bool {
     match scope {
-        DiscountScope::Order => false,
+        DiscountScope::Order | DiscountScope::Group(_) => false,
         DiscountScope::Product(id) => line.product_id == id,
         DiscountScope::Category(id) => line.category_id == Some(id),
     }
@@ -130,6 +139,14 @@ fn discount_amount(value: DiscountValue, base: MinorUnits) -> Result<MinorUnits,
                 ));
             }
             amount
+        }
+        DiscountValue::Target(price) => {
+            if price < 0 {
+                return Err(PricingError::InvalidDiscount(
+                    "target price must not be negative",
+                ));
+            }
+            base - price
         }
     };
     Ok(raw.clamp(0, base.max(0)))
@@ -173,7 +190,18 @@ pub fn price(
     let mut applied = Vec::new();
 
     // 2. Line-scoped discounts.
-    for discount in discounts.iter().filter(|d| d.scope != DiscountScope::Order) {
+    let line_scoped = |d: &&Discount| {
+        matches!(
+            d.scope,
+            DiscountScope::Product(_) | DiscountScope::Category(_)
+        )
+    };
+    for discount in discounts.iter().filter(line_scoped) {
+        if matches!(discount.value, DiscountValue::Target(_)) {
+            return Err(PricingError::InvalidDiscount(
+                "a target price applies to a group only",
+            ));
+        }
         let mut hit = false;
         for (i, line) in lines.iter().enumerate() {
             if line_matches(discount.scope, line) {
@@ -187,8 +215,43 @@ pub fn price(
         }
     }
 
-    // 3. Order-scoped discounts, allocated across lines.
+    // 3. Group discounts, allocated across the group's lines.
+    for discount in discounts.iter() {
+        let DiscountScope::Group(group) = discount.scope else {
+            continue;
+        };
+        let members: Vec<usize> = (0..lines.len())
+            .filter(|&i| lines[i].group == Some(group))
+            .collect();
+        if members.is_empty() {
+            return Err(PricingError::InvalidDiscount(
+                "a group discount has no lines",
+            ));
+        }
+        let remaining: Vec<MinorUnits> = members
+            .iter()
+            .map(|&i| gross[i] - line_discount[i])
+            .collect();
+        let amount = discount_amount(discount.value, money::add(&remaining)?)?;
+        if amount == 0 {
+            continue;
+        }
+        for (share, &i) in money::allocate(amount, &remaining)?
+            .into_iter()
+            .zip(&members)
+        {
+            line_discount[i] += share;
+        }
+        applied.push(discount.id);
+    }
+
+    // 4. Order-scoped discounts, allocated across lines.
     for discount in discounts.iter().filter(|d| d.scope == DiscountScope::Order) {
+        if matches!(discount.value, DiscountValue::Target(_)) {
+            return Err(PricingError::InvalidDiscount(
+                "a target price applies to a group only",
+            ));
+        }
         let remaining: Vec<MinorUnits> = gross
             .iter()
             .zip(&line_discount)
@@ -214,7 +277,7 @@ pub fn price(
         applied.push(discount.id);
     }
 
-    // 4. Tax.
+    // 5. Tax.
     let mut priced = Vec::with_capacity(lines.len());
     for (i, line) in lines.iter().enumerate() {
         let net = gross[i] - line_discount[i];
@@ -288,6 +351,7 @@ mod tests {
             unit_price: price,
             quantity_milli: qty,
             tax_rate_bps: tax,
+            group: None,
         }
     }
 
@@ -436,5 +500,85 @@ mod tests {
         assert_eq!(price(&[], &[], true), Err(PricingError::Empty));
         assert!(price(&[line(1, 100, 0, 0)], &[], true).is_err());
         assert!(price(&[line(1, -1, 1000, 0)], &[], true).is_err());
+    }
+
+    fn grouped(mut l: PriceLine, group: u128) -> PriceLine {
+        l.group = Some(Uuid::from_u128(group));
+        l
+    }
+
+    fn combo(group: u128, price: i64) -> Discount {
+        Discount {
+            id: Uuid::from_u128(900 + group),
+            value: DiscountValue::Target(price),
+            scope: DiscountScope::Group(Uuid::from_u128(group)),
+            min_subtotal: None,
+        }
+    }
+
+    #[test]
+    fn a_combo_brings_its_lines_to_the_set_price() {
+        // Coffee 1.250 + croissant 0.900 + juice 1.100 = 3.250 → combo 2.500.
+        let lines = [
+            grouped(line(1, 1_250, 1000, 0), 7),
+            grouped(line(2, 900, 1000, 0), 7),
+            grouped(line(3, 1_100, 1000, 0), 7),
+            line(4, 500, 1000, 0), // not in the combo
+        ];
+        let q = price(&lines, &[combo(7, 2_500)], true).expect("quote");
+        assert_eq!(q.discount_total, 750);
+        let combo_total: i64 = q.lines[..3].iter().map(|l| l.line_total).sum();
+        assert_eq!(combo_total, 2_500);
+        assert_eq!(q.lines[3].line_total, 500, "other lines untouched");
+        assert_eq!(q.total, 3_000);
+        assert_eq!(q.applied_discounts, vec![Uuid::from_u128(907)]);
+        invariants(&q);
+    }
+
+    #[test]
+    fn a_combo_never_costs_more_and_two_instances_price_separately() {
+        let lines = [
+            grouped(line(1, 1_000, 1000, 0), 1),
+            grouped(line(2, 1_000, 1000, 0), 1),
+            grouped(line(1, 1_000, 1000, 0), 2),
+            grouped(line(2, 1_000, 1000, 0), 2),
+        ];
+        let q = price(&lines, &[combo(1, 2_500), combo(2, 1_500)], true).expect("quote");
+        assert_eq!(
+            q.lines[0].discount_amount + q.lines[1].discount_amount,
+            0,
+            "no surcharge"
+        );
+        assert_eq!(q.lines[2].line_total + q.lines[3].line_total, 1_500);
+        invariants(&q);
+    }
+
+    #[test]
+    fn combo_tax_is_computed_on_the_discounted_lines() {
+        let lines = [
+            grouped(line(1, 1_150, 1000, 1500), 3),
+            grouped(line(2, 1_150, 1000, 0), 3),
+        ];
+        let q = price(&lines, &[combo(3, 2_000)], true).expect("quote");
+        assert_eq!(q.total, 2_000);
+        // The taxed line carries half the saving: 1.000 incl. 15 % → 0.130 tax.
+        assert_eq!(q.lines[0].line_total, 1_000);
+        assert_eq!(q.lines[0].tax_amount, 130);
+        invariants(&q);
+    }
+
+    #[test]
+    fn target_prices_are_for_groups_only() {
+        let bad = Discount {
+            id: Uuid::nil(),
+            value: DiscountValue::Target(1),
+            scope: DiscountScope::Order,
+            min_subtotal: None,
+        };
+        assert!(price(&[line(1, 100, 1000, 0)], &[bad], true).is_err());
+        assert!(
+            price(&[line(1, 100, 1000, 0)], &[combo(5, 50)], true).is_err(),
+            "group without lines"
+        );
     }
 }

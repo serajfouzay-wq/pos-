@@ -7,9 +7,10 @@ use std::collections::HashMap;
 
 use pos_core::config::ClientConfig;
 use pos_core::currency::CurrencyCode;
+use pos_core::money;
 use pos_core::pricing::{self, Discount, DiscountScope, DiscountValue, PriceLine, Quote, TaxLine};
 use pos_core::rbac::Role;
-use pos_core::receipt::{Receipt, ReceiptLine, ReceiptPayment};
+use pos_core::receipt::{ModifierLine, Receipt, ReceiptLine, ReceiptPayment};
 use pos_core::sales::{OrderType, PaymentMethod, TransactionKind};
 use pos_core::tender::{self, Tender};
 use pos_core::time::Timestamp;
@@ -20,6 +21,8 @@ use uuid::Uuid;
 
 use super::audit::{self, Actor};
 use super::catalog::{self, StockReason};
+use super::menu;
+pub use super::orders::ComboRef;
 use super::outbox::{self, EventType};
 use super::{
     device, enum_at, enum_str, opt_ts_at, print_jobs, shifts, ts_at, uuid_at, Meta, SqlResultExt,
@@ -35,6 +38,9 @@ pub struct PayloadItem {
     pub modifier_ids: Vec<Uuid>,
     pub course: Option<i64>,
     pub note: Option<String>,
+    /// Set on every line added from one combo (same `instance`).
+    #[serde(default)]
+    pub combo: Option<ComboRef>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -134,26 +140,196 @@ fn load_discounts(conn: &Connection, ids: &[Uuid], now: Timestamp) -> IpcResult<
     Ok(out)
 }
 
-/// Prices a cart from the catalogue. Shared by `quote_transaction` and
-/// `create_transaction`, so the preview and the sale can never disagree.
-pub fn quote(
+/// A priced cart plus what each line was sold with (for the snapshots).
+pub struct PricedCart {
+    pub quote: Quote,
+    pub modifiers: Vec<Vec<ModifierLine>>,
+}
+
+/// Modifiers of one line, validated against the product's groups: options
+/// must be live and belong to a group the product asks; each group's count
+/// must be within its min/max (so required choices are made).
+fn resolve_modifiers(
+    product: &catalog::Product,
+    item: &PayloadItem,
+    catalog_menu: &MenuIndex,
+) -> IpcResult<Vec<ModifierLine>> {
+    let asked = catalog_menu
+        .product_groups
+        .get(&product.meta.id)
+        .cloned()
+        .unwrap_or_default();
+    let mut counts: HashMap<Uuid, i64> = HashMap::new();
+    let mut lines = Vec::with_capacity(item.modifier_ids.len());
+    for (i, id) in item.modifier_ids.iter().enumerate() {
+        if item.modifier_ids[..i].contains(id) {
+            return Err(invalid(format!(
+                "{}: an option was chosen twice.",
+                product.name
+            )));
+        }
+        let option = catalog_menu
+            .modifiers
+            .get(id)
+            .filter(|m| asked.contains(&m.group_id))
+            .ok_or_else(|| {
+                invalid(format!(
+                    "{}: an option is no longer available.",
+                    product.name
+                ))
+            })?;
+        *counts.entry(option.group_id).or_default() += 1;
+        lines.push(ModifierLine {
+            modifier_id: Some(option.meta.id),
+            name: option.name.clone(),
+            price_delta: option.price_delta,
+        });
+    }
+    for group_id in &asked {
+        let Some(group) = catalog_menu.groups.get(group_id) else {
+            continue;
+        };
+        let chosen = counts.get(group_id).copied().unwrap_or(0);
+        if chosen < group.min_select {
+            return Err(invalid(format!("{}: choose {}.", product.name, group.name)));
+        }
+        if chosen > group.max_select {
+            return Err(invalid(format!(
+                "{}: at most {} for {}.",
+                product.name, group.max_select, group.name
+            )));
+        }
+    }
+    Ok(lines)
+}
+
+/// Live modifier groups/options and product links, loaded once per quote.
+struct MenuIndex {
+    groups: HashMap<Uuid, menu::ModifierGroup>,
+    modifiers: HashMap<Uuid, menu::Modifier>,
+    product_groups: HashMap<Uuid, Vec<Uuid>>,
+}
+
+impl MenuIndex {
+    fn load(conn: &Connection) -> IpcResult<Self> {
+        let groups: HashMap<Uuid, menu::ModifierGroup> = menu::modifier_groups(conn)
+            .ipc()?
+            .into_iter()
+            .filter(|g| g.is_active)
+            .map(|g| (g.meta.id, g))
+            .collect();
+        let modifiers = menu::modifiers(conn)
+            .ipc()?
+            .into_iter()
+            .filter(|m| m.is_active && groups.contains_key(&m.group_id))
+            .map(|m| (m.meta.id, m))
+            .collect();
+        let mut product_groups: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
+        for link in menu::product_groups(conn).ipc()? {
+            if groups.contains_key(&link.group_id) {
+                product_groups
+                    .entry(link.product_id)
+                    .or_default()
+                    .push(link.group_id);
+            }
+        }
+        Ok(Self {
+            groups,
+            modifiers,
+            product_groups,
+        })
+    }
+}
+
+/// Each combo instance must be exactly the combo's components; its lines are
+/// then priced as a group down to the combo price (plus any option
+/// surcharges, which a combo never swallows).
+fn combo_discounts(
+    conn: &Connection,
+    items: &[PayloadItem],
+    lines: &[PriceLine],
+    modifiers: &[Vec<ModifierLine>],
+) -> IpcResult<Vec<Discount>> {
+    let mut instances: Vec<(ComboRef, Vec<usize>)> = Vec::new();
+    for (i, item) in items.iter().enumerate() {
+        let Some(combo) = item.combo else { continue };
+        match instances
+            .iter_mut()
+            .find(|(c, _)| c.instance == combo.instance)
+        {
+            Some((c, members)) if c.combo_id == combo.combo_id => members.push(i),
+            Some(_) => return Err(invalid("A combo in the cart is inconsistent.")),
+            None => instances.push((combo, vec![i])),
+        }
+    }
+    if instances.is_empty() {
+        return Ok(Vec::new());
+    }
+    let combos = menu::combos(conn).ipc()?;
+    let components = menu::combo_items(conn).ipc()?;
+    let mut out = Vec::with_capacity(instances.len());
+    for (combo_ref, members) in instances {
+        let combo = combos
+            .iter()
+            .find(|c| c.meta.id == combo_ref.combo_id && c.is_active)
+            .ok_or_else(|| invalid("A combo in the cart is no longer available."))?;
+        let mut expected: Vec<(Uuid, i64)> = components
+            .iter()
+            .filter(|c| c.combo_id == combo.meta.id)
+            .map(|c| (c.product_id, c.quantity_milli))
+            .collect();
+        let mut actual: Vec<(Uuid, i64)> = members
+            .iter()
+            .map(|&i| (items[i].product_id, items[i].quantity_milli))
+            .collect();
+        expected.sort();
+        actual.sort();
+        if expected.is_empty() || expected != actual {
+            return Err(invalid(format!(
+                "{} must be sold with exactly its items.",
+                combo.name
+            )));
+        }
+        let mut surcharge = 0;
+        for &i in &members {
+            let delta: i64 = modifiers[i].iter().map(|m| m.price_delta).sum();
+            surcharge += money::multiply_by_quantity(
+                delta,
+                lines[i].quantity_milli,
+                money::RoundingMode::HalfUp,
+            )
+            .map_err(|e| invalid(e.to_string()))?;
+        }
+        out.push(Discount {
+            id: combo.meta.id,
+            value: DiscountValue::Target(combo.price.saturating_add(surcharge).max(0)),
+            scope: DiscountScope::Group(combo_ref.instance),
+            min_subtotal: None,
+        });
+    }
+    Ok(out)
+}
+
+/// Prices a cart from the catalogue. Shared by `quote_transaction`,
+/// `create_transaction` and open orders, so a preview and the sale can never
+/// disagree.
+pub fn price_cart(
     conn: &Connection,
     items: &[PayloadItem],
     discount_rule_ids: &[Uuid],
     config: &ClientConfig,
     now: Timestamp,
-) -> IpcResult<Quote> {
+) -> IpcResult<PricedCart> {
     if items.is_empty() {
         return Err(invalid("Add at least one item."));
     }
     if items.len() > MAX_LINES {
         return Err(invalid("Too many lines on one sale."));
     }
+    let catalog_menu = MenuIndex::load(conn)?;
     let mut lines = Vec::with_capacity(items.len());
+    let mut modifiers = Vec::with_capacity(items.len());
     for item in items {
-        if !item.modifier_ids.is_empty() {
-            return Err(invalid("Modifiers are not available yet."));
-        }
         let product = catalog::get(conn, item.product_id)
             .ipc()?
             .filter(|p| p.is_active)
@@ -164,19 +340,44 @@ pub fn quote(
         if !product.sold_by_weight && item.quantity_milli % 1000 != 0 {
             return Err(invalid(format!("{} is sold in whole units.", product.name)));
         }
+        if item.course.is_some_and(|c| !(1..=9).contains(&c)) {
+            return Err(invalid("Courses are numbered 1 to 9."));
+        }
+        let chosen = resolve_modifiers(&product, item, &catalog_menu)?;
+        let unit_price = product.price + chosen.iter().map(|m| m.price_delta).sum::<i64>();
+        if unit_price < 0 {
+            return Err(invalid(format!(
+                "{}: the options make the price negative.",
+                product.name
+            )));
+        }
         lines.push(PriceLine {
             product_id: product.meta.id,
             category_id: product.category_id,
             name: product.name,
             sku: product.sku,
-            unit_price: product.price,
+            unit_price,
             quantity_milli: item.quantity_milli,
             tax_rate_bps: product.tax_rate_bps,
+            group: item.combo.map(|c| c.instance),
         });
+        modifiers.push(chosen);
     }
-    let discounts = load_discounts(conn, discount_rule_ids, now)?;
-    pricing::price(&lines, &discounts, config.tax.prices_include_tax)
-        .map_err(|e| invalid(e.to_string()))
+    let mut discounts = combo_discounts(conn, items, &lines, &modifiers)?;
+    discounts.extend(load_discounts(conn, discount_rule_ids, now)?);
+    let quote = pricing::price(&lines, &discounts, config.tax.prices_include_tax)
+        .map_err(|e| invalid(e.to_string()))?;
+    Ok(PricedCart { quote, modifiers })
+}
+
+pub fn quote(
+    conn: &Connection,
+    items: &[PayloadItem],
+    discount_rule_ids: &[Uuid],
+    config: &ClientConfig,
+    now: Timestamp,
+) -> IpcResult<Quote> {
+    price_cart(conn, items, discount_rule_ids, config, now).map(|p| p.quote)
 }
 
 pub fn quote_view(quote: Quote, currency: CurrencyCode) -> QuoteView {
@@ -228,7 +429,7 @@ struct ItemRow {
     sku: Option<String>,
     unit_price: i64,
     quantity_milli: i64,
-    modifiers: Vec<serde_json::Value>,
+    modifiers: Vec<ModifierLine>,
     discount_amount: i64,
     tax_rate_bps: i64,
     tax_amount: i64,
@@ -284,8 +485,23 @@ pub fn create(
     config: &ClientConfig,
     now: Timestamp,
 ) -> IpcResult<CreatedSale> {
-    if let Some(existing) = find_by_key(conn, payload.idempotency_key)? {
-        let includes_cash = payments_include_cash(conn, existing)?;
+    let tx = conn.transaction().ipc()?;
+    let created = create_in(&tx, actor, payload, config, now)?;
+    tx.commit().ipc()?;
+    Ok(created)
+}
+
+/// [`create`] inside the caller's SQLite transaction (paying an open order
+/// updates the order in the same commit).
+pub fn create_in(
+    tx: &Connection,
+    actor: &SaleActor,
+    payload: &TransactionPayload,
+    config: &ClientConfig,
+    now: Timestamp,
+) -> IpcResult<CreatedSale> {
+    if let Some(existing) = find_by_key(tx, payload.idempotency_key)? {
+        let includes_cash = payments_include_cash(tx, existing)?;
         return Ok(CreatedSale {
             transaction_id: existing,
             is_new: false,
@@ -300,13 +516,13 @@ pub fn create(
         return Err(invalid("Foreign-currency payments are not available yet."));
     }
 
-    let tx = conn.transaction().ipc()?;
-    let device_id = device::id(&tx).ipc()?;
-    let shift = shifts::current_open(&tx, device_id)
+    let device_id = device::id(tx).ipc()?;
+    let shift = shifts::current_open(tx, device_id)
         .ipc()?
         .ok_or_else(|| IpcError::new(IpcErrorCode::Conflict, "Open a shift before selling."))?;
 
-    let quote = quote(&tx, &payload.items, &payload.discount_rule_ids, config, now)?;
+    let PricedCart { quote, modifiers } =
+        price_cart(tx, &payload.items, &payload.discount_rule_ids, config, now)?;
     let tenders: Vec<Tender> = payload
         .payments
         .iter()
@@ -375,7 +591,7 @@ pub fn create(
     )
     .ipc()?;
     outbox::record(
-        &tx,
+        tx,
         "transactions",
         EventType::Append,
         row.meta.id,
@@ -389,7 +605,13 @@ pub fn create(
         role: actor.role,
         device_id,
     };
-    for (i, (line, item)) in quote.lines.iter().zip(&payload.items).enumerate() {
+    for (i, ((line, item), chosen)) in quote
+        .lines
+        .iter()
+        .zip(&payload.items)
+        .zip(&modifiers)
+        .enumerate()
+    {
         let item_row = ItemRow {
             meta: Meta::new(now),
             transaction_id: row.meta.id,
@@ -399,7 +621,7 @@ pub fn create(
             sku: line.sku.clone(),
             unit_price: line.unit_price,
             quantity_milli: line.quantity_milli,
-            modifiers: Vec::new(),
+            modifiers: chosen.clone(),
             discount_amount: line.discount_amount,
             tax_rate_bps: line.tax_rate_bps,
             tax_amount: line.tax_amount,
@@ -411,7 +633,7 @@ pub fn create(
             "INSERT INTO transaction_items (id, created_at, updated_at, transaction_id, line_number, product_id,
                 product_name, sku, unit_price, quantity_milli, modifiers, discount_amount, tax_rate_bps,
                 tax_amount, line_total, course, note)
-             VALUES (?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, '[]', ?10, ?11, ?12, ?13, ?14, ?15)",
+             VALUES (?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?16, ?10, ?11, ?12, ?13, ?14, ?15)",
             params![
                 item_row.meta.id.to_string(),
                 now.to_string(),
@@ -428,11 +650,12 @@ pub fn create(
                 item_row.line_total,
                 item_row.course,
                 item_row.note,
+                serde_json::to_string(&item_row.modifiers).unwrap_or_else(|_| "[]".into()),
             ],
         )
         .ipc()?;
         outbox::record(
-            &tx,
+            tx,
             "transaction_items",
             EventType::Append,
             item_row.meta.id,
@@ -441,12 +664,12 @@ pub fn create(
         )
         .ipc()?;
 
-        let tracks_stock = catalog::get(&tx, line.product_id)
+        let tracks_stock = catalog::get(tx, line.product_id)
             .ipc()?
             .is_some_and(|p| p.track_stock);
         if tracks_stock {
             catalog::move_stock(
-                &tx,
+                tx,
                 line.product_id,
                 -line.quantity_milli,
                 StockReason::Sale,
@@ -489,7 +712,7 @@ pub fn create(
         )
         .ipc()?;
         outbox::record(
-            &tx,
+            tx,
             "transaction_payments",
             EventType::Append,
             payment.meta.id,
@@ -500,7 +723,7 @@ pub fn create(
     }
 
     audit::record(
-        &tx,
+        tx,
         &audit_actor,
         "sale.create",
         "transactions",
@@ -510,8 +733,7 @@ pub fn create(
         now,
     )
     .ipc()?;
-    print_jobs::enqueue(&tx, row.meta.id, false, now).ipc()?;
-    tx.commit().ipc()?;
+    print_jobs::enqueue(tx, row.meta.id, false, now).ipc()?;
 
     Ok(CreatedSale {
         transaction_id: row.meta.id,
@@ -555,7 +777,8 @@ pub fn load_receipt(conn: &Connection, transaction_id: Uuid, printed: bool) -> I
 
     let items: Vec<(ReceiptLine, i64, i64)> = conn
         .prepare(
-            "SELECT product_name, quantity_milli, unit_price, discount_amount, line_total, tax_rate_bps, tax_amount
+            "SELECT product_name, quantity_milli, unit_price, discount_amount, line_total, tax_rate_bps, tax_amount,
+                    modifiers
              FROM transaction_items WHERE transaction_id = ?1 ORDER BY line_number",
         )
         .ipc()?
@@ -565,7 +788,7 @@ pub fn load_receipt(conn: &Connection, transaction_id: Uuid, printed: bool) -> I
                     name: r.get(0)?,
                     quantity_milli: r.get(1)?,
                     unit_price: r.get(2)?,
-                    modifiers: Vec::new(),
+                    modifiers: serde_json::from_str(&r.get::<_, String>(7)?).unwrap_or_default(),
                     discount_amount: r.get(3)?,
                     line_total: r.get(4)?,
                 },

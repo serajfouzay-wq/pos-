@@ -456,11 +456,16 @@ h2 {
 .topbar__nav {
   display: flex;
   gap: 4px;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
 .topbar__nav button {
+  flex: none;
   min-block-size: 40px;
-  padding-inline: 14px;
+  padding-inline: 10px;
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -474,6 +479,7 @@ h2 {
 
 .topbar__status {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 8px;
   margin-inline-start: auto;
@@ -970,4 +976,481 @@ h2 {
 .banner--danger {
   background: #b91c1c;
   color: #fff;
+}
+
+/* ── Phase 6: layouts per business type ────────────────────────────────── */
+
+.row--end {
+  justify-content: flex-end;
+}
+
+.row--wrap {
+  flex-wrap: wrap;
+}
+
+.chip--warn {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.badge--sent {
+  margin-inline-start: 8px;
+  background: color-mix(in srgb, var(--ok) 20%, transparent);
+  color: var(--ok);
+}
+
+.grid-panel__toolbar {
+  display: flex;
+  gap: 8px;
+}
+
+.product-tile--combo {
+  border-inline-start-color: var(--brand-accent);
+  background: color-mix(in srgb, var(--brand-accent) 8%, var(--surface-raised));
+}
+
+/* Cart lines: options, notes, courses. */
+.cart__group > ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cart__course {
+  margin: 0;
+  padding: 8px 16px 4px;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+}
+
+.cart-line--sent {
+  background: color-mix(in srgb, var(--ok) 5%, transparent);
+}
+
+.cart-line__name {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.cart-line__details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-block-start: 2px;
+}
+
+.cart-line__note {
+  color: var(--brand-accent);
+}
+
+.cart__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cart__actions > .button {
+  flex: 1 1 auto;
+}
+
+/* Option picker. */
+.option-group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.option-group legend {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-weight: 600;
+  margin-block-end: 8px;
+}
+
+.option-group__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.option {
+  display: grid;
+  min-inline-size: 96px;
+  min-block-size: 52px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  text-align: start;
+}
+
+.option[aria-pressed='true'] {
+  border-color: var(--brand-primary);
+  background: color-mix(in srgb, var(--brand-primary) 22%, var(--surface));
+}
+
+.combo-part {
+  display: grid;
+  gap: 8px;
+  padding-block: 10px;
+  border-block-end: 1px solid var(--border);
+}
+
+.combo-part h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.stepper--large button {
+  inline-size: 56px;
+  block-size: 52px;
+}
+
+.stepper--large span {
+  min-inline-size: 56px;
+  font-size: 1.3rem;
+}
+
+/* Screens with a bar on top (open orders, takeaway). */
+.sell--with-bar {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.sell--with-bar > .order-bar {
+  grid-column: 1 / -1;
+}
+
+.order-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 10px 14px;
+  border-block-end: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+
+.order-bar__title {
+  font-size: 1.15rem;
+}
+
+.order-bar__courses {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.order-bar__end {
+  margin-inline-start: auto;
+}
+
+.order-error {
+  flex-basis: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 10px;
+}
+
+.ticket-text {
+  margin: 0;
+  padding: 14px;
+  border-radius: 10px;
+  background: #fafafa;
+  color: #111;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+/* Cafe: tabs across the top. */
+.layout-with-tabs {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  block-size: 100%;
+}
+
+.tab-bar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 14px;
+  overflow-x: auto;
+  border-block-end: 1px solid var(--border);
+  background: var(--surface-sunken);
+}
+
+.tab-bar button {
+  flex: none;
+  min-block-size: 44px;
+  padding-inline: 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  font-weight: 600;
+}
+
+.tab-bar button[aria-pressed='true'] {
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
+}
+
+.tab-bar .tab-bar__new {
+  border-style: dashed;
+  color: var(--brand-accent);
+}
+
+/* Split bill. */
+.split-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-block-size: 50vh;
+  overflow-y: auto;
+}
+
+.split-list__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-block: 6px;
+  border-block-end: 1px solid var(--border);
+}
+
+.split-list__pick {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-block-size: 44px;
+}
+
+.split-list__pick input {
+  inline-size: 22px;
+  block-size: 22px;
+}
+
+/* Restaurant floor. */
+.floor-screen {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  block-size: 100%;
+}
+
+.floor-screen__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 10px 14px;
+  border-block-end: 1px solid var(--border);
+}
+
+.floor-screen__bar h2 {
+  margin: 0;
+}
+
+.floor-screen__end {
+  margin-inline-start: auto;
+}
+
+.floor {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 14px;
+  min-block-size: 0;
+}
+
+.floor__areas,
+.floor__empty {
+  margin: 0;
+}
+
+.floor__empty {
+  padding: 24px;
+}
+
+.floor__grid {
+  display: grid;
+  gap: 4px;
+  min-block-size: 0;
+  block-size: 100%;
+  padding: 8px;
+  border-radius: var(--radius);
+  background:
+    linear-gradient(var(--border) 1px, transparent 1px) 0 0 / calc(100% / 24) calc(100% / 16),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px) 0 0 / calc(100% / 24) calc(100% / 16),
+    var(--surface-sunken);
+  background-blend-mode: normal;
+}
+
+/* The grid lines direction does not matter in RTL; tables use logical columns. */
+.floor__grid--editor {
+  aspect-ratio: 24 / 16;
+  block-size: auto;
+  inline-size: min(100%, calc((100vh - 300px) * 1.5));
+}
+
+.floor__cell {
+  border: 0;
+  background: transparent;
+  border-radius: 4px;
+}
+
+.floor__cell:hover {
+  background: color-mix(in srgb, var(--brand-primary) 20%, transparent);
+}
+
+.table-tile {
+  white-space: nowrap;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-raised);
+  text-align: center;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.table-tile--round {
+  border-radius: 50%;
+}
+
+.table-tile--bar {
+  border-radius: 999px 999px 8px 8px;
+}
+
+.table-tile--free {
+  border-color: color-mix(in srgb, var(--ok) 60%, var(--border));
+}
+
+.table-tile--occupied {
+  border-color: var(--brand-primary);
+  background: color-mix(in srgb, var(--brand-primary) 25%, var(--surface-raised));
+}
+
+.table-tile--unsent {
+  border-color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 18%, var(--surface-raised));
+}
+
+.table-tile--editing {
+  border-style: dashed;
+  border-color: var(--brand-accent);
+  pointer-events: none;
+}
+
+.table-tile.inactive {
+  opacity: 0.45;
+}
+
+.table-tile__label {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.table-tile__total {
+  font-variant-numeric: tabular-nums;
+  color: var(--brand-accent);
+  font-weight: 700;
+}
+
+.floor__legend {
+  display: flex;
+  gap: 18px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  color: var(--text-muted);
+}
+
+.legend-dot {
+  display: inline-block;
+  inline-size: 12px;
+  block-size: 12px;
+  border-radius: 4px;
+  border: 2px solid;
+  vertical-align: middle;
+}
+
+.floor-editor {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.floor-editor > .floor__grid {
+  flex: 0 1 auto;
+}
+
+.floor__grid--editor .table-tile .small {
+  display: none;
+}
+
+.floor-editor__form {
+  inline-size: 300px;
+  position: sticky;
+  inset-block-start: 0;
+}
+
+/* Back office lists. */
+.card-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.card-list .card {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.card.inactive {
+  opacity: 0.6;
+}
+
+.table--compact td {
+  padding-block: 4px;
+}
+
+.table--compact input:not([type='checkbox']) {
+  inline-size: 100%;
+}
+
+.table tr.row--low td {
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+}
+
+.table .badge {
+  margin-inline-start: 8px;
+}
+
+.field > .stepper {
+  justify-self: start;
+}
+
+.cart__actions .button {
+  min-block-size: 40px;
+  padding-block: 6px;
+}
+
+.admin__header .check {
+  white-space: nowrap;
+}
+
+.product-grid__empty {
+  grid-column: 1 / -1;
 }

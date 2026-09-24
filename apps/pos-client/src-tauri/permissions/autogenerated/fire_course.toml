@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-fire-course"
+description = "Enables the fire_course command without any pre-configured scope."
+commands.allow = ["fire_course"]
+
+[[permission]]
+identifier = "deny-fire-course"
+description = "Denies the fire_course command without any pre-configured scope."
+commands.deny = ["fire_course"]

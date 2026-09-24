@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-save-dining-table"
+description = "Enables the save_dining_table command without any pre-configured scope."
+commands.allow = ["save_dining_table"]
+
+[[permission]]
+identifier = "deny-save-dining-table"
+description = "Denies the save_dining_table command without any pre-configured scope."
+commands.deny = ["save_dining_table"]

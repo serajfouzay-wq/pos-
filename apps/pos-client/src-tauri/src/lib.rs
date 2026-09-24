@@ -3,7 +3,9 @@
 
 mod commands;
 mod db;
+mod inventory;
 mod license;
+mod open_orders;
 mod printing;
 mod repo;
 mod sample_catalog;
@@ -96,6 +98,23 @@ pub fn run() {
             commands::hardware::test_printer,
             commands::sync::sync_to_cloud,
             commands::sync::sync_status,
+            commands::menu::get_menu,
+            commands::menu::save_modifier_group,
+            commands::menu::delete_modifier_group,
+            commands::menu::set_product_modifier_groups,
+            commands::menu::save_combo,
+            commands::menu::delete_combo,
+            commands::menu::save_dining_table,
+            commands::menu::delete_dining_table,
+            commands::orders::list_open_orders,
+            commands::orders::open_order,
+            commands::orders::update_open_order,
+            commands::orders::split_order_line,
+            commands::orders::fire_course,
+            commands::orders::cancel_open_order,
+            commands::orders::pay_open_order,
+            commands::inventory::adjust_stock,
+            commands::inventory::print_product_labels,
         ])
         .run(tauri::generate_context!())
         .expect("failed to start the POS client");

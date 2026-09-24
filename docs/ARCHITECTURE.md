@@ -463,6 +463,80 @@ goes through the same PNG → 1-bit dither conversion the printer receives.
 What the operator sees is what prints, including the column width for 58 or
 80 mm paper.
 
+### D37 — A combo is a group target, not a product
+
+Combo components are sold as ordinary lines. They keep their own stock,
+kitchen routing, tax rate and receipt line, and are tagged with
+`combo: {combo_id, instance}`. Pricing gains a `DiscountScope::Group` with
+`DiscountValue::Target(price)`. The group's remaining total is brought down
+to the combo price (plus option surcharges) and the difference is allocated
+across the lines by largest remainder. It never raises a price, and it runs
+after line discounts and before order discounts, so tax is still computed
+per line on what was actually charged. Rust accepts a combo only when its
+lines match the combo's components exactly.
+
+### D38 — Options are validated and snapshotted by Rust
+
+`price_cart` checks every chosen modifier: it must be live, belong to one of
+the product's groups, and keep each group's count within `min..=max`.
+`unit_price = product price + Σ price_delta`. The sale stores the chosen
+options (name + delta) as JSON on `transaction_items`. The receipt and
+later reports then show what was sold even after the menu changes.
+
+### D39 — Open orders: optimistic versions locally, LWW between tills
+
+A tab or table is one `open_orders` row whose items live in a JSON array.
+On the till every change carries the `expected_updated_at` it was based on.
+A stale edit is refused and the UI reloads, and the order editor sends its
+changes one at a time, each against the version the previous save returned.
+Between tills the row syncs last-write-wins like any mutable entity. Only one
+open order may sit at a table. Changing or removing an item already sent to
+the kitchen needs `sale.void` and is audited as `sale.void`.
+
+### D40 — Courses and kitchen tickets
+
+Items carry an optional course (1–9). `fire_course` stamps `fired_at` on the
+unsent items of one course (or all) and returns a `KitchenTicket`. It prints
+on the kitchen printer when one is configured (`PrinterSettings.kitchen`).
+The rendered text is always returned, so a shop without a kitchen printer
+reads it off the screen. The KDS window (Phase 8) will consume the same
+tickets.
+
+### D41 — Split bills are several sales against one order
+
+`pay_open_order` takes the line ids to pay (null = all). It creates an
+ordinary transaction for them (same pricing, same idempotency key rules) and
+removes them from the order in the same database transaction. It appends
+the sale to `transaction_ids`. Combos can only be paid whole. `split_order_line` turns a
+line of N whole units into N lines so guests can pay single items. When no
+lines remain the order is `settled` and the table is free.
+
+### D42 — Stock changes are movements, never overwrites
+
+Receiving, corrections, waste and counts all write `stock_movements` deltas.
+A count stores `counted − on hand` as its delta. On-hand stays a sum of
+deltas, so two tills adjusting stock offline still converge (the additive
+strategy of D8). Every adjustment is also written to the audit log.
+
+### D43 — One generic row helper for LWW tables
+
+`repo::rows::{upsert, select}` serialise a `#[derive(Serialize,
+Deserialize)]` struct straight to its columns plus the outbox event
+(`json_text` and `int_bool` adapters for JSON and boolean columns). The
+seven Phase 6 tables use it instead of hand-written SQL per table. Adding a
+synced table is now a migration, a struct, and a line in the sync entity
+list on both sides.
+
+### D44 — The layout is chosen by the build, not by a setting
+
+`SellScreen` switches on `app_info.client.business_type`, which is compiled
+in from the generator's client config. There is no runtime toggle, so a
+retail till never shows tabs or a floor plan. The pieces are shared: product
+grid, cart panel, payment, option picker. Only the composition differs
+(`QuickSale`, `CafeSell`, `RestaurantSell`). Plural forms missing from a
+locale (Arabic: two, few, many…) reuse that locale's `_other` text rather
+than falling back to English.
+
 ## Open items for upcoming phases
 
 - **Arabic receipts (next).** Text-mode ESC/POS cannot render Arabic.
@@ -489,3 +563,9 @@ What the operator sees is what prints, including the column width for 58 or
   doesn't warn.
 - **Versions per client.** Builds use the repository's app version; the
   auto-updater (Phase 8) brings per-client release channels.
+- **Local time on paper.** Receipts and kitchen tickets print UTC times; the
+  client config needs a timezone (IANA name) so both print shop time.
+- **Floor plan overlap.** Tables can be placed overlapping on the grid; the
+  editor could refuse overlapping cells.
+- **Moving and merging tables.** An order can change table through
+  `update_open_order`, but the floor has no drag-to-move or merge yet.

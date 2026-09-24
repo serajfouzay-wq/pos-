@@ -5,7 +5,7 @@
       "color": "#8B5E3C",
       "created_at": "2026-09-23T10:00:00.000Z",
       "deleted_at": null,
-      "id": "01a0cf90-e6ab-70e5-9ba2-de71b7dc3e0b",
+      "id": "01a0d055-9fdb-7049-b66a-15fd3dd60a3f",
       "name": "Coffee",
       "name_localized": {},
       "parent_id": null,
@@ -21,11 +21,255 @@
         "port": "COM5"
       }
     },
+    "fire_outcome": {
+      "order": {
+        "closed_at": null,
+        "created_at": "2026-09-23T10:00:00.000Z",
+        "deleted_at": null,
+        "device_id": "01a0d055-9f9c-744e-b129-f336780c112f",
+        "guests": 2,
+        "id": "01a0d055-9fdf-77c0-8110-e2100462e0e3",
+        "items": [
+          {
+            "added_at": "2026-09-23T10:00:01.000Z",
+            "added_by": "01a0d055-9fd5-7650-b3f8-6d833b509e5e",
+            "combo": null,
+            "course": 1,
+            "fired_at": "2026-09-23T10:00:02.000Z",
+            "line_id": "01a0d055-9fdf-77c0-8110-e2129c48c45e",
+            "modifier_ids": ["01a0d055-9fdb-7049-b66a-1600496fcf64"],
+            "note": "extra hot",
+            "product_id": "01a0d055-9fd7-76a5-aecd-93cff806a079",
+            "quantity_milli": 1000
+          }
+        ],
+        "label": null,
+        "notes": null,
+        "opened_at": "2026-09-23T10:00:00.000Z",
+        "opened_by": "01a0d055-9fd5-7650-b3f8-6d833b509e5e",
+        "order_type": "dine_in",
+        "status": "open",
+        "table_id": "01a0d055-9fde-718d-95fb-1e337b163ffa",
+        "table_label": "T4",
+        "total": 1450,
+        "transaction_ids": [],
+        "unfired": 0,
+        "updated_at": "2026-09-23T10:00:02.000Z"
+      },
+      "print_error": "no kitchen printer",
+      "printed": false,
+      "ticket_text": "Table T4\nCOURSE 1\nSara · 10:00 UTC · 2 guests\n------------------------------------------------\n1 x Latte\n   + Oat\n   ! extra hot\n------------------------------------------------"
+    },
     "login_user": {
       "display_name": "Sara",
-      "id": "01a0cf90-e6a8-76ca-ad88-faad3dd11d29",
+      "id": "01a0d055-9fd5-7650-b3f8-6d833b509e5e",
       "locked_until": "2026-09-23T10:00:00.000Z",
       "role": "cashier"
+    },
+    "menu": {
+      "combos": [
+        {
+          "color": "#B7791F",
+          "created_at": "2026-09-23T10:00:00.000Z",
+          "deleted_at": null,
+          "id": "01a0d055-9fdd-7543-98e6-dcd9811b4b82",
+          "is_active": true,
+          "items": [
+            {
+              "combo_id": "01a0d055-9fdd-7543-98e6-dcd9811b4b82",
+              "created_at": "2026-09-23T10:00:00.000Z",
+              "deleted_at": null,
+              "id": "01a0d055-9fdd-7543-98e6-dcdad8461d4b",
+              "product_id": "01a0d055-9fd7-76a5-aecd-93cff806a079",
+              "quantity_milli": 1000,
+              "sort_order": 0,
+              "updated_at": "2026-09-23T10:00:00.000Z"
+            },
+            {
+              "combo_id": "01a0d055-9fdd-7543-98e6-dcd9811b4b82",
+              "created_at": "2026-09-23T10:00:00.000Z",
+              "deleted_at": null,
+              "id": "01a0d055-9fdd-7543-98e6-dcdb0e174a22",
+              "product_id": "01a0d055-9fdc-70e4-9f8b-a917d69e8ebe",
+              "quantity_milli": 1000,
+              "sort_order": 0,
+              "updated_at": "2026-09-23T10:00:00.000Z"
+            }
+          ],
+          "name": "Breakfast",
+          "name_localized": {},
+          "price": 1750,
+          "sort_order": 0,
+          "updated_at": "2026-09-23T10:00:00.000Z"
+        }
+      ],
+      "dining_tables": [
+        {
+          "area": "Hall",
+          "created_at": "2026-09-23T10:00:00.000Z",
+          "deleted_at": null,
+          "grid_x": 1,
+          "grid_y": 1,
+          "id": "01a0d055-9fde-718d-95fb-1e337b163ffa",
+          "is_active": true,
+          "label": "T4",
+          "seats": 4,
+          "shape": "square",
+          "sort_order": 0,
+          "updated_at": "2026-09-23T10:00:00.000Z"
+        }
+      ],
+      "modifier_groups": [
+        {
+          "created_at": "2026-09-23T10:00:00.000Z",
+          "deleted_at": null,
+          "id": "01a0d055-9fdb-7049-b66a-15ff5758d489",
+          "is_active": true,
+          "max_select": 1,
+          "min_select": 0,
+          "modifiers": [
+            {
+              "created_at": "2026-09-23T10:00:00.000Z",
+              "deleted_at": null,
+              "group_id": "01a0d055-9fdb-7049-b66a-15ff5758d489",
+              "id": "01a0d055-9fdb-7049-b66a-1600496fcf64",
+              "is_active": true,
+              "is_default": false,
+              "name": "Oat",
+              "name_localized": {},
+              "price_delta": 200,
+              "sort_order": 0,
+              "updated_at": "2026-09-23T10:00:00.000Z"
+            }
+          ],
+          "name": "Milk",
+          "name_localized": {
+            "ar": "حليب"
+          },
+          "sort_order": 0,
+          "updated_at": "2026-09-23T10:00:00.000Z"
+        }
+      ],
+      "product_modifier_groups": {
+        "00000000-0000-4000-8000-000000000000": ["01a0d055-9fdb-7049-b66a-15ff5758d489"]
+      }
+    },
+    "open_order_view": {
+      "closed_at": null,
+      "created_at": "2026-09-23T10:00:00.000Z",
+      "deleted_at": null,
+      "device_id": "01a0d055-9f9c-744e-b129-f336780c112f",
+      "guests": 2,
+      "id": "01a0d055-9fdf-77c0-8110-e2100462e0e3",
+      "items": [
+        {
+          "added_at": "2026-09-23T10:00:01.000Z",
+          "added_by": "01a0d055-9fd5-7650-b3f8-6d833b509e5e",
+          "combo": null,
+          "course": 1,
+          "fired_at": "2026-09-23T10:00:02.000Z",
+          "line_id": "01a0d055-9fdf-77c0-8110-e2129c48c45e",
+          "modifier_ids": ["01a0d055-9fdb-7049-b66a-1600496fcf64"],
+          "note": "extra hot",
+          "product_id": "01a0d055-9fd7-76a5-aecd-93cff806a079",
+          "quantity_milli": 1000
+        }
+      ],
+      "label": null,
+      "notes": null,
+      "opened_at": "2026-09-23T10:00:00.000Z",
+      "opened_by": "01a0d055-9fd5-7650-b3f8-6d833b509e5e",
+      "order_type": "dine_in",
+      "status": "open",
+      "table_id": "01a0d055-9fde-718d-95fb-1e337b163ffa",
+      "table_label": "T4",
+      "total": 1450,
+      "transaction_ids": [],
+      "unfired": 0,
+      "updated_at": "2026-09-23T10:00:02.000Z"
+    },
+    "paid_order": {
+      "order": {
+        "closed_at": null,
+        "created_at": "2026-09-23T10:00:00.000Z",
+        "deleted_at": null,
+        "device_id": "01a0d055-9f9c-744e-b129-f336780c112f",
+        "guests": 2,
+        "id": "01a0d055-9fdf-77c0-8110-e2100462e0e3",
+        "items": [
+          {
+            "added_at": "2026-09-23T10:00:01.000Z",
+            "added_by": "01a0d055-9fd5-7650-b3f8-6d833b509e5e",
+            "combo": null,
+            "course": 1,
+            "fired_at": "2026-09-23T10:00:02.000Z",
+            "line_id": "01a0d055-9fdf-77c0-8110-e2129c48c45e",
+            "modifier_ids": ["01a0d055-9fdb-7049-b66a-1600496fcf64"],
+            "note": "extra hot",
+            "product_id": "01a0d055-9fd7-76a5-aecd-93cff806a079",
+            "quantity_milli": 1000
+          }
+        ],
+        "label": null,
+        "notes": null,
+        "opened_at": "2026-09-23T10:00:00.000Z",
+        "opened_by": "01a0d055-9fd5-7650-b3f8-6d833b509e5e",
+        "order_type": "dine_in",
+        "status": "open",
+        "table_id": "01a0d055-9fde-718d-95fb-1e337b163ffa",
+        "table_label": "T4",
+        "total": 1450,
+        "transaction_ids": [],
+        "unfired": 0,
+        "updated_at": "2026-09-23T10:00:02.000Z"
+      },
+      "sale": {
+        "cashier_name": "Sara",
+        "change_due": 0,
+        "currency": "KWD",
+        "customer_name": null,
+        "discount_total": 0,
+        "drawer_opened": false,
+        "issued_at": "2026-09-23T10:00:02.000Z",
+        "kind": "sale",
+        "lines": [
+          {
+            "discount_amount": 0,
+            "line_total": 1450,
+            "modifiers": [
+              {
+                "modifier_id": "01a0d055-9fdb-7049-b66a-1600496fcf64",
+                "name": "Oat",
+                "price_delta": 200
+              }
+            ],
+            "name": "Latte",
+            "quantity_milli": 1000,
+            "unit_price": 1450
+          }
+        ],
+        "loyalty": null,
+        "payments": [
+          {
+            "amount": 1450,
+            "method": "card",
+            "tendered_amount": 1450,
+            "tendered_currency": "KWD"
+          }
+        ],
+        "printed": false,
+        "receipt_number": "01A0-000002",
+        "subtotal": 1450,
+        "tax_lines": [
+          {
+            "rate_bps": 500,
+            "tax_amount": 69,
+            "taxable_amount": 1381
+          }
+        ],
+        "total": 1450,
+        "transaction_id": "01a0d055-9fe6-7351-bbde-a496ad8157da"
+      }
     },
     "print_outcome": {
       "printed": false,
@@ -48,6 +292,11 @@
           "port": "COM5"
         }
       ],
+      "kitchen": {
+        "host": "192.168.1.60",
+        "kind": "tcp",
+        "port": 9100
+      },
       "open_drawer_on_cash": true
     },
     "printer_status": {
@@ -62,7 +311,7 @@
       "cost": null,
       "created_at": "2026-09-23T10:00:00.000Z",
       "deleted_at": null,
-      "id": "01a0cf90-e6a9-7573-b8a3-69988aa13a96",
+      "id": "01a0d055-9fd7-76a5-aecd-93cff806a079",
       "image_asset": null,
       "is_active": true,
       "name": "Latte",
@@ -88,7 +337,7 @@
           "gross": 2500,
           "line_total": 2500,
           "name": "Latte",
-          "product_id": "01a0cf90-e6a9-7573-b8a3-69988aa13a96",
+          "product_id": "01a0d055-9fd7-76a5-aecd-93cff806a079",
           "quantity_milli": 2000,
           "tax_amount": 119,
           "tax_rate_bps": 500,
@@ -145,7 +394,7 @@
         }
       ],
       "total": 2500,
-      "transaction_id": "01a0cf90-e6a9-7573-b8a3-699ad38650a7"
+      "transaction_id": "01a0d055-9fd8-76a6-8bf6-3b4058fb3e45"
     },
     "session": {
       "display_name": "Sara",
@@ -159,7 +408,7 @@
       ],
       "role": "cashier",
       "started_at": "2026-09-23T10:00:00.000Z",
-      "user_id": "01a0cf90-e6a8-76ca-ad88-faad3dd11d29"
+      "user_id": "01a0d055-9fd5-7650-b3f8-6d833b509e5e"
     },
     "session_status": {
       "needs_setup": false,
@@ -175,7 +424,7 @@
         ],
         "role": "cashier",
         "started_at": "2026-09-23T10:00:00.000Z",
-        "user_id": "01a0cf90-e6a8-76ca-ad88-faad3dd11d29"
+        "user_id": "01a0d055-9fd5-7650-b3f8-6d833b509e5e"
       }
     },
     "shift_summary": {
@@ -187,12 +436,12 @@
         "closing_float": null,
         "created_at": "2026-09-23T10:00:00.000Z",
         "deleted_at": null,
-        "device_id": "01a0cf90-e679-73cd-a309-6fb216b50214",
+        "device_id": "01a0d055-9f9c-744e-b129-f336780c112f",
         "expected_cash": null,
-        "id": "01a0cf90-e6a8-76ca-ad88-fab1bcd2a1c4",
+        "id": "01a0d055-9fd6-72b1-ae4c-4c1c036183c4",
         "notes": null,
         "opened_at": "2026-09-23T10:00:00.000Z",
-        "opened_by": "01a0cf90-e6a8-76ca-ad88-faaf11e35549",
+        "opened_by": "01a0d055-9fd6-72b1-ae4c-4c1a90314cac",
         "opening_float": 20000,
         "updated_at": "2026-09-23T10:00:00.000Z",
         "variance": null
@@ -209,7 +458,7 @@
       "created_at": "2026-09-23T10:00:00.000Z",
       "deleted_at": null,
       "display_name": "Sara",
-      "id": "01a0cf90-e6a8-76ca-ad88-faad3dd11d29",
+      "id": "01a0d055-9fd5-7650-b3f8-6d833b509e5e",
       "is_active": true,
       "locked_until": null,
       "role": "cashier",

@@ -4,6 +4,7 @@
  * `contracts/pos-examples.json` are produced by Rust and parsed here in tests.
  */
 import { z } from 'zod';
+import { ComboRefSchema } from '../entities/orders';
 import { CurrencyCodeSchema } from '../currency';
 import { ProductUnitSchema } from '../entities/catalog';
 import { ShiftSchema } from '../entities/sales';
@@ -96,6 +97,8 @@ export const CartItemSchema = z.object({
   modifier_ids: z.array(UuidSchema),
   course: z.int().positive().nullable(),
   note: z.string().max(200).nullable(),
+  /** Set on every line added from one combo (same `instance`). */
+  combo: ComboRefSchema.nullable().default(null),
 });
 export type CartItem = z.input<typeof CartItemSchema>;
 
@@ -169,6 +172,8 @@ export const PrinterSettingsSchema = z.object({
   /** Tried in order: primary, then fallbacks. */
   chain: z.array(PrinterTargetSchema).max(3),
   open_drawer_on_cash: z.boolean(),
+  /** Kitchen tickets for fired courses; null = no kitchen printer. */
+  kitchen: PrinterTargetSchema.nullable().default(null),
 });
 export type PrinterSettings = z.infer<typeof PrinterSettingsSchema>;
 

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-print-product-labels"
+description = "Enables the print_product_labels command without any pre-configured scope."
+commands.allow = ["print_product_labels"]
+
+[[permission]]
+identifier = "deny-print-product-labels"
+description = "Denies the print_product_labels command without any pre-configured scope."
+commands.deny = ["print_product_labels"]

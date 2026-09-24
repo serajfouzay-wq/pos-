@@ -170,6 +170,7 @@ pub fn preview_receipt(
             unit_price: scaled(*unit, currency),
             quantity_milli: *qty,
             tax_rate_bps: rate,
+            group: None,
         })
         .collect();
     let quote = price(&lines, &[], config.tax.prices_include_tax)

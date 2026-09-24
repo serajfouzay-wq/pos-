@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-delete-modifier-group"
+description = "Enables the delete_modifier_group command without any pre-configured scope."
+commands.allow = ["delete_modifier_group"]
+
+[[permission]]
+identifier = "deny-delete-modifier-group"
+description = "Denies the delete_modifier_group command without any pre-configured scope."
+commands.deny = ["delete_modifier_group"]

@@ -9,8 +9,11 @@
 pub mod audit;
 pub mod catalog;
 pub mod device;
+pub mod menu;
+pub mod orders;
 pub mod outbox;
 pub mod print_jobs;
+pub mod rows;
 pub mod sales;
 pub mod settings;
 pub mod shifts;
@@ -96,7 +99,7 @@ pub fn new_id() -> Uuid {
 }
 
 /// Columns every table has.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
 pub struct Meta {
     pub id: Uuid,
     pub created_at: Timestamp,

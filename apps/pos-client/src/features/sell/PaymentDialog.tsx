@@ -1,13 +1,19 @@
-import { CURRENCIES, type PaymentMethod, type SaleReceipt } from '@pos/shared';
+import {
+  allocate,
+  CURRENCIES,
+  newUuid,
+  type CurrencyCode,
+  type PaymentMethod,
+  type SaleReceipt,
+  type Uuid,
+} from '@pos/shared';
 import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AmountPad } from '../../components/AmountPad';
 import { Modal } from '../../components/Modal';
-import { useCreateTransaction } from '../../ipc/queries';
 import { useMoney } from '../../lib/money';
-import { toCartItems, useCart } from './cartStore';
 
-type TenderMethod = Extract<PaymentMethod, 'cash' | 'card' | 'wallet'>;
+export type TenderMethod = Extract<PaymentMethod, 'cash' | 'card' | 'wallet'>;
 const METHODS: readonly TenderMethod[] = ['cash', 'card', 'wallet'];
 
 interface Tender {
@@ -15,10 +21,32 @@ interface Tender {
   amount: number;
 }
 
+export interface PaymentInput {
+  method: TenderMethod;
+  tendered_currency: CurrencyCode;
+  tendered_amount: number;
+  reference: null;
+}
+
+/** What the dialog asks the caller to do (create a sale / pay an order). */
+export interface PaymentSubmit {
+  run: (
+    payments: PaymentInput[],
+    idempotencyKey: Uuid,
+    callbacks: { onSuccess: (receipt: SaleReceipt) => void },
+  ) => void;
+  pending: boolean;
+  error: Error | null;
+  reset: () => void;
+}
+
 interface Props {
   open: boolean;
-  /** Authoritative total from `quote_transaction`. */
+  /** Authoritative total from Rust (`quote_transaction`). */
   total: number;
+  /** Offer "split equally" between this many guests (0/1 = hidden). */
+  guests?: number;
+  submit: PaymentSubmit;
   onClose: () => void;
   onComplete: (receipt: SaleReceipt) => void;
 }
@@ -27,16 +55,25 @@ interface Props {
  * Tender entry. The sums shown here are for guidance; Rust re-prices the cart
  * from the catalogue and re-validates every tender before recording the sale.
  */
-export function PaymentDialog({ open, total, onClose, onComplete }: Props) {
+export function PaymentDialog({ open, total, guests = 0, submit, onClose, onComplete }: Props) {
   const { t } = useTranslation();
   const { format, currency } = useMoney();
-  const lines = useCart((s) => s.lines);
-  const create = useCreateTransaction();
+  const create = submit;
+  const [splitWays, setSplitWays] = useState(Math.max(guests, 2));
+  // Equal shares in integer minor units (largest remainder), from Rust's rules.
+  const shares = useMemo(
+    () =>
+      allocate(
+        total,
+        Array.from({ length: splitWays }, () => 1),
+      ),
+    [total, splitWays],
+  );
   const [tenders, setTenders] = useState<Tender[]>([]);
   const [method, setMethod] = useState<TenderMethod>('cash');
   const [entry, setEntry] = useState(total);
   // One key per sale attempt: retries after an error can never double-charge.
-  const idempotencyKey = useRef(crypto.randomUUID());
+  const idempotencyKey = useRef(newUuid());
 
   const paid = tenders.reduce((sum, x) => sum + x.amount, 0);
   const remaining = Math.max(0, total - paid);
@@ -66,26 +103,17 @@ export function PaymentDialog({ open, total, onClose, onComplete }: Props) {
 
   const complete = () => {
     if (!canComplete) return;
-    create.mutate(
-      {
-        idempotency_key: idempotencyKey.current,
-        customer_id: null,
-        order_type: 'counter',
-        table_label: null,
-        items: toCartItems(lines),
-        discount_rule_ids: [],
-        loyalty_points_to_redeem: 0,
-        payments: withEntry.map((x) => ({
-          method: x.method,
-          tendered_currency: currency,
-          tendered_amount: x.amount,
-          reference: null,
-        })),
-        notes: null,
-      },
+    create.run(
+      withEntry.map((x) => ({
+        method: x.method,
+        tendered_currency: currency,
+        tendered_amount: x.amount,
+        reference: null,
+      })),
+      idempotencyKey.current,
       {
         onSuccess: (receipt) => {
-          idempotencyKey.current = crypto.randomUUID();
+          idempotencyKey.current = newUuid();
           setTenders([]);
           onComplete(receipt);
         },
@@ -94,7 +122,7 @@ export function PaymentDialog({ open, total, onClose, onComplete }: Props) {
   };
 
   const close = () => {
-    if (create.isPending) return;
+    if (create.pending) return;
     setTenders([]);
     setEntry(total);
     create.reset();
@@ -153,6 +181,46 @@ export function PaymentDialog({ open, total, onClose, onComplete }: Props) {
               {t('pay.split')}
             </button>
           </div>
+          {guests > 1 && (
+            <div className="quick-row">
+              <span className="muted small">{t('pay.splitEqually')}</span>
+              <div className="stepper" dir="ltr">
+                <button
+                  type="button"
+                  aria-label={t('sell.less')}
+                  onClick={() => {
+                    setSplitWays((n) => Math.max(2, n - 1));
+                  }}
+                >
+                  −
+                </button>
+                <span>÷{splitWays}</span>
+                <button
+                  type="button"
+                  aria-label={t('sell.more')}
+                  onClick={() => {
+                    setSplitWays((n) => Math.min(20, n + 1));
+                  }}
+                >
+                  +
+                </button>
+              </div>
+              <button
+                type="button"
+                className="chip"
+                disabled={tenders.length >= splitWays - 1 || remaining <= 0}
+                onClick={() => {
+                  setEntry(Math.min(remaining, shares[tenders.length] ?? remaining));
+                }}
+              >
+                {t('pay.share', {
+                  n: tenders.length + 1,
+                  of: splitWays,
+                  amount: format(shares[tenders.length] ?? 0),
+                })}
+              </button>
+            </div>
+          )}
         </div>
         <div className="payment__summary">
           <ul className="tenders">
@@ -203,10 +271,10 @@ export function PaymentDialog({ open, total, onClose, onComplete }: Props) {
           <button
             type="button"
             className="button button--primary button--block button--xl"
-            disabled={!canComplete || create.isPending}
+            disabled={!canComplete || create.pending}
             onClick={complete}
           >
-            {create.isPending ? t('common.working') : t('pay.complete')}
+            {create.pending ? t('common.working') : t('pay.complete')}
           </button>
         </div>
       </div>

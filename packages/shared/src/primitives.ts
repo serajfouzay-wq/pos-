@@ -4,6 +4,11 @@ import { z } from 'zod';
 export const UuidSchema = z.uuid().brand<'Uuid'>();
 export type Uuid = z.infer<typeof UuidSchema>;
 
+/** A fresh random id (line ids, idempotency keys, combo instances). */
+export function newUuid(): Uuid {
+  return UuidSchema.parse(crypto.randomUUID());
+}
+
 /**
  * UTC ISO-8601 timestamp with millisecond precision, e.g. `2026-09-23T10:15:30.123Z`.
  *

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-cancel-open-order"
+description = "Enables the cancel_open_order command without any pre-configured scope."
+commands.allow = ["cancel_open_order"]
+
+[[permission]]
+identifier = "deny-cancel-open-order"
+description = "Denies the cancel_open_order command without any pre-configured scope."
+commands.deny = ["cancel_open_order"]

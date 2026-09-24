@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-delete-dining-table"
+description = "Enables the delete_dining_table command without any pre-configured scope."
+commands.allow = ["delete_dining_table"]
+
+[[permission]]
+identifier = "deny-delete-dining-table"
+description = "Denies the delete_dining_table command without any pre-configured scope."
+commands.deny = ["delete_dining_table"]

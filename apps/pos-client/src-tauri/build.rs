@@ -47,6 +47,23 @@ const COMMANDS: &[&str] = &[
     "test_printer",
     "sync_to_cloud",
     "sync_status",
+    "get_menu",
+    "save_modifier_group",
+    "delete_modifier_group",
+    "set_product_modifier_groups",
+    "save_combo",
+    "delete_combo",
+    "save_dining_table",
+    "delete_dining_table",
+    "list_open_orders",
+    "open_order",
+    "update_open_order",
+    "split_order_line",
+    "fire_course",
+    "cancel_open_order",
+    "pay_open_order",
+    "adjust_stock",
+    "print_product_labels",
 ];
 
 fn main() {

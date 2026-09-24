@@ -25,7 +25,19 @@ import {
   UuidSchema,
 } from '../primitives';
 import { SyncReportSchema, SyncStatusSchema } from '../sync';
+import { DiningTableSchema } from '../entities/menu';
 import { PosAppInfoSchema } from './app-info';
+import {
+  ComboInputSchema,
+  DiningTableInputSchema,
+  FireOutcomeSchema,
+  MenuSchema,
+  ModifierGroupInputSchema,
+  OpenOrderInputSchema,
+  OpenOrderUpdateSchema,
+  OpenOrderViewSchema,
+  StockAdjustmentSchema,
+} from './layout-types';
 import { command } from './contract';
 import {
   DiscoveredPrinterSchema,
@@ -142,6 +154,13 @@ export const SaleReceiptSchema = ReceiptSchema.extend({
   drawer_opened: z.boolean(),
 });
 export type SaleReceipt = z.infer<typeof SaleReceiptSchema>;
+
+/** `pay_open_order`: the sale, and what is left of the order (null once settled). */
+export const PaidOrderSchema = z.object({
+  sale: SaleReceiptSchema,
+  order: OpenOrderViewSchema.nullable(),
+});
+export type PaidOrder = z.infer<typeof PaidOrderSchema>;
 
 // ── get_products ───────────────────────────────────────────────────────────
 
@@ -283,6 +302,68 @@ export const POS_IPC = {
   /** Runs a push + pull round now (the worker also runs every 60 s). */
   sync_to_cloud: command(NoArgs, SyncReportSchema, 4),
   sync_status: command(NoArgs, SyncStatusSchema, 4),
+
+  // Menu & floor — read: catalog.view (inactive rows: catalog.manage); edit: catalog.manage.
+  get_menu: command(z.object({ include_inactive: z.boolean() }), MenuSchema, 6),
+  save_modifier_group: command(z.object({ group: ModifierGroupInputSchema }), UuidSchema, 6),
+  delete_modifier_group: command(z.object({ group_id: UuidSchema }), z.null(), 6),
+  set_product_modifier_groups: command(
+    z.object({ product_id: UuidSchema, group_ids: z.array(UuidSchema).max(10) }),
+    z.null(),
+    6,
+  ),
+  save_combo: command(z.object({ combo: ComboInputSchema }), UuidSchema, 6),
+  delete_combo: command(z.object({ combo_id: UuidSchema }), z.null(), 6),
+  save_dining_table: command(z.object({ table: DiningTableInputSchema }), DiningTableSchema, 6),
+  delete_dining_table: command(z.object({ table_id: UuidSchema }), z.null(), 6),
+
+  // Open orders (tabs, tables) — sale.create; changing sent items: sale.void.
+  list_open_orders: command(NoArgs, z.array(OpenOrderViewSchema), 6),
+  open_order: command(z.object({ input: OpenOrderInputSchema }), OpenOrderViewSchema, 6),
+  update_open_order: command(z.object({ input: OpenOrderUpdateSchema }), OpenOrderViewSchema, 6),
+  /** A line of N whole items → N lines of one (to pay them separately). */
+  split_order_line: command(
+    z.object({ order_id: UuidSchema, line_id: UuidSchema, expected_updated_at: z.string() }),
+    OpenOrderViewSchema,
+    6,
+  ),
+  /** Sends unsent lines of `course` (null = all unsent) to the kitchen. */
+  fire_course: command(
+    z.object({
+      order_id: UuidSchema,
+      course: z.int().min(1).max(9).nullable(),
+      expected_updated_at: z.string(),
+    }),
+    FireOutcomeSchema,
+    6,
+  ),
+  cancel_open_order: command(
+    z.object({ order_id: UuidSchema, expected_updated_at: z.string() }),
+    z.null(),
+    6,
+  ),
+  /** Pays the chosen lines (split bill) or everything left (`line_ids: null`). */
+  pay_open_order: command(
+    z.object({
+      input: z.object({
+        order_id: UuidSchema,
+        idempotency_key: UuidSchema,
+        line_ids: z.array(UuidSchema).min(1).nullable(),
+        discount_rule_ids: z.array(UuidSchema),
+        payments: TransactionPayloadSchema.shape.payments,
+      }),
+    }),
+    PaidOrderSchema,
+    6,
+  ),
+
+  // Stock & labels — inventory.adjust / inventory.view.
+  adjust_stock: command(z.object({ adjustment: StockAdjustmentSchema }), ProductSchema, 6),
+  print_product_labels: command(
+    z.object({ product_id: UuidSchema, copies: z.int().min(1).max(50) }),
+    z.null(),
+    6,
+  ),
   get_dashboard_metrics: command(z.object({ range: DateRangeSchema }), DashboardDataSchema, 7),
 } as const;
 

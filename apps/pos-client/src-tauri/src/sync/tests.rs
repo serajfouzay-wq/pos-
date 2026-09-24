@@ -301,6 +301,7 @@ impl Till {
                 modifier_ids: vec![],
                 course: None,
                 note: None,
+                combo: None,
             }],
             discount_rule_ids: vec![],
             loyalty_points_to_redeem: 0,
@@ -651,6 +652,93 @@ fn soft_deletes_propagate() {
 }
 
 #[test]
+fn menus_floor_plans_and_open_orders_reach_the_other_till() {
+    use crate::repo::menu::{self, DiningTable, Modifier, ModifierGroup, TableShape};
+    use crate::repo::orders::{self, OpenOrder, OpenOrderItem, OpenOrderStatus};
+
+    let (_, a, b, cashier, product) = shop();
+    let group = ModifierGroup {
+        meta: Meta::new(at(1)),
+        name: "Milk".into(),
+        name_localized: serde_json::json!({ "ar": "حليب" }),
+        min_select: 0,
+        max_select: 1,
+        sort_order: 0,
+        is_active: true,
+    };
+    let oat = Modifier {
+        meta: Meta::new(at(1)),
+        group_id: group.meta.id,
+        name: "Oat".into(),
+        name_localized: serde_json::json!({}),
+        price_delta: 200,
+        is_default: false,
+        sort_order: 0,
+        is_active: true,
+    };
+    let table = DiningTable {
+        meta: Meta::new(at(1)),
+        label: "T1".into(),
+        area: "Hall".into(),
+        seats: 4,
+        shape: TableShape::Square,
+        grid_x: 1,
+        grid_y: 1,
+        sort_order: 0,
+        is_active: true,
+    };
+    let order = OpenOrder {
+        meta: Meta::new(at(2)),
+        device_id: a.device,
+        order_type: OrderType::DineIn,
+        table_id: Some(table.meta.id),
+        label: None,
+        guests: 2,
+        status: OpenOrderStatus::Open,
+        items: vec![OpenOrderItem {
+            line_id: Uuid::now_v7(),
+            product_id: product.meta.id,
+            quantity_milli: 2000,
+            modifier_ids: vec![oat.meta.id],
+            course: Some(1),
+            note: Some("no ice".into()),
+            combo: None,
+            fired_at: None,
+            added_by: cashier,
+            added_at: at(2),
+        }],
+        transaction_ids: vec![],
+        opened_by: cashier,
+        opened_at: at(2),
+        closed_at: None,
+        notes: None,
+    };
+    {
+        let conn = a.db.conn();
+        menu::save_group(&conn, &group, &[oat], at(1)).expect("group");
+        menu::set_product_groups(&conn, product.meta.id, &[group.meta.id], at(1)).expect("link");
+        menu::save_table(&conn, &table, at(1)).expect("table");
+        orders::save(&conn, &order, at(2)).expect("order");
+    }
+    a.sync();
+    b.sync();
+    let conn = b.db.conn();
+    let pulled = menu::menu(&conn, false).expect("menu");
+    assert_eq!(
+        pulled.modifier_groups[0].group.name_localized,
+        serde_json::json!({ "ar": "حليب" })
+    );
+    assert_eq!(pulled.modifier_groups[0].modifiers[0].price_delta, 200);
+    assert_eq!(
+        pulled.product_modifier_groups[&product.meta.id],
+        vec![group.meta.id]
+    );
+    assert_eq!(pulled.dining_tables[0].label, "T1");
+    let orders_on_b = orders::open(&conn).expect("orders");
+    assert_eq!(orders_on_b, vec![order], "items survive the round trip");
+}
+
+#[test]
 fn pulls_page_through_everything_and_resume_from_the_cursor() {
     let server = Arc::new(MemoryServer::default());
     let (a, b) = (till(&server, "A"), till(&server, "B"));
@@ -884,6 +972,56 @@ mod live {
         assert_eq!(ta.product(product.meta.id).expect("a").price, 1_400);
         assert_eq!(tb.product(product.meta.id).expect("b").price, 1_400);
         assert_eq!(a.engine.status(&a.db).pending, 0);
+
+        // A table seated on one till shows as occupied on the other.
+        use crate::repo::menu::{self, DiningTable, TableShape};
+        use crate::repo::orders::{self, OpenOrder, OpenOrderItem, OpenOrderStatus};
+        let now = SystemClock.now();
+        let table = DiningTable {
+            meta: Meta::new(now),
+            label: "T1".into(),
+            area: "Hall".into(),
+            seats: 4,
+            shape: TableShape::Square,
+            grid_x: 1,
+            grid_y: 1,
+            sort_order: 0,
+            is_active: true,
+        };
+        menu::save_table(&a.db.conn(), &table, now).expect("table");
+        let order = OpenOrder {
+            meta: Meta::new(now),
+            device_id: a.device,
+            order_type: OrderType::DineIn,
+            table_id: Some(table.meta.id),
+            label: None,
+            guests: 2,
+            status: OpenOrderStatus::Open,
+            items: vec![OpenOrderItem {
+                line_id: Uuid::now_v7(),
+                product_id: product.meta.id,
+                quantity_milli: 1000,
+                modifier_ids: vec![],
+                course: Some(1),
+                note: Some("no ice".into()),
+                combo: None,
+                fired_at: None,
+                added_by: cashier,
+                added_at: now,
+            }],
+            transaction_ids: vec![],
+            opened_by: cashier,
+            opened_at: now,
+            closed_at: None,
+            notes: None,
+        };
+        orders::save(&a.db.conn(), &order, now).expect("order");
+        a.sync();
+        b.sync();
+        let seen = orders::at_table(&b.db.conn(), table.meta.id)
+            .expect("read")
+            .expect("B sees the open order");
+        assert_eq!(seen.items, order.items);
 
         // The license token alone is not a credential.
         let stolen = SyncCredentials {

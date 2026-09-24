@@ -2,7 +2,7 @@
 //! transaction — never from anything the UI sent — then rendered to ESC/POS
 //! by `pos-hardware`.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::currency::CurrencyCode;
@@ -11,7 +11,7 @@ use crate::pricing::TaxLine;
 use crate::sales::{PaymentMethod, TransactionKind};
 use crate::time::Timestamp;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModifierLine {
     pub modifier_id: Option<Uuid>,
     pub name: String,

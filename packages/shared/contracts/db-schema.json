@@ -334,6 +334,122 @@
       "append_only": true,
       "sync": "append_only"
     },
+    "modifier_groups": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "name",
+        "name_localized",
+        "min_select",
+        "max_select",
+        "sort_order",
+        "is_active"
+      ],
+      "append_only": false,
+      "sync": "last_write_wins"
+    },
+    "modifiers": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "group_id",
+        "name",
+        "name_localized",
+        "price_delta",
+        "is_default",
+        "sort_order",
+        "is_active"
+      ],
+      "append_only": false,
+      "sync": "last_write_wins"
+    },
+    "product_modifier_groups": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "product_id",
+        "group_id",
+        "sort_order"
+      ],
+      "append_only": false,
+      "sync": "last_write_wins"
+    },
+    "combos": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "name",
+        "name_localized",
+        "price",
+        "color",
+        "sort_order",
+        "is_active"
+      ],
+      "append_only": false,
+      "sync": "last_write_wins"
+    },
+    "combo_items": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "combo_id",
+        "product_id",
+        "quantity_milli",
+        "sort_order"
+      ],
+      "append_only": false,
+      "sync": "last_write_wins"
+    },
+    "dining_tables": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "label",
+        "area",
+        "seats",
+        "shape",
+        "grid_x",
+        "grid_y",
+        "sort_order",
+        "is_active"
+      ],
+      "append_only": false,
+      "sync": "last_write_wins"
+    },
+    "open_orders": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "device_id",
+        "order_type",
+        "table_id",
+        "label",
+        "guests",
+        "status",
+        "items",
+        "transaction_ids",
+        "opened_by",
+        "opened_at",
+        "closed_at",
+        "notes"
+      ],
+      "append_only": false,
+      "sync": "last_write_wins"
+    },
     "sync_queue": {
       "columns": [
         "id",

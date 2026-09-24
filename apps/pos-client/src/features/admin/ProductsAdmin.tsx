@@ -2,8 +2,10 @@ import {
   parseDecimalString,
   PRODUCT_UNITS,
   toDecimalString,
+  type Menu,
   type Product,
   type ProductInput,
+  type Uuid,
 } from '@pos/shared';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,10 +13,12 @@ import {
   useAppInfo,
   useCategories,
   useLoadSampleCatalog,
+  useMenu,
   useProducts,
   useSaveProduct,
+  useSetProductGroups,
 } from '../../ipc/queries';
-import { useMoney } from '../../lib/money';
+import { parseQuantity, useMoney } from '../../lib/money';
 
 type Unit = (typeof PRODUCT_UNITS)[number];
 
@@ -27,6 +31,11 @@ interface Draft {
   unit: Unit;
   tax_percent: string;
   track_stock: boolean;
+  /** Units, e.g. "5" or "2.5"; empty = no alert. */
+  reorder_at: string;
+  /** Slot on the retail quick-keys grid; empty = none. */
+  quick_key: string;
+  group_ids: Uuid[];
   is_active: boolean;
 }
 
@@ -34,7 +43,10 @@ function draftFrom(
   product: Product | null,
   defaultTaxBps: number,
   format: (p: number) => string,
+  menu: Menu | undefined,
 ): Draft {
+  const links = menu?.product_modifier_groups as
+    Readonly<Record<string, readonly Uuid[]>> | undefined;
   return {
     id: product?.id ?? null,
     name: product?.name ?? '',
@@ -44,6 +56,12 @@ function draftFrom(
     unit: product?.unit ?? 'each',
     tax_percent: String((product?.tax_rate_bps ?? defaultTaxBps) / 100),
     track_stock: product?.track_stock ?? false,
+    reorder_at:
+      product?.reorder_threshold_milli == null
+        ? ''
+        : String(product.reorder_threshold_milli / 1000),
+    quick_key: product?.quick_key_position == null ? '' : String(product.quick_key_position),
+    group_ids: product ? [...(links?.[product.id] ?? [])] : [],
     is_active: product?.is_active ?? true,
   };
 }
@@ -63,6 +81,9 @@ export function ProductsAdmin() {
   const products = useProducts({ include_inactive: true, limit: 1000 });
   const categories = useCategories();
   const save = useSaveProduct();
+  const setGroups = useSetProductGroups();
+  const menu = useMenu(true);
+  const groups = menu.data?.modifier_groups ?? [];
   const sample = useLoadSampleCatalog();
   const defaultTax = info.data?.client.tax.default_rate_bps ?? 0;
   const plain = (p: number) => toDecimalString(p, currency);
@@ -83,6 +104,15 @@ export function ProductsAdmin() {
       setError(t('admin.products.badTax'));
       return;
     }
+    const reorder = parseQuantity(draft.reorder_at);
+    const quickKey = draft.quick_key.trim() ? Number(draft.quick_key) : null;
+    if (
+      reorder === undefined ||
+      (quickKey !== null && !(Number.isInteger(quickKey) && quickKey >= 0))
+    ) {
+      setError(t('admin.products.badNumber'));
+      return;
+    }
     const input: ProductInput = {
       id: draft.id,
       name: draft.name,
@@ -93,14 +123,32 @@ export function ProductsAdmin() {
       tax_rate_bps: tax,
       unit: draft.unit,
       track_stock: draft.track_stock,
-      reorder_threshold_milli: null,
-      quick_key_position: null,
+      reorder_threshold_milli: reorder,
+      quick_key_position: quickKey,
       is_active: draft.is_active,
     };
     setError(null);
+    const groupIds = groups.map((g) => g.id).filter((id) => draft.group_ids.includes(id));
+    const before = draftFrom(
+      products.data?.find((p) => p.id === draft.id) ?? null,
+      defaultTax,
+      plain,
+      menu.data,
+    ).group_ids;
     save.mutate(input, {
-      onSuccess: () => {
-        setDraft(null);
+      onSuccess: (product) => {
+        if (groupIds.join() === before.join()) {
+          setDraft(null);
+          return;
+        }
+        setGroups.mutate(
+          { productId: product.id, groupIds },
+          {
+            onSuccess: () => {
+              setDraft(null);
+            },
+          },
+        );
       },
     });
   };
@@ -117,7 +165,7 @@ export function ProductsAdmin() {
           type="button"
           className="button button--primary"
           onClick={() => {
-            setDraft(draftFrom(null, defaultTax, plain));
+            setDraft(draftFrom(null, defaultTax, plain, menu.data));
           }}
         >
           {t('admin.products.add')}
@@ -240,6 +288,58 @@ export function ProductsAdmin() {
             />
             {t('admin.products.trackStock')}
           </label>
+          {draft.track_stock && (
+            <label className="field">
+              {t('admin.products.reorderAt')}
+              <input
+                value={draft.reorder_at}
+                inputMode="decimal"
+                dir="ltr"
+                placeholder="—"
+                onChange={(e) => {
+                  set('reorder_at', e.target.value);
+                }}
+              />
+            </label>
+          )}
+          {info.data?.client.business_type === 'retail' && (
+            <label className="field">
+              {t('admin.products.quickKey')}
+              <input
+                value={draft.quick_key}
+                inputMode="numeric"
+                dir="ltr"
+                placeholder="—"
+                onChange={(e) => {
+                  set('quick_key', e.target.value);
+                }}
+              />
+            </label>
+          )}
+          {groups.length > 0 && (
+            <fieldset className="field span-all">
+              <legend>{t('admin.products.options')}</legend>
+              <div className="row row--wrap">
+                {groups.map((g) => (
+                  <label key={g.id} className="check">
+                    <input
+                      type="checkbox"
+                      checked={draft.group_ids.includes(g.id)}
+                      onChange={(e) => {
+                        set(
+                          'group_ids',
+                          e.target.checked
+                            ? [...draft.group_ids, g.id]
+                            : draft.group_ids.filter((id) => id !== g.id),
+                        );
+                      }}
+                    />
+                    {g.name}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
           <label className="check">
             <input
               type="checkbox"
@@ -250,13 +350,17 @@ export function ProductsAdmin() {
             />
             {t('admin.products.active')}
           </label>
-          {(error ?? save.error?.message) && (
+          {(error ?? save.error?.message ?? setGroups.error?.message) && (
             <p role="alert" className="error-text span-all">
-              {error ?? save.error?.message}
+              {error ?? save.error?.message ?? setGroups.error?.message}
             </p>
           )}
           <div className="row span-all">
-            <button type="submit" className="button button--primary" disabled={save.isPending}>
+            <button
+              type="submit"
+              className="button button--primary"
+              disabled={save.isPending || setGroups.isPending}
+            >
               {t('common.save')}
             </button>
             <button
@@ -298,7 +402,7 @@ export function ProductsAdmin() {
                   type="button"
                   className="link-button"
                   onClick={() => {
-                    setDraft(draftFrom(p, defaultTax, plain));
+                    setDraft(draftFrom(p, defaultTax, plain, menu.data));
                   }}
                 >
                   {t('common.edit')}

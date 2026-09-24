@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-product-modifier-groups"
+description = "Enables the set_product_modifier_groups command without any pre-configured scope."
+commands.allow = ["set_product_modifier_groups"]
+
+[[permission]]
+identifier = "deny-set-product-modifier-groups"
+description = "Denies the set_product_modifier_groups command without any pre-configured scope."
+commands.deny = ["set_product_modifier_groups"]

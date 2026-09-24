@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-update-open-order"
+description = "Enables the update_open_order command without any pre-configured scope."
+commands.allow = ["update_open_order"]
+
+[[permission]]
+identifier = "deny-update-open-order"
+description = "Denies the update_open_order command without any pre-configured scope."
+commands.deny = ["update_open_order"]

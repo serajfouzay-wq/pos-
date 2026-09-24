@@ -19,6 +19,15 @@ import {
   PrintJobRowSchema,
   SettingRowSchema,
 } from './entities/licensing';
+import {
+  ComboItemSchema,
+  ComboSchema,
+  DiningTableSchema,
+  ModifierGroupSchema,
+  ModifierSchema,
+  ProductModifierGroupSchema,
+} from './entities/menu';
+import { OpenOrderSchema } from './entities/orders';
 import { CustomerSchema, LoyaltyLedgerEntrySchema, UserRowSchema } from './entities/people';
 import {
   PurchaseOrderItemSchema,
@@ -53,6 +62,13 @@ export const LOCAL_TABLES = {
   purchase_orders: PurchaseOrderSchema,
   purchase_order_items: PurchaseOrderItemSchema,
   audit_log: AuditLogEntrySchema,
+  modifier_groups: ModifierGroupSchema,
+  modifiers: ModifierSchema,
+  product_modifier_groups: ProductModifierGroupSchema,
+  combos: ComboSchema,
+  combo_items: ComboItemSchema,
+  dining_tables: DiningTableSchema,
+  open_orders: OpenOrderSchema,
   sync_queue: SyncQueueRowSchema,
 } as const satisfies Record<string, z.ZodObject>;
 

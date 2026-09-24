@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-split-order-line"
+description = "Enables the split_order_line command without any pre-configured scope."
+commands.allow = ["split_order_line"]
+
+[[permission]]
+identifier = "deny-split-order-line"
+description = "Denies the split_order_line command without any pre-configured scope."
+commands.deny = ["split_order_line"]

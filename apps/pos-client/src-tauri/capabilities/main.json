@@ -33,6 +33,23 @@
     "allow-save-printer-settings",
     "allow-test-printer",
     "allow-sync-to-cloud",
-    "allow-sync-status"
+    "allow-sync-status",
+    "allow-get-menu",
+    "allow-save-modifier-group",
+    "allow-delete-modifier-group",
+    "allow-set-product-modifier-groups",
+    "allow-save-combo",
+    "allow-delete-combo",
+    "allow-save-dining-table",
+    "allow-delete-dining-table",
+    "allow-list-open-orders",
+    "allow-open-order",
+    "allow-update-open-order",
+    "allow-split-order-line",
+    "allow-fire-course",
+    "allow-cancel-open-order",
+    "allow-pay-open-order",
+    "allow-adjust-stock",
+    "allow-print-product-labels"
   ]
 }

@@ -188,6 +188,36 @@ DENO_NO_PACKAGE_JSON=1 deno run --no-config -A supabase/functions/dev-server.ts
 | Manager | + open/close shifts, reprint receipts, discounts, refunds/voids (soon) |
 | Owner   | Everything: products, staff, printer settings, reports                 |
 
+## Selling by business type
+
+The layout follows the `business_type` compiled into the build.
+
+- **Retail.** Opens on the quick-keys grid (Products → _Quick-key slot_). The
+  search box takes a scanned or typed barcode on Enter, and the USB scanner
+  works anywhere on the screen. Weighed goods ask their weight. **Stock**
+  lists on-hand quantities with a low-stock filter. It records deliveries,
+  corrections, waste and counts as additive movements, and prints shelf
+  labels (EAN-13/EAN-8/UPC-A when the check digit is valid, otherwise
+  Code 128). A top-bar chip counts items at or below their alert level.
+- **Cafe.** Pay-now at the **Counter**, or **Hold as tab** / **New tab** (a
+  name, optionally a table). Products with options (size, milk, sugar…) open
+  a picker with the defaults pre-selected; each option's price delta is
+  added to the line. **Combos** sell fixed sets at one price, with a choice
+  per component. The ✎ on a line adds a kitchen note.
+- **Restaurant.** The **floor** shows every table as free, occupied (with
+  its running total) or with items not yet sent. Tap a free table to seat it
+  (guests), then add items by **course**, and **Send course N** (or _Send
+  all_) to the kitchen. With a kitchen printer set up (Printer → Kitchen
+  printer) the ticket prints; otherwise it is shown on screen. **Split bill**
+  pays chosen lines (combos go whole; _One each_ splits a line of N), or pay
+  everything and split the amount equally in the payment dialog. The table
+  frees itself when the last line is paid. **Takeaway** is a pay-now sale.
+
+Back office (owner): **Menu** for option groups and combos, **Floor plan**
+for placing tables on the 24 × 16 grid, and option groups per product in
+**Products**. Tabs and tables are shared between the shop's tills through
+sync.
+
 ## Ground rules
 
 These are enforced by tooling where possible — see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -215,6 +245,6 @@ These are enforced by tooling where possible — see [`docs/ARCHITECTURE.md`](do
 | 3     | Core POS UI: products, cart, payment, receipt print, cash drawer        | ✅     |
 | 4     | Offline sync engine: outbox, background worker, conflict resolution     | ✅     |
 | 5     | Generator: client dashboard, asset upload, GitHub Actions build trigger | ✅     |
-| 6     | Business-type layouts: retail / cafe / restaurant                       |        |
+| 6     | Business-type layouts: retail / cafe / restaurant                       | ✅     |
 | 7     | Analytics, Z-reports, audit trail, role-based views                     |        |
 | 8     | Polish: animations, KDS window, loyalty, auto-updater                   |        |

@@ -297,3 +297,38 @@ begin
   end loop;
   raise notice 'ok 10 strategy parity';
 end $$;
+
+-- 11. Open orders (nested JSON items) and menu rows round-trip ─────────────
+do $$
+declare
+  ids record := (select t from t_ids t);
+  o uuid := '00000000-0000-4000-8000-00000000b001';
+  g uuid := '00000000-0000-4000-8000-00000000b002';
+  items jsonb := jsonb_build_array(jsonb_build_object(
+    'line_id', '00000000-0000-4000-8000-00000000b003', 'product_id', '00000000-0000-4000-8000-00000000a001',
+    'quantity_milli', 2000, 'modifier_ids', jsonb_build_array(g), 'course', 1, 'note', 'no ice',
+    'combo', null, 'fired_at', null, 'added_by', ids.dev_a1, 'added_at', '2026-09-24T11:00:00.000Z'));
+  r jsonb;
+  pulled jsonb;
+  row jsonb;
+begin
+  update device_activations set revoked_at = null where fingerprint_hash = ids.fp_a2; -- revoked in test 8
+  r := public.sync_push(ids.client_a, ids.fp_a1, ids.dev_a1, jsonb_build_array(
+    pg_temp.event('e0000000-0000-4000-8000-00000000b001', 'upsert', 'open_orders', jsonb_build_object(
+      'id', o, 'created_at', '2026-09-24T11:00:00.000Z', 'updated_at', '2026-09-24T11:00:00.000Z', 'deleted_at', null,
+      'device_id', ids.dev_a1, 'order_type', 'dine_in', 'table_id', null, 'label', 'T4', 'guests', 2,
+      'status', 'open', 'items', items, 'transaction_ids', '[]'::jsonb, 'opened_by', ids.dev_a1,
+      'opened_at', '2026-09-24T11:00:00.000Z', 'closed_at', null, 'notes', null)),
+    pg_temp.event('e0000000-0000-4000-8000-00000000b002', 'upsert', 'modifier_groups', jsonb_build_object(
+      'id', g, 'created_at', '2026-09-24T11:00:00.000Z', 'updated_at', '2026-09-24T11:00:00.000Z', 'deleted_at', null,
+      'name', 'Milk', 'name_localized', '{"ar": "حليب"}'::jsonb, 'min_select', 0, 'max_select', 1,
+      'sort_order', 0, 'is_active', true))));
+  assert jsonb_array_length(r->'acknowledged') = 2 and jsonb_array_length(r->'rejected') = 0, r::text;
+  pulled := public.sync_pull(ids.client_a, ids.fp_a2, ids.dev_a2, 0, 1000);
+  select c->'row' into row from jsonb_array_elements(pulled->'changes') c where c->>'entity_type' = 'open_orders';
+  assert row->'items' = items, 'items survive as JSON: ' || coalesce(row::text, 'missing');
+  assert row->>'opened_at' = '2026-09-24T11:00:00.000Z', 'timestamps in protocol format';
+  select c->'row' into row from jsonb_array_elements(pulled->'changes') c where c->>'entity_type' = 'modifier_groups';
+  assert (row->>'is_active')::boolean and row->'name_localized'->>'ar' = 'حليب', coalesce(row::text, 'missing');
+  raise notice 'ok 11 menu + open orders';
+end $$;

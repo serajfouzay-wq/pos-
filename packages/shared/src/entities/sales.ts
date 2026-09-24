@@ -22,6 +22,7 @@ export const TransactionKindSchema = z.enum(TRANSACTION_KINDS);
 
 export const ORDER_TYPES = ['counter', 'dine_in', 'takeaway', 'delivery'] as const;
 export const OrderTypeSchema = z.enum(ORDER_TYPES);
+export type OrderType = z.infer<typeof OrderTypeSchema>;
 
 export const TransactionSchema = EntityBaseSchema.extend({
   kind: TransactionKindSchema,

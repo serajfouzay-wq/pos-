@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-save-combo"
+description = "Enables the save_combo command without any pre-configured scope."
+commands.allow = ["save_combo"]
+
+[[permission]]
+identifier = "deny-save-combo"
+description = "Denies the save_combo command without any pre-configured scope."
+commands.deny = ["save_combo"]

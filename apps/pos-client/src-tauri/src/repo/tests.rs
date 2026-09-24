@@ -97,6 +97,7 @@ fn item(product_id: Uuid, quantity_milli: i64) -> PayloadItem {
         modifier_ids: vec![],
         course: None,
         note: None,
+        combo: None,
     }
 }
 
@@ -346,6 +347,7 @@ fn receipts_queue_while_offline_and_print_in_order_later() {
                 port: 9100,
             }],
             open_drawer_on_cash: true,
+            kitchen: None,
         };
         settings::put(&conn, SETTINGS_KEY, &chain, now()).expect("settings");
         product(&conn, "Latte", 1_250, Unit::Each, false)
@@ -481,7 +483,177 @@ fn pos_response_shapes_match_the_contract_fixture() {
     let session = Session::new(user.meta.id, user.display_name.clone(), user.role, now());
     let category = catalog::new_category("Coffee", 0, Some("#8B5E3C"), now());
 
+    // Phase 6: a menu with options and a combo, an open table order.
+    let (menu_example, order_view, fired_view, paid) = {
+        use crate::commands::orders::{FireOutcome, PaidOrder};
+        use crate::open_orders::{self, ItemInput, OpenInput, OrderActor, PayInput, UpdateInput};
+        use crate::repo::menu::{
+            self, Combo, ComboItem, DiningTable, Modifier, ModifierGroup, TableShape,
+        };
+
+        let group = ModifierGroup {
+            meta: Meta::new(now()),
+            name: "Milk".into(),
+            name_localized: json!({ "ar": "حليب" }),
+            min_select: 0,
+            max_select: 1,
+            sort_order: 0,
+            is_active: true,
+        };
+        let oat = Modifier {
+            meta: Meta::new(now()),
+            group_id: group.meta.id,
+            name: "Oat".into(),
+            name_localized: json!({}),
+            price_delta: 200,
+            is_default: false,
+            sort_order: 0,
+            is_active: true,
+        };
+        menu::save_group(&conn, &group, std::slice::from_ref(&oat), now()).expect("group");
+        menu::set_product_groups(&conn, latte, &[group.meta.id], now()).expect("link");
+        let croissant = product(&conn, "Croissant", 750, Unit::Each, false);
+        let combo = Combo {
+            meta: Meta::new(now()),
+            name: "Breakfast".into(),
+            name_localized: json!({}),
+            price: 1_750,
+            color: Some("#B7791F".into()),
+            sort_order: 0,
+            is_active: true,
+        };
+        let parts: Vec<ComboItem> = [latte, croissant]
+            .iter()
+            .map(|p| ComboItem {
+                meta: Meta::new(now()),
+                combo_id: combo.meta.id,
+                product_id: *p,
+                quantity_milli: 1000,
+                sort_order: 0,
+            })
+            .collect();
+        menu::save_combo(&conn, &combo, &parts, now()).expect("combo");
+        let table = DiningTable {
+            meta: Meta::new(now()),
+            label: "T4".into(),
+            area: "Hall".into(),
+            seats: 4,
+            shape: TableShape::Square,
+            grid_x: 1,
+            grid_y: 1,
+            sort_order: 0,
+            is_active: true,
+        };
+        menu::save_table(&conn, &table, now()).expect("table");
+        let actor = OrderActor {
+            user_id: w.cashier,
+            display_name: "Sara".into(),
+            role: Role::Cashier,
+            device_id: w.device,
+        };
+        let order = open_orders::open(
+            &conn,
+            &actor,
+            OpenInput {
+                table_id: Some(table.meta.id),
+                label: None,
+                guests: 2,
+                order_type: OrderType::DineIn,
+            },
+            now(),
+        )
+        .expect("open");
+        let later = now().checked_add(Duration::seconds(1)).expect("ts");
+        let order = open_orders::update(
+            &conn,
+            &actor,
+            UpdateInput {
+                order_id: order.meta.id,
+                expected_updated_at: order.meta.updated_at,
+                items: vec![ItemInput {
+                    line_id: Uuid::now_v7(),
+                    product_id: latte,
+                    quantity_milli: 1000,
+                    modifier_ids: vec![oat.meta.id],
+                    course: Some(1),
+                    note: Some("extra hot".into()),
+                    combo: None,
+                }],
+                table_id: Some(table.meta.id),
+                label: None,
+                guests: 2,
+                notes: None,
+            },
+            &config(),
+            later,
+        )
+        .expect("update");
+        let later2 = later.checked_add(Duration::seconds(1)).expect("ts");
+        let fired = open_orders::fire(
+            &conn,
+            &actor,
+            order.meta.id,
+            Some(1),
+            order.meta.updated_at,
+            later2,
+        )
+        .expect("fire");
+        let fired_order =
+            open_orders::view(&conn, fired.order.clone(), &config(), later2).expect("view");
+        let outcome = FireOutcome {
+            order: fired_order.clone(),
+            printed: false,
+            print_error: Some("no kitchen printer".into()),
+            ticket_text: pos_hardware::kitchen::render_text(&fired.ticket, 80),
+        };
+        let listed = open_orders::views(&conn, &config(), later2).expect("views");
+        let (_, paid) = open_orders::pay(
+            &conn,
+            &SaleActor {
+                user_id: w.cashier,
+                role: Role::Cashier,
+            },
+            &PayInput {
+                order_id: order.meta.id,
+                idempotency_key: Uuid::new_v4(),
+                line_ids: None,
+                discount_rule_ids: vec![],
+                payments: vec![pay(PaymentMethod::Card, 1_450)],
+            },
+            &config(),
+            later2,
+        )
+        .expect("pay");
+        let paid_receipt = sales::load_receipt(&conn, paid.transaction_id, false).expect("receipt");
+        let paid = PaidOrder {
+            sale: SaleReceipt {
+                receipt: paid_receipt,
+                drawer_opened: false,
+            },
+            order: Some(fired_order),
+        };
+        (
+            menu::menu(&conn, false).expect("menu"),
+            listed[0].clone(),
+            outcome,
+            paid,
+        )
+    };
+
+    // Map keys are product ids (random per run): pin them for the shape.
+    let mut menu_example = serde_json::to_value(&menu_example).expect("menu");
+    if let Some(links) = menu_example["product_modifier_groups"].as_object_mut() {
+        let values: Vec<Value> = links.values().cloned().collect();
+        links.clear();
+        for (i, v) in values.into_iter().enumerate() {
+            links.insert(format!("00000000-0000-4000-8000-{i:012}"), v);
+        }
+    }
     let examples = json!({
+        "menu": menu_example,
+        "fire_outcome": fired_view,
+        "paid_order": paid,
+        "open_order_view": order_view,
         "session": session,
         "session_status": SessionStatus { needs_setup: false, session: Some(session.clone()) },
         "login_user": LoginUser { id: user.meta.id, display_name: user.display_name.clone(), role: user.role, locked_until: Some(now()) },
@@ -499,6 +671,7 @@ fn pos_response_shapes_match_the_contract_fixture() {
                 PrinterTarget::Serial { port: "COM5".into(), baud_rate: 9600 },
             ],
             open_drawer_on_cash: true,
+            kitchen: Some(PrinterTarget::Tcp { host: "192.168.1.60".into(), port: 9100 }),
         },
         "printer_status": PrinterStatus { configured: true, online: Some(false), pending_jobs: 2, last_error: Some("offline".into()) },
         "discovered_printer": DiscoveredPrinter {

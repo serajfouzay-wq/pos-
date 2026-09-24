@@ -9,8 +9,11 @@ use tauri::State;
 use uuid::Uuid;
 
 use super::{authorize, blocking};
+use crate::db::Database;
 use crate::printing::PrintService;
-use crate::repo::sales::{self, QuoteRequest, QuoteView, SaleActor, TransactionPayload};
+use crate::repo::sales::{
+    self, CreatedSale, QuoteRequest, QuoteView, SaleActor, TransactionPayload,
+};
 use crate::repo::{audit, print_jobs, SqlResultExt};
 use crate::state::AppState;
 
@@ -72,28 +75,37 @@ pub async fn create_transaction(
             SystemClock.now(),
         )?;
 
-        // Hardware is best-effort and happens after the sale is committed:
-        // a jammed printer must never lose a sale.
-        let mut drawer_opened = false;
-        let printed = if created.is_new {
-            let settings = PrintService::settings(&auth.db.conn())?;
-            if created.includes_cash && settings.open_drawer_on_cash {
-                drawer_opened = printer.kick_drawer(&auth.db).is_ok();
-            }
-            printer
-                .drain(&auth.db, Some(created.transaction_id))
-                .unwrap_or(false)
-        } else {
-            print_jobs::ever_printed(&auth.db.conn(), created.transaction_id).ipc()?
-        };
-        let receipt = sales::load_receipt(&auth.db.conn(), created.transaction_id, printed)?;
-        Ok(SaleReceipt {
-            receipt,
-            drawer_opened,
-        })
+        complete(&auth.db, &printer, created)
     })
     .await
     .inspect(|_| state.sync.nudge())
+}
+
+/// After a sale is committed: open the drawer for cash, print (or queue)
+/// the receipt. Hardware is best-effort — a jammed printer never loses a
+/// sale. A replayed sale (same idempotency key) touches no hardware.
+pub fn complete(
+    db: &Database,
+    printer: &PrintService,
+    created: CreatedSale,
+) -> IpcResult<SaleReceipt> {
+    let mut drawer_opened = false;
+    let printed = if created.is_new {
+        let settings = PrintService::settings(&db.conn())?;
+        if created.includes_cash && settings.open_drawer_on_cash {
+            drawer_opened = printer.kick_drawer(db).is_ok();
+        }
+        printer
+            .drain(db, Some(created.transaction_id))
+            .unwrap_or(false)
+    } else {
+        print_jobs::ever_printed(&db.conn(), created.transaction_id).ipc()?
+    };
+    let receipt = sales::load_receipt(&db.conn(), created.transaction_id, printed)?;
+    Ok(SaleReceipt {
+        receipt,
+        drawer_opened,
+    })
 }
 
 /// Mirrors `PrintOutcomeSchema`.

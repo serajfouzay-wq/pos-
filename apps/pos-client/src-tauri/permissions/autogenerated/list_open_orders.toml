@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-list-open-orders"
+description = "Enables the list_open_orders command without any pre-configured scope."
+commands.allow = ["list_open_orders"]
+
+[[permission]]
+identifier = "deny-list-open-orders"
+description = "Denies the list_open_orders command without any pre-configured scope."
+commands.deny = ["list_open_orders"]

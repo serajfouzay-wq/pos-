@@ -15,6 +15,8 @@ use pos_core::time::{Clock, SystemClock};
 use pos_core::{IpcError, IpcErrorCode, IpcResult};
 use pos_hardware::escpos::{Align, EscPos, DRAWER_KICK};
 use pos_hardware::image::MonoImage;
+use pos_hardware::kitchen::KitchenTicket;
+use pos_hardware::label::ProductLabel;
 use pos_hardware::receipt::{render_escpos, ReceiptTemplate};
 use pos_hardware::transport::{self, DiscoveredPrinter, PrinterTarget, TransportError};
 use rusqlite::Connection;
@@ -52,6 +54,10 @@ pub struct PrinterSettings {
     pub chain: Vec<PrinterTarget>,
     #[serde(default = "yes")]
     pub open_drawer_on_cash: bool,
+    /// Kitchen tickets for fired courses (restaurants/cafes). `None` = no
+    /// kitchen printer (the kitchen display arrives in Phase 8).
+    #[serde(default)]
+    pub kitchen: Option<PrinterTarget>,
 }
 
 impl Default for PrinterSettings {
@@ -59,6 +65,7 @@ impl Default for PrinterSettings {
         Self {
             chain: Vec::new(),
             open_drawer_on_cash: true,
+            kitchen: None,
         }
     }
 }
@@ -217,6 +224,26 @@ impl PrintService {
         let result = self.send_chain(&chain, &DRAWER_KICK);
         self.publish(db);
         result.map_err(hardware_error)
+    }
+
+    /// Product labels on the receipt printer chain.
+    pub fn print_labels(&self, db: &Database, label: &ProductLabel, copies: u8) -> IpcResult<()> {
+        let chain = Self::settings(&db.conn())?.chain;
+        let bytes = pos_hardware::label::render_escpos(label, self.template.paper_width_mm, copies);
+        let result = self.send_chain(&chain, &bytes);
+        self.publish(db);
+        result.map_err(hardware_error)
+    }
+
+    /// Sends a kitchen ticket to the kitchen printer. `Ok(false)` when none
+    /// is configured.
+    pub fn print_kitchen(&self, db: &Database, ticket: &KitchenTicket) -> IpcResult<bool> {
+        let Some(target) = Self::settings(&db.conn())?.kitchen else {
+            return Ok(false);
+        };
+        let bytes = pos_hardware::kitchen::render_escpos(ticket, self.template.paper_width_mm);
+        self.io.send(&target, &bytes).map_err(hardware_error)?;
+        Ok(true)
     }
 
     pub fn test_print(&self, target: &PrinterTarget) -> IpcResult<()> {

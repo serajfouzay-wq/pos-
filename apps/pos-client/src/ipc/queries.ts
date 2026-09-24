@@ -1,5 +1,14 @@
 import type {
+  CommandArgs,
+  ComboInput,
+  DiningTableInput,
   LicenseStatus,
+  ModifierGroupInput,
+  OpenOrderInput,
+  OpenOrderUpdate,
+  OpenOrderView,
+  PosIpcContract,
+  StockAdjustment,
   PrinterSettings,
   PrinterStatus,
   PrinterTarget,
@@ -31,6 +40,8 @@ export const queryKeys = {
   printerSettings: ['printer_settings'] as const,
   printers: ['printers'] as const,
   syncStatus: ['sync_status'] as const,
+  menu: (includeInactive: boolean) => ['menu', includeInactive] as const,
+  openOrders: ['open_orders'] as const,
 };
 
 /** Raised when the UI is loaded in a plain browser instead of the Tauri shell. */
@@ -209,11 +220,12 @@ export function useCloseShift() {
 
 // ── Catalogue ──────────────────────────────────────────────────────────────
 
-export function useProducts(filter: ProductFilter) {
+export function useProducts(filter: ProductFilter, enabled = true) {
   return useQuery({
     queryKey: queryKeys.products(filter),
     queryFn: () => ipc.call('get_products', { filter }),
     placeholderData: keepPreviousData,
+    enabled,
   });
 }
 
@@ -238,6 +250,7 @@ export function useLoadSampleCatalog() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['products'] });
       void queryClient.invalidateQueries({ queryKey: queryKeys.categories });
+      void queryClient.invalidateQueries({ queryKey: ['menu'] });
     },
   });
 }
@@ -329,6 +342,8 @@ export function useTestPrinter() {
 /** Local data another till may have changed; refetched after a sync round. */
 const SYNCED_QUERIES = [
   ['products'],
+  ['menu'],
+  queryKeys.openOrders,
   queryKeys.categories,
   queryKeys.users,
   queryKeys.loginUsers,
@@ -369,5 +384,205 @@ export function useSyncNow() {
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.syncStatus });
     },
+  });
+}
+
+// ── Menu & floor (Phase 6) ─────────────────────────────────────────────────
+
+export function useMenu(includeInactive = false) {
+  return useQuery({
+    queryKey: queryKeys.menu(includeInactive),
+    queryFn: () => ipc.call('get_menu', { include_inactive: includeInactive }),
+    staleTime: 30_000,
+  });
+}
+
+function useMenuChanged() {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: ['menu'] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.openOrders });
+  };
+}
+
+export function useSaveModifierGroup() {
+  const changed = useMenuChanged();
+  return useMutation({
+    mutationFn: (group: ModifierGroupInput) => ipc.call('save_modifier_group', { group }),
+    onSuccess: changed,
+  });
+}
+
+export function useDeleteModifierGroup() {
+  const changed = useMenuChanged();
+  return useMutation({
+    mutationFn: (groupId: string) => ipc.call('delete_modifier_group', { group_id: groupId }),
+    onSuccess: changed,
+  });
+}
+
+export function useSetProductGroups() {
+  const changed = useMenuChanged();
+  return useMutation({
+    mutationFn: (args: { productId: string; groupIds: string[] }) =>
+      ipc.call('set_product_modifier_groups', {
+        product_id: args.productId,
+        group_ids: args.groupIds,
+      }),
+    onSuccess: changed,
+  });
+}
+
+export function useSaveCombo() {
+  const changed = useMenuChanged();
+  return useMutation({
+    mutationFn: (combo: ComboInput) => ipc.call('save_combo', { combo }),
+    onSuccess: changed,
+  });
+}
+
+export function useDeleteCombo() {
+  const changed = useMenuChanged();
+  return useMutation({
+    mutationFn: (comboId: string) => ipc.call('delete_combo', { combo_id: comboId }),
+    onSuccess: changed,
+  });
+}
+
+export function useSaveTable() {
+  const changed = useMenuChanged();
+  return useMutation({
+    mutationFn: (table: DiningTableInput) => ipc.call('save_dining_table', { table }),
+    onSuccess: changed,
+  });
+}
+
+export function useDeleteTable() {
+  const changed = useMenuChanged();
+  return useMutation({
+    mutationFn: (tableId: string) => ipc.call('delete_dining_table', { table_id: tableId }),
+    onSuccess: changed,
+  });
+}
+
+// ── Open orders (tabs & tables) ────────────────────────────────────────────
+
+/** Open orders of the whole shop (other tills' arrive through sync). */
+export function useOpenOrders(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.openOrders,
+    queryFn: () => ipc.call('list_open_orders'),
+    enabled,
+    refetchInterval: 15_000,
+  });
+}
+
+/** Writes a fresh order version into the list cache. */
+function useOrderStored() {
+  const queryClient = useQueryClient();
+  return (order: OpenOrderView | null, removedId?: string) => {
+    queryClient.setQueryData<OpenOrderView[]>(queryKeys.openOrders, (list = []) => {
+      const others = list.filter((o) => o.id !== (order?.id ?? removedId));
+      return order ? [...others, order] : others;
+    });
+  };
+}
+
+export function useOpenOrder() {
+  const stored = useOrderStored();
+  return useMutation({
+    mutationFn: (input: OpenOrderInput) => ipc.call('open_order', { input }),
+    onSuccess: (order) => {
+      stored(order);
+    },
+  });
+}
+
+export function useUpdateOrder() {
+  const stored = useOrderStored();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: OpenOrderUpdate) => ipc.call('update_open_order', { input }),
+    onSuccess: (order) => {
+      stored(order);
+    },
+    onError: () => {
+      // Probably changed on another till: take the current version.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.openOrders });
+    },
+  });
+}
+
+export function useSplitLine() {
+  const stored = useOrderStored();
+  return useMutation({
+    mutationFn: (args: { order: OpenOrderView; lineId: string }) =>
+      ipc.call('split_order_line', {
+        order_id: args.order.id,
+        line_id: args.lineId,
+        expected_updated_at: args.order.updated_at,
+      }),
+    onSuccess: (order) => {
+      stored(order);
+    },
+  });
+}
+
+export function useFireCourse() {
+  const stored = useOrderStored();
+  return useMutation({
+    mutationFn: (args: { order: OpenOrderView; course: number | null }) =>
+      ipc.call('fire_course', {
+        order_id: args.order.id,
+        course: args.course,
+        expected_updated_at: args.order.updated_at,
+      }),
+    onSuccess: (outcome) => {
+      stored(outcome.order);
+    },
+  });
+}
+
+export function useCancelOrder() {
+  const stored = useOrderStored();
+  return useMutation({
+    mutationFn: (order: OpenOrderView) =>
+      ipc.call('cancel_open_order', { order_id: order.id, expected_updated_at: order.updated_at }),
+    onSuccess: (_done, order) => {
+      stored(null, order.id);
+    },
+  });
+}
+
+export function usePayOrder() {
+  const stored = useOrderStored();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CommandArgs<PosIpcContract, 'pay_open_order'>['input']) =>
+      ipc.call('pay_open_order', { input }),
+    onSuccess: (paid, input) => {
+      stored(paid.order, input.order_id);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.shift });
+      void queryClient.invalidateQueries({ queryKey: ['products'] });
+    },
+  });
+}
+
+// ── Stock & labels ─────────────────────────────────────────────────────────
+
+export function useAdjustStock() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (adjustment: StockAdjustment) => ipc.call('adjust_stock', { adjustment }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['products'] });
+    },
+  });
+}
+
+export function usePrintLabels() {
+  return useMutation({
+    mutationFn: (args: { productId: string; copies: number }) =>
+      ipc.call('print_product_labels', { product_id: args.productId, copies: args.copies }),
   });
 }

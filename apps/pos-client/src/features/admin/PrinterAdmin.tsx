@@ -2,6 +2,7 @@ import type { PrinterSettings, PrinterTarget } from '@pos/shared';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  useAppInfo,
   useDiscoveredPrinters,
   useKickDrawer,
   usePrinterSettings,
@@ -33,6 +34,8 @@ export function PrinterAdmin() {
   const save = useSavePrinterSettings();
   const test = useTestPrinter();
   const drawer = useKickDrawer();
+  const info = useAppInfo();
+  const kitchenEnabled = info.data?.client.business_type !== 'retail';
   // Unsaved edits; until the first edit the saved settings are shown.
   const [edited, setDraft] = useState<PrinterSettings | null>(null);
   const [host, setHost] = useState('');
@@ -44,6 +47,9 @@ export function PrinterAdmin() {
   const chain = draft.chain;
   const update = (next: PrinterTarget[]) => {
     setDraft({ ...draft, chain: next });
+  };
+  const setKitchen = (target: PrinterTarget | null) => {
+    setDraft({ ...draft, kitchen: target });
   };
   const addTarget = (target: PrinterTarget) => {
     if (chain.length < 3 && !chain.some((c) => same(c, target))) update([...chain, target]);
@@ -184,6 +190,55 @@ export function PrinterAdmin() {
         )}
       </section>
 
+      {kitchenEnabled && (
+        <section className="card">
+          <h2>{t('admin.printer.kitchen')}</h2>
+          <p className="muted">{t('admin.printer.kitchenHelp')}</p>
+          <ol className="chain">
+            {draft.kitchen ? (
+              <li>
+                <span className="badge">{t('admin.printer.kitchenBadge')}</span>
+                <span className="grow" dir="ltr">
+                  {label(draft.kitchen)}
+                </span>
+                <button
+                  type="button"
+                  className="link-button"
+                  disabled={test.isPending}
+                  onClick={() => {
+                    if (draft.kitchen) test.mutate(draft.kitchen);
+                  }}
+                >
+                  {t('admin.printer.test')}
+                </button>
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={() => {
+                    setKitchen(null);
+                  }}
+                  aria-label={t('sell.remove')}
+                >
+                  ✕
+                </button>
+              </li>
+            ) : (
+              <li className="muted">{t('admin.printer.kitchenNone')}</li>
+            )}
+          </ol>
+          <button
+            type="button"
+            className="button button--primary"
+            disabled={save.isPending}
+            onClick={() => {
+              save.mutate(draft);
+            }}
+          >
+            {t('common.save')}
+          </button>
+        </section>
+      )}
+
       <section className="card">
         <h2>{t('admin.printer.detected')}</h2>
         <ul className="chain">
@@ -203,6 +258,17 @@ export function PrinterAdmin() {
               >
                 {t('admin.printer.add')}
               </button>
+              {kitchenEnabled && (
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() => {
+                    setKitchen(p.target);
+                  }}
+                >
+                  {t('admin.printer.useForKitchen')}
+                </button>
+              )}
             </li>
           ))}
         </ul>
@@ -212,7 +278,10 @@ export function PrinterAdmin() {
             e.preventDefault();
             const p = Number(port);
             if (host.trim() && Number.isInteger(p) && p > 0 && p < 65_536) {
-              addTarget({ kind: 'tcp', host: host.trim(), port: p });
+              const target: PrinterTarget = { kind: 'tcp', host: host.trim(), port: p };
+              const submitter = (e.nativeEvent as SubmitEvent).submitter;
+              if (submitter?.getAttribute('name') === 'kitchen') setKitchen(target);
+              else addTarget(target);
               setHost('');
             }
           }}
@@ -238,6 +307,11 @@ export function PrinterAdmin() {
           <button type="submit" className="button">
             {t('admin.printer.addNetwork')}
           </button>
+          {kitchenEnabled && (
+            <button type="submit" name="kitchen" className="button">
+              {t('admin.printer.useForKitchen')}
+            </button>
+          )}
         </form>
       </section>
     </div>
