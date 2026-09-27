@@ -42,6 +42,8 @@ export const SYNC_ENTITY_STRATEGY = {
   combo_items: 'last_write_wins',
   dining_tables: 'last_write_wins',
   open_orders: 'last_write_wins',
+  shop_settings: 'last_write_wins',
+  kitchen_tickets: 'last_write_wins',
   transactions: 'append_only',
   transaction_items: 'append_only',
   transaction_payments: 'append_only',

@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use super::{authorize, blocking};
 use crate::db::Database;
+use crate::loyalty;
 use crate::printing::PrintService;
 use crate::repo::sales::{
     self, CreatedSale, QuoteRequest, QuoteView, SaleActor, TransactionPayload,
@@ -28,19 +29,45 @@ pub async fn quote_transaction(
     if !request.discount_rule_ids.is_empty() {
         rbac::authorize(auth.session.role, Permission::DiscountApply)?;
     }
+    if let Some(loyalty) = &request.loyalty {
+        rbac::authorize(auth.session.role, Permission::CustomerLookup)?;
+        if loyalty.redeem_points > 0 {
+            rbac::authorize(auth.session.role, Permission::LoyaltyRedeem)?;
+        }
+    }
     let client = Arc::clone(&state.client);
     blocking(move || {
         let conn = auth.db.conn();
-        let quote = sales::quote(
+        let priced = loyalty::price(
             &conn,
             &request.items,
             &request.discount_rule_ids,
+            request.loyalty,
             &client,
             SystemClock.now(),
         )?;
-        Ok(sales::quote_view(quote, client.currency.base))
+        Ok(sales::quote_view(
+            priced.cart.quote,
+            client.currency.base,
+            priced.loyalty,
+        ))
     })
     .await
+}
+
+/// Naming a customer needs `customer.lookup`; spending points `loyalty.redeem`.
+pub(crate) fn loyalty_permissions(
+    auth: &super::Authorized,
+    customer_id: Option<Uuid>,
+    redeem_points: i64,
+) -> IpcResult<()> {
+    if customer_id.is_some() {
+        rbac::authorize(auth.session.role, Permission::CustomerLookup)?;
+    }
+    if redeem_points != 0 {
+        rbac::authorize(auth.session.role, Permission::LoyaltyRedeem)?;
+    }
+    Ok(())
 }
 
 /// Mirrors `SaleReceiptSchema`: the receipt plus what the hardware did.
@@ -60,6 +87,7 @@ pub async fn create_transaction(
     if !payload.discount_rule_ids.is_empty() {
         rbac::authorize(auth.session.role, Permission::DiscountApply)?;
     }
+    loyalty_permissions(&auth, payload.customer_id, payload.loyalty_points_to_redeem)?;
     let client = Arc::clone(&state.client);
     let printer = Arc::clone(&state.printer);
     blocking(move || {

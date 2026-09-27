@@ -88,7 +88,11 @@ Normally the generator drives all of this (see below).
    one commit and runs [`build-client.yml`](.github/workflows/build-client.yml)
    on GitHub Actions. It follows the run and offers **Download installer**
    when it's done (about 15–25 min). Each client gets its own app identity
-   (`com.posfactory.pos.<slug>`), name, icon and embedded config.
+   (`com.posfactory.pos.<slug>`), name, icon and embedded config. Every
+   build of a client gets a higher version (`MAJOR.MINOR` of the app, then
+   the client's build number). Add **release notes** and keep **Publish to
+   the tills as an update** ticked to ship it to that client's tills (see
+   [Updates](#updates)).
 5. **Licenses** (on the client, or in the Licenses section): paste the till's
    activation code and sign. A code from another client's till is refused,
    and every license is kept in the client's history.
@@ -153,7 +157,7 @@ same SQLite transaction as the change itself.
   ```
   supabase db push
   supabase secrets set LICENSE_PUBLIC_KEY_PEM="$(cat license-public-key.pem)"
-  supabase functions deploy license-validate sync-push sync-pull
+  supabase functions deploy license-validate sync-push sync-pull app-update
   ```
 
 **Local cloud for development** (Postgres ≥ 15 and Deno 2):
@@ -169,6 +173,28 @@ LICENSE_PUBLIC_KEY_PEM="$(cat keys/dev/license-dev.public.pem)" \
 DENO_NO_PACKAGE_JSON=1 deno run --no-config -A supabase/functions/dev-server.ts
 ```
 
+## Updates
+
+Tills update themselves from their shop's cloud project. A published build
+is downloaded in the background and checked against the release key compiled
+into the till. It installs quietly the next time the till is closed; a
+manager can choose **Restart now** from the banner instead. After the update,
+the first sign-in shows what changed.
+
+One-time setup:
+
+1. `pnpm --filter @pos/pos-client tauri signer generate -w updater.key` and
+   keep the private key safe (losing it means reinstalling every till by hand).
+2. In the build repository: variable `POS_UPDATER_PUBLIC_KEY` (the `.pub`
+   contents); secrets `TAURI_SIGNING_PRIVATE_KEY` (+ `_PASSWORD`) and
+   `POS_SUPABASE_SERVICE_ROLE_KEY` (uploads to the private `releases`
+   bucket).
+3. Deploy the `app-update` function (above). Tills built before this key was
+   set, or without a cloud, keep updating by installer.
+
+A release can be withdrawn by setting `withdrawn_at` on its `app_releases`
+row; tills then get the previous one offered (they never downgrade).
+
 ## Using the till
 
 1. **Activate** (see Licensing). 2. The first person creates the **owner**
@@ -182,16 +208,16 @@ DENO_NO_PACKAGE_JSON=1 deno run --no-config -A supabase/functions/dev-server.ts
    is down, receipts queue and print once it's back. 6. **Close shift**: count
    the drawer blind, then see expected cash and variance.
 
-| Role    | Can                                                                              |
-| ------- | -------------------------------------------------------------------------------- |
-| Cashier | Sell, print the receipt, "No sale" drawer open                                   |
-| Manager | + open/close shifts, discounts, history and reprints, refunds/voids, X/Z, shifts |
-| Owner   | Everything: products, staff, printer settings, dashboard, audit log              |
+| Role    | Can                                                                                         |
+| ------- | ------------------------------------------------------------------------------------------- |
+| Cashier | Sell, print the receipt, "No sale" drawer open, find/register customers and spend points    |
+| Manager | + open/close shifts, discounts, history and reprints, refunds/voids, X/Z, shifts, updates   |
+| Owner   | Everything: products, staff, printers, loyalty rules, customers, kitchen display, audit log |
 
 The top bar shows only what the signed-in role may use: **Sell**, **History**,
-**Reports**, **Dashboard**, and the **Back office ▾** menu (Products, Menu,
-Floor, Stock, Staff, Printer, Audit). Rust checks the permission on every
-command anyway.
+**Reports**, **Dashboard**, and the **Back office ▾** menu (Customers,
+Products, Menu, Floor, Stock, Staff, Printer, Audit). Rust checks the
+permission on every command anyway.
 
 ## Selling by business type
 
@@ -253,6 +279,31 @@ sync.
 Times on screen, receipts, kitchen tickets and reports follow the Windows
 time zone.
 
+## Customers, points and the kitchen display
+
+- **Loyalty.** In the payment dialog, **+ Customer** finds someone by name or
+  phone, or registers them on the spot. With the programme on, the dialog
+  shows their balance, what this bill earns, and lets them spend points: Rust
+  prices the bill again with the points taken off (an order discount, so tax
+  follows it), up to the whole bill. The receipt prints the points earned and
+  the balance. Refunds and voids give back the same share of redeemed points
+  and take back the share earned. **Customers** (back office) lists everyone
+  with their visits, spending and points history; the owner edits the rules
+  (points per unit spent, what a point is worth, the smallest redemption, the
+  largest share of a bill) and can adjust a balance with a reason. Points
+  earned on several tills offline all count (additive sync, like stock).
+- **Kitchen display.** In builds with it (cafe or restaurant,
+  `features.kitchen_display`), **Printer → Kitchen display → Show** opens a
+  second window: put it on a kitchen screen, or use a PC in the kitchen
+  running the same app. It reopens whenever the till starts, and needs no
+  sign-in (it can only read and bump tickets). Courses sent from a table,
+  pay-now sales and changes to food already sent (a red **VOID** ticket)
+  appear with a timer that turns amber after 10 minutes and red after 20.
+  Tap an item to strike it, **Ready** to bump the ticket, and the chips at
+  the bottom recall anything bumped in the last 30 minutes. **All day** sums
+  what is still to make. The till that sent the order hears "#12 Table T4 is
+  ready". Tickets sync, and a till showing the display pulls every 5 seconds.
+
 ## Ground rules
 
 These are enforced by tooling where possible — see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -282,4 +333,4 @@ These are enforced by tooling where possible — see [`docs/ARCHITECTURE.md`](do
 | 5     | Generator: client dashboard, asset upload, GitHub Actions build trigger | ✅     |
 | 6     | Business-type layouts: retail / cafe / restaurant                       | ✅     |
 | 7     | Analytics, Z-reports, audit trail, role-based views                     | ✅     |
-| 8     | Polish: animations, KDS window, loyalty, auto-updater                   |        |
+| 8     | Polish: animations, KDS window, loyalty, auto-updater                   | ✅     |

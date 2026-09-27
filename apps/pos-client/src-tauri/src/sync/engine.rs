@@ -84,6 +84,9 @@ pub struct SyncEngine {
     listener: OnceLock<StatusListener>,
     nudge: tokio::sync::Notify,
     attempted: AtomicBool,
+    /// A kitchen display is open: pull often so tickets from other tills
+    /// show up within seconds.
+    fast: AtomicBool,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -138,6 +141,7 @@ impl SyncEngine {
             listener: OnceLock::new(),
             nudge: tokio::sync::Notify::new(),
             attempted: AtomicBool::new(false),
+            fast: AtomicBool::new(false),
         }
     }
 
@@ -160,6 +164,15 @@ impl SyncEngine {
         if self.enabled() {
             self.nudge.notify_one();
         }
+    }
+
+    pub fn set_fast(&self, fast: bool) {
+        self.fast.store(fast, Ordering::Relaxed);
+        self.nudge();
+    }
+
+    pub fn is_fast(&self) -> bool {
+        self.fast.load(Ordering::Relaxed)
     }
 
     pub async fn nudged(&self) {

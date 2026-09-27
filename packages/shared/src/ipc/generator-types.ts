@@ -81,7 +81,11 @@ export const BuildRecordSchema = z.object({
   client_slug: ClientSlugSchema,
   status: BuildStatusSchema,
   config_sha256: Sha256HexSchema,
+  /** The client version this build produces (MAJOR.MINOR of the app, then a per-client number). */
   app_version: z.string(),
+  release_notes: z.string(),
+  /** The installer is published to the client's tills as an update. */
+  publish_update: z.boolean(),
   commit_sha: z.string().nullable(),
   run_id: NonNegativeIntSchema.nullable(),
   run_url: z.string().nullable(),
@@ -95,6 +99,13 @@ export const BuildRecordSchema = z.object({
   completed_at: TimestampSchema.nullable(),
 });
 export type BuildRecord = z.infer<typeof BuildRecordSchema>;
+
+/** `start_build` options: what the tills show after updating, and whether to ship it. */
+export const ReleaseOptionsSchema = z.object({
+  release_notes: z.string().trim().max(1000),
+  publish_update: z.boolean(),
+});
+export type ReleaseOptions = z.input<typeof ReleaseOptionsSchema>;
 
 export const ClientSummarySchema = z.object({
   client_id: UuidSchema,

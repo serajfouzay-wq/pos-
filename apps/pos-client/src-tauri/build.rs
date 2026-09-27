@@ -77,9 +77,28 @@ const COMMANDS: &[&str] = &[
     "list_shifts",
     "get_dashboard_metrics",
     "list_audit_log",
+    "search_customers",
+    "get_customer",
+    "save_customer",
+    "delete_customer",
+    "adjust_loyalty_points",
+    "get_loyalty_settings",
+    "save_loyalty_settings",
+    "kitchen_display_status",
+    "set_kitchen_display",
+    "list_kitchen_tickets",
+    "bump_kitchen_ticket",
+    "set_kitchen_item_done",
+    "update_status",
+    "check_for_updates",
+    "install_update",
+    "dismiss_update_notice",
 ];
 
 fn main() {
+    // The updater's public key is read with `option_env!` (none = updates
+    // arrive as installers).
+    println!("cargo:rerun-if-env-changed=POS_UPDATER_PUBLIC_KEY");
     embed_client_config();
     embed_license_public_key();
     expose_target_triple();

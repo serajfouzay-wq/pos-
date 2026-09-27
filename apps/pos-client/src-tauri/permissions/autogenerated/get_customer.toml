@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-customer"
+description = "Enables the get_customer command without any pre-configured scope."
+commands.allow = ["get_customer"]
+
+[[permission]]
+identifier = "deny-get-customer"
+description = "Denies the get_customer command without any pre-configured scope."
+commands.deny = ["get_customer"]

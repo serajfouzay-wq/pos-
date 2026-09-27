@@ -289,10 +289,21 @@ impl Till {
     }
 
     fn sell(&self, cashier: Uuid, product: Uuid, quantity_milli: i64, now: Timestamp) -> Uuid {
+        self.sell_to(cashier, product, quantity_milli, None, now)
+    }
+
+    fn sell_to(
+        &self,
+        cashier: Uuid,
+        product: Uuid,
+        quantity_milli: i64,
+        customer: Option<(Uuid, i64)>,
+        now: Timestamp,
+    ) -> Uuid {
         let config = ClientConfig::parse(CONFIG).expect("config");
         let payload = TransactionPayload {
             idempotency_key: Uuid::new_v4(),
-            customer_id: None,
+            customer_id: customer.map(|(id, _)| id),
             order_type: OrderType::Counter,
             table_label: None,
             items: vec![PayloadItem {
@@ -304,7 +315,7 @@ impl Till {
                 combo: None,
             }],
             discount_rule_ids: vec![],
-            loyalty_points_to_redeem: 0,
+            loyalty_points_to_redeem: customer.map_or(0, |(_, points)| points),
             payments: vec![PayloadPayment {
                 method: PaymentMethod::Cash,
                 tendered_currency: CurrencyCode::KWD,
@@ -809,6 +820,108 @@ fn refunds_and_z_reports_reach_the_other_till() {
     .expect("dashboard");
     assert_eq!((d.totals.sale_count, d.totals.refund_count), (1, 1));
     assert_eq!(d.totals.net_sales, 2_500);
+}
+
+#[test]
+fn points_earned_on_two_tills_offline_add_up_and_kitchen_bumps_come_back() {
+    use crate::kitchen::{self, Draft, TicketItem, TicketKind, TicketStatus};
+    use crate::loyalty::{self, CustomerInput, PointsAdjustment};
+    use crate::repo::audit::Actor;
+    use crate::repo::customers;
+
+    let (_, a, b, cashier, product) = shop();
+    let owner = Actor {
+        user_id: cashier,
+        role: Role::Owner,
+        device_id: a.device,
+    };
+    let layla = loyalty::save(
+        &a.db.conn(),
+        &owner,
+        CustomerInput {
+            id: None,
+            display_name: "Layla".into(),
+            phone: Some("55551234".into()),
+            email: None,
+            notes: None,
+        },
+        at(1),
+    )
+    .expect("customer")
+    .meta
+    .id;
+    loyalty::adjust(
+        &a.db.conn(),
+        &owner,
+        &PointsAdjustment {
+            customer_id: layla,
+            points_delta: 500,
+            note: "Welcome".into(),
+        },
+        at(2),
+    )
+    .expect("adjust");
+    a.sync();
+    b.sync();
+    let balance = |till: &Till| {
+        customers::get(&till.db.conn(), layla)
+            .expect("q")
+            .expect("customer")
+            .loyalty_points
+    };
+    assert_eq!(balance(&b), 500, "B knows Layla and her points");
+
+    // Both tills sell to her before either syncs again.
+    a.open_shift(cashier);
+    b.open_shift(cashier);
+    // 5 × 1.250 − 1.000 (100 points) = 5.250 → 5 points; 3 × 1.250 → 3 points.
+    a.sell_to(cashier, product.meta.id, 5_000, Some((layla, 100)), at(10));
+    b.sell_to(cashier, product.meta.id, 3_000, Some((layla, 0)), at(11));
+    assert_eq!(balance(&a), 500 - 100 + 5);
+    assert_eq!(balance(&b), 500 + 3);
+    for _ in 0..2 {
+        a.sync();
+        b.sync();
+    }
+    assert_eq!(balance(&a), 500 - 100 + 5 + 3);
+    assert_eq!(balance(&b), balance(&a), "both tills agree");
+
+    // A ticket from A, bumped by the kitchen on B, is ready on A.
+    let ticket = kitchen::create(
+        &a.db.conn(),
+        a.device,
+        Draft {
+            kind: TicketKind::Order,
+            order_id: None,
+            transaction_id: None,
+            title: "Table T4".into(),
+            order_type: OrderType::DineIn,
+            course: Some(1),
+            server_name: "Sara".into(),
+            guests: 2,
+            items: vec![TicketItem {
+                line_id: Uuid::new_v4(),
+                quantity_milli: 1_000,
+                name: "Soup".into(),
+                modifiers: vec![],
+                note: None,
+                course: Some(1),
+                done_at: None,
+            }],
+        },
+        at(20),
+    )
+    .expect("ticket");
+    a.sync();
+    b.sync();
+    let board = kitchen::board(&b.db.conn(), 30, at(21)).expect("board");
+    assert_eq!(board.open.len(), 1);
+    kitchen::bump(&b.db.conn(), ticket.meta.id, true, at(25)).expect("bump");
+    b.sync();
+    a.sync();
+    let back = kitchen::get(&a.db.conn(), ticket.meta.id).expect("ticket");
+    assert_eq!(back.status, TicketStatus::Ready);
+    assert_eq!(back.ready_at, Some(at(25)));
 }
 
 #[test]

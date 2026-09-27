@@ -1,10 +1,19 @@
-import { LOCALES, type Locale, type Session, type ShiftSummary } from '@pos/shared';
-import { useState } from 'react';
+import {
+  LOCALES,
+  type KitchenChange,
+  type Locale,
+  type Session,
+  type ShiftSummary,
+} from '@pos/shared';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useToast } from '../../components/Toast';
 import {
   useAppInfo,
   useCurrentShift,
   useKickDrawer,
+  useKitchenReady,
   useLogout,
   usePrinterStatus,
   useProducts,
@@ -18,6 +27,7 @@ import { ProductsAdmin } from '../admin/ProductsAdmin';
 import { StockAdmin } from '../admin/StockAdmin';
 import { UsersAdmin } from '../admin/UsersAdmin';
 import { AuditScreen } from '../audit/AuditScreen';
+import { CustomersScreen } from '../customers/CustomersScreen';
 import { DashboardScreen } from '../dashboard/DashboardScreen';
 import { HistoryScreen } from '../history/HistoryScreen';
 import { ReportsScreen } from '../reports/ReportsScreen';
@@ -25,12 +35,14 @@ import { SellScreen } from '../sell/SellScreen';
 import { SyncIndicator } from '../sync/SyncIndicator';
 import { CloseShiftDialog } from '../shift/CloseShiftDialog';
 import { ShiftGate } from '../shift/ShiftGate';
+import { UpdateBanner } from '../updates/UpdateBanner';
 
 type View =
   | 'sell'
   | 'history'
   | 'reports'
   | 'dashboard'
+  | 'customers'
   | 'products'
   | 'menu'
   | 'floor'
@@ -56,6 +68,16 @@ export function Workspace({ session }: { session: Session }) {
   // Snapshot of the shift being closed: the dialog must outlive the shift
   // itself so the reconciliation result stays on screen after closing.
   const [closingShift, setClosingShift] = useState<ShiftSummary | null>(null);
+  // The kitchen display on this till tells the front when food is ready.
+  const toast = useToast(6000);
+  const showToast = toast.show;
+  const onReady = useCallback(
+    (change: KitchenChange) => {
+      showToast(t('kitchen.readyToast', { number: change.ticket_number, title: change.title }));
+    },
+    [showToast, t],
+  );
+  useKitchenReady(onReady);
 
   // What each role sees follows the permission matrix Rust sent with the
   // session (Rust re-checks every command). Front of house on the bar;
@@ -67,6 +89,7 @@ export function Workspace({ session }: { session: Session }) {
     { id: 'dashboard', allowed: can(session, 'analytics.view') },
   ];
   const backOffice: { id: View; allowed: boolean }[] = [
+    { id: 'customers', allowed: can(session, 'customer.lookup') },
     { id: 'products', allowed: can(session, 'catalog.manage') },
     { id: 'menu', allowed: business !== 'retail' && can(session, 'catalog.manage') },
     { id: 'floor', allowed: business !== 'retail' && can(session, 'catalog.manage') },
@@ -95,6 +118,8 @@ export function Workspace({ session }: { session: Session }) {
         );
       case 'audit':
         return <AuditScreen />;
+      case 'customers':
+        return <CustomersScreen session={session} />;
       case 'products':
         return <ProductsAdmin />;
       case 'menu':
@@ -113,6 +138,18 @@ export function Workspace({ session }: { session: Session }) {
   };
 
   const printerState = printer.data;
+  const printerLabel = [
+    !printerState?.configured
+      ? t('status.noPrinter')
+      : printerState.online === false
+        ? t('status.printerOffline')
+        : t('status.printer'),
+    printerState && printerState.pending_jobs > 0
+      ? t('status.pending', { count: printerState.pending_jobs })
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
   const printerClass =
     !printerState?.configured || printerState.online === false
       ? 'status-dot status-dot--warn'
@@ -193,15 +230,11 @@ export function Workspace({ session }: { session: Session }) {
               {t('status.lowStock', { count: lowCount })}
             </button>
           )}
-          <span className={printerClass} title={printerState?.last_error ?? ''}>
-            {!printerState?.configured
-              ? t('status.noPrinter')
-              : printerState.online === false
-                ? t('status.printerOffline')
-                : t('status.printer')}
-            {printerState &&
-              printerState.pending_jobs > 0 &&
-              ` · ${t('status.pending', { count: printerState.pending_jobs })}`}
+          <span
+            className={printerClass}
+            title={[printerLabel, printerState?.last_error].filter(Boolean).join(' · ')}
+          >
+            <span className="status-dot__label">{printerLabel}</span>
           </span>
           {can(session, 'drawer.kick') && (
             <button
@@ -258,13 +291,26 @@ export function Workspace({ session }: { session: Session }) {
           {drawer.error.message}
         </div>
       )}
+      <UpdateBanner session={session} />
       <main className="workspace__body">
-        {view === 'sell' ? (
-          <ShiftGate session={session}>{(open) => renderView(open)}</ShiftGate>
-        ) : (
-          renderView(null)
-        )}
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={view}
+            className="workspace__view"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.16, ease: 'easeOut' }}
+          >
+            {view === 'sell' ? (
+              <ShiftGate session={session}>{(open) => renderView(open)}</ShiftGate>
+            ) : (
+              renderView(null)
+            )}
+          </motion.div>
+        </AnimatePresence>
       </main>
+      {toast.node}
       {closingShift && (
         <CloseShiftDialog
           key={closingShift.shift.id}

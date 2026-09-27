@@ -6,7 +6,7 @@ import { formatDateTime, presetRange, type RangePreset } from '../../lib/dates';
 import { formatQuantity, useMoney } from '../../lib/money';
 import { can } from '../../lib/permissions';
 import { useUiStore } from '../../stores/ui';
-import { ReceiptDialog } from '../sell/ReceiptDialog';
+import { ReceiptDialog, usePointsText } from '../sell/ReceiptDialog';
 import { RefundDialog, VoidDialog } from './RefundDialog';
 
 type Range = RangePreset | 'all';
@@ -36,6 +36,7 @@ function Detail({
   const detail = useTransaction(id);
   const print = usePrintReceipt();
   const [dialog, setDialog] = useState<'refund' | 'void' | null>(null);
+  const pointsText = usePointsText();
   const d = detail.data;
   if (!d) return <aside className="history__detail muted">{detail.error?.message ?? '…'}</aside>;
   const r = d.receipt;
@@ -63,6 +64,12 @@ function Detail({
         >
           {t('history.ofSale', { number: d.summary.original_receipt_number ?? '' })}
         </button>
+      )}
+      {r.customer_name && (
+        <p className="small receipt-done__customer history__customer">
+          <strong>{r.customer_name}</strong>
+          {r.loyalty && ` · ${pointsText(r)}`}
+        </p>
       )}
       {d.summary.notes && <p className="small">“{d.summary.notes}”</p>}
       <ul className="history__lines">

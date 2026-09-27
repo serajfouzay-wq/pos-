@@ -1,5 +1,11 @@
 import type {
   AuditFilter,
+  CustomerInput,
+  CustomerSearch,
+  KitchenChange,
+  LoyaltySettings,
+  PointsAdjustment,
+  UpdateStatus,
   CommandArgs,
   DashboardRequest,
   RefundInput,
@@ -57,6 +63,12 @@ export const queryKeys = {
   shifts: (filter: ShiftFilter) => ['shifts', filter] as const,
   dashboard: (request: DashboardRequest) => ['dashboard', request] as const,
   audit: (filter: AuditFilter) => ['audit', filter] as const,
+  customers: (search: CustomerSearch) => ['customers', search] as const,
+  customer: (id: string) => ['customer', id] as const,
+  loyalty: ['loyalty_settings'] as const,
+  kitchenStatus: ['kitchen_display'] as const,
+  kitchenBoard: ['kitchen_board'] as const,
+  updates: ['update_status'] as const,
 };
 
 /** Raised when the UI is loaded in a plain browser instead of the Tauri shell. */
@@ -362,6 +374,10 @@ const SYNCED_QUERIES = [
   ['dashboard'],
   ['menu'],
   queryKeys.openOrders,
+  ['customers'],
+  ['customer'],
+  queryKeys.loyalty,
+  queryKeys.kitchenBoard,
   queryKeys.categories,
   queryKeys.users,
   queryKeys.loginUsers,
@@ -737,5 +753,200 @@ export function useAuditLog(filter: AuditFilter) {
     queryKey: queryKeys.audit(filter),
     queryFn: () => ipc.call('list_audit_log', { filter }),
     placeholderData: keepPreviousData,
+  });
+}
+
+// ── Customers & loyalty (Phase 8) ──────────────────────────────────────────
+
+export function useCustomers(search: CustomerSearch, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.customers(search),
+    queryFn: () => ipc.call('search_customers', { search }),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+export function useCustomer(id: Uuid | null) {
+  return useQuery({
+    queryKey: queryKeys.customer(id ?? ''),
+    queryFn: () => {
+      if (id === null) throw new Error('no customer');
+      return ipc.call('get_customer', { customer_id: id });
+    },
+    enabled: id !== null,
+  });
+}
+
+function useCustomersChanged() {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: ['customers'] });
+    void queryClient.invalidateQueries({ queryKey: ['customer'] });
+    void queryClient.invalidateQueries({ queryKey: ['quote'] });
+  };
+}
+
+export function useSaveCustomer() {
+  const changed = useCustomersChanged();
+  return useMutation({
+    mutationFn: (customer: CustomerInput) => ipc.call('save_customer', { customer }),
+    onSuccess: changed,
+  });
+}
+
+export function useDeleteCustomer() {
+  const changed = useCustomersChanged();
+  return useMutation({
+    mutationFn: (customerId: Uuid) => ipc.call('delete_customer', { customer_id: customerId }),
+    onSuccess: changed,
+  });
+}
+
+export function useAdjustPoints() {
+  const changed = useCustomersChanged();
+  return useMutation({
+    mutationFn: (adjustment: PointsAdjustment) => ipc.call('adjust_loyalty_points', { adjustment }),
+    onSuccess: changed,
+  });
+}
+
+export function useLoyaltyProgram() {
+  return useQuery({
+    queryKey: queryKeys.loyalty,
+    queryFn: () => ipc.call('get_loyalty_settings'),
+    staleTime: 60_000,
+  });
+}
+
+export function useSaveLoyaltyProgram() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (settings: LoyaltySettings) => ipc.call('save_loyalty_settings', { settings }),
+    onSuccess: (program) => {
+      queryClient.setQueryData(queryKeys.loyalty, program);
+      void queryClient.invalidateQueries({ queryKey: ['quote'] });
+    },
+  });
+}
+
+// ── Kitchen display (Phase 8) ──────────────────────────────────────────────
+
+export function useKitchenDisplayStatus(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.kitchenStatus,
+    queryFn: () => ipc.call('kitchen_display_status'),
+    enabled,
+  });
+}
+
+export function useSetKitchenDisplay() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) => ipc.call('set_kitchen_display', { enabled }),
+    onSuccess: (status) => {
+      queryClient.setQueryData(queryKeys.kitchenStatus, status);
+    },
+  });
+}
+
+/**
+ * The ticket board. Refetched on every local change (`kitchen://changed`),
+ * after sync rounds, and every few seconds so timers and other tills'
+ * tickets stay current.
+ */
+export function useKitchenBoard(recentMinutes = 30) {
+  const queryClient = useQueryClient();
+  useEffect(
+    () =>
+      subscribe('kitchen_changed', () => {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.kitchenBoard });
+      }),
+    [queryClient],
+  );
+  return useQuery({
+    queryKey: [...queryKeys.kitchenBoard, recentMinutes],
+    queryFn: () => ipc.call('list_kitchen_tickets', { recent_minutes: recentMinutes }),
+    refetchInterval: 5_000,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useBumpTicket() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { ticketId: Uuid; ready: boolean }) =>
+      ipc.call('bump_kitchen_ticket', { ticket_id: args.ticketId, ready: args.ready }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.kitchenBoard });
+    },
+  });
+}
+
+export function useStrikeItem() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { ticketId: Uuid; lineId: Uuid; done: boolean }) =>
+      ipc.call('set_kitchen_item_done', {
+        ticket_id: args.ticketId,
+        line_id: args.lineId,
+        done: args.done,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.kitchenBoard });
+    },
+  });
+}
+
+/** Calls `handler` when the kitchen marks a ticket ready (this till's window). */
+export function useKitchenReady(handler: (change: KitchenChange) => void) {
+  useEffect(
+    () =>
+      subscribe('kitchen_changed', (change) => {
+        if (change.status === 'ready' && change.kind === 'order') handler(change);
+      }),
+    [handler],
+  );
+}
+
+// ── Updates (Phase 8) ──────────────────────────────────────────────────────
+
+export function useUpdateStatus() {
+  const queryClient = useQueryClient();
+  useEffect(
+    () =>
+      subscribe('update_status', (status) => {
+        queryClient.setQueryData<UpdateStatus>(queryKeys.updates, status);
+      }),
+    [queryClient],
+  );
+  return useQuery({
+    queryKey: queryKeys.updates,
+    queryFn: () => ipc.call('update_status'),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+}
+
+export function useCheckForUpdates() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => ipc.call('check_for_updates'),
+    onSuccess: (status) => {
+      queryClient.setQueryData(queryKeys.updates, status);
+    },
+  });
+}
+
+export function useInstallUpdate() {
+  return useMutation({ mutationFn: () => ipc.call('install_update') });
+}
+
+export function useDismissUpdateNotice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => ipc.call('dismiss_update_notice'),
+    onSuccess: (status) => {
+      queryClient.setQueryData(queryKeys.updates, status);
+    },
   });
 }

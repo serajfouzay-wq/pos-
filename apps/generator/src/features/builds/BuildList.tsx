@@ -27,6 +27,7 @@ function BuildRow({ build, showClient }: { build: BuildRecord; showClient: boole
         <div className="muted small">
           v{build.app_version}
           {build.commit_sha && ` · ${build.commit_sha.slice(0, 7)}`}
+          {build.publish_update && <span className="badge">{t('builds.published')}</span>}
         </div>
       </td>
       <td>

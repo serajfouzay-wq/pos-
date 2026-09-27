@@ -116,17 +116,29 @@ pub async fn fire_course(
     let auth = authorize(&state, Permission::SaleCreate)?;
     let client = Arc::clone(&state.client);
     let printer = Arc::clone(&state.printer);
+    let hub = Arc::clone(&state.kitchen);
     blocking(move || {
         let actor = actor(&auth)?;
         let now = SystemClock.now();
         let (fired, view) = {
             let mut conn = auth.db.conn();
             let tx = conn.transaction().ipc()?;
-            let fired = open_orders::fire(&tx, &actor, order_id, course, expected_updated_at, now)?;
+            let fired = open_orders::fire(
+                &tx,
+                &actor,
+                order_id,
+                course,
+                expected_updated_at,
+                &client,
+                now,
+            )?;
             let view = open_orders::view(&tx, fired.order.clone(), &client, now)?;
             tx.commit().ipc()?;
             (fired, view)
         };
+        if let Some(ticket) = &fired.kitchen {
+            hub.changed(ticket);
+        }
         // The order is marked as sent even if the printer is down: the
         // ticket text is returned so the till can show or reprint it.
         let (printed, print_error) = match printer.print_kitchen(&auth.db, &fired.ticket) {
@@ -154,6 +166,7 @@ pub async fn cancel_open_order(
     expected_updated_at: Timestamp,
 ) -> IpcResult<()> {
     let auth = authorize(&state, Permission::SaleCreate)?;
+    let client = Arc::clone(&state.client);
     blocking(move || {
         let actor = actor(&auth)?;
         let mut conn = auth.db.conn();
@@ -163,6 +176,7 @@ pub async fn cancel_open_order(
             &actor,
             order_id,
             expected_updated_at,
+            &client,
             SystemClock.now(),
         )?;
         tx.commit().ipc()?;
@@ -187,6 +201,7 @@ pub async fn pay_open_order(state: State<'_, AppState>, input: PayInput) -> IpcR
     if !input.discount_rule_ids.is_empty() {
         rbac::authorize(auth.session.role, Permission::DiscountApply)?;
     }
+    super::sales::loyalty_permissions(&auth, input.customer_id, input.loyalty_points_to_redeem)?;
     let client = Arc::clone(&state.client);
     let printer = Arc::clone(&state.printer);
     blocking(move || {

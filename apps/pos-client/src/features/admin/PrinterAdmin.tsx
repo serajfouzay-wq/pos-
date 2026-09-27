@@ -1,6 +1,7 @@
 import type { PrinterSettings, PrinterTarget } from '@pos/shared';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { KitchenSettings, UpdateSettings } from '../kitchen/KitchenSettings';
 import {
   useAppInfo,
   useDiscoveredPrinters,
@@ -314,6 +315,8 @@ export function PrinterAdmin() {
           )}
         </form>
       </section>
+      <KitchenSettings />
+      <UpdateSettings />
     </div>
   );
 }

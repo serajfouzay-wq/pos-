@@ -120,8 +120,19 @@ fn a_build_publishes_the_client_and_follows_the_run_to_the_installer() {
         )
         .expect("logo");
 
-    let build = w.service.start(w.client_id, at(2)).expect("start");
+    let release = ReleaseOptions {
+        release_notes: "  Loyalty points  ".into(),
+        publish_update: true,
+    };
+    let build = w
+        .service
+        .start(w.client_id, &release, at(2))
+        .expect("start");
     assert_eq!(build.status, BuildStatus::Queued, "{:?}", build.message);
+    // The app is 0.x.y: this client's first build is x.1 of that series.
+    assert!(build.app_version.ends_with(".1"), "{}", build.app_version);
+    assert_eq!(build.release_notes, "Loyalty points");
+    assert!(build.publish_update);
     assert!(build.commit_sha.is_some());
 
     {
@@ -139,7 +150,13 @@ fn a_build_publishes_the_client_and_follows_the_run_to_the_installer() {
         assert!(repo.head_message().ends_with("[skip ci]"));
         assert_eq!(
             repo.dispatches,
-            vec![json!({ "client": "acme-cafe", "build_id": build.build_id.to_string() })]
+            vec![json!({
+                "client": "acme-cafe",
+                "build_id": build.build_id.to_string(),
+                "version": build.app_version,
+                "notes": "Loyalty points",
+                "publish": "true",
+            })]
         );
     }
 
@@ -193,7 +210,7 @@ fn failures_are_recorded_on_the_build() {
     configure(&w);
     let err = w
         .service
-        .start(w.client_id, at(1))
+        .start(w.client_id, &ReleaseOptions::default(), at(1))
         .expect_err("no signing key");
     assert!(err.message.contains("signing key"));
 
@@ -206,7 +223,10 @@ fn failures_are_recorded_on_the_build() {
             at(1),
         )
         .expect("settings");
-    let build = w.service.start(w.client_id, at(2)).expect("recorded");
+    let build = w
+        .service
+        .start(w.client_id, &ReleaseOptions::default(), at(2))
+        .expect("recorded");
     assert_eq!(build.status, BuildStatus::Error);
     assert!(build
         .message
@@ -220,14 +240,20 @@ fn failures_are_recorded_on_the_build() {
 fn a_failed_run_and_a_run_that_never_appears() {
     let w = world(true);
     configure(&w);
-    let build = w.service.start(w.client_id, at(1)).expect("start");
+    let build = w
+        .service
+        .start(w.client_id, &ReleaseOptions::default(), at(1))
+        .expect("start");
     w.server.repo.lock().expect("repo").runs[0]["status"] = json!("completed");
     w.server.repo.lock().expect("repo").runs[0]["conclusion"] = json!("failure");
     let failed = w.service.refresh(build.build_id, at(60)).expect("refresh");
     assert_eq!(failed.status, BuildStatus::Failed);
     assert!(failed.run_url.is_some());
 
-    let lost = w.service.start(w.client_id, at(100)).expect("start");
+    let lost = w
+        .service
+        .start(w.client_id, &ReleaseOptions::default(), at(100))
+        .expect("start");
     w.server.repo.lock().expect("repo").runs.clear();
     assert_eq!(
         w.service

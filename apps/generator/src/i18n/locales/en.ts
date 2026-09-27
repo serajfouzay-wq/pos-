@@ -152,7 +152,13 @@ export const en = {
       publishing: 'Publishing…',
       running: 'A build is running…',
       submit: 'Build installer',
+      notes: 'Release notes',
+      notesHelp: 'Shown on the tills after they update. Optional.',
+      publish: 'Publish to the tills as an update',
+      publishHelp:
+        'The tills download it in the background and install it when they are next restarted. Needs the updater key in the repository settings.',
     },
+    published: 'Update',
   },
   licenses: {
     key: {

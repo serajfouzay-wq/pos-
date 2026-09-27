@@ -27,7 +27,9 @@ import {
   ModifierSchema,
   ProductModifierGroupSchema,
 } from './entities/menu';
+import { KitchenTicketSchema } from './entities/kitchen';
 import { OpenOrderSchema } from './entities/orders';
+import { ShopSettingRowSchema } from './entities/shop';
 import { ZReportSchema } from './entities/reports';
 import { CustomerSchema, LoyaltyLedgerEntrySchema, UserRowSchema } from './entities/people';
 import {
@@ -71,6 +73,8 @@ export const LOCAL_TABLES = {
   dining_tables: DiningTableSchema,
   open_orders: OpenOrderSchema,
   z_reports: ZReportSchema,
+  shop_settings: ShopSettingRowSchema,
+  kitchen_tickets: KitchenTicketSchema,
   sync_queue: SyncQueueRowSchema,
 } as const satisfies Record<string, z.ZodObject>;
 

@@ -606,16 +606,124 @@ from the role matrix. History needs `receipt.reprint`, Reports
 back-office screens sit in one menu. Hiding a button is a convenience only:
 every Phase 7 command starts with `authorize` on the same permission.
 
+### D52 — Points are an order discount, applied last
+
+Redeeming points adds an order-scoped `Fixed` discount with the fixed id
+`shop::LOYALTY_ID`, priced after every other discount by the same engine,
+so tax, rounding and allocation to lines work as for any discount. The UI
+sends only a customer id and a point count. Rust checks them against the
+programme (`loyalty::max_redeemable`: never more than the balance, never
+more than `max_redeem_bps` of the payable, nothing below
+`min_redeem_points`) and returns the money value. Points earned are
+`floor(total × points_per_unit / 10^exp)`, computed after redemption. A bill
+fully paid by points has a total of 0 and completes with one cash tender of
+0; zero-amount payment rows are not written. Redeeming needs
+`loyalty.redeem`.
+
+### D53 — The points ledger is additive; balances are a cache
+
+`loyalty_ledger` is append-only (`earn`, `redeem`, `adjust`,
+`refund_reversal`) and syncs with the append strategy, like stock
+movements. `customers.loyalty_points` is a cached sum that `add_points`
+moves in the same transaction as the ledger row. Points earned on two tills
+offline both count. The price is that two tills can redeem the same points
+offline, so a balance can go negative. It is shown as such and the next
+purchases pay it back. Receipts print `balance_at(customer, issued_at)`,
+which keeps reprints stable.
+
+### D54 — Refunds and voids return points by subtotal share
+
+A reversal takes back earned points and returns redeemed points in
+proportion to the gross subtotal it reverses (cumulative, so several
+partial refunds never exceed the sale's points). The share uses the
+subtotal, not the total, because a sale fully paid by points has a total
+of 0 and must still return them. On a refund or void row,
+`loyalty_points_earned` holds the points taken back and
+`loyalty_points_redeemed` the points returned; the receipt prints them as
+"Points taken back" and "Points returned".
+
+### D55 — Shop settings are synced rows with fixed ids
+
+`shop_settings` holds shop-wide JSON values by key and syncs
+last-write-wins. Each key has a fixed row id (loyalty is
+`0199a000-0000-7000-8000-000000000001`), so two tills that save the setting
+offline update one row instead of creating two. Without a row the programme
+uses `LoyaltySettings::default_for(currency)` (one point per currency unit,
+a point worth 1/100 of it). The programme also needs `features.loyalty` in
+the build. Changing it needs `settings.manage`. Looking up and registering
+customers needs `customer.lookup` (every role); editing, deleting and
+adjusting points needs `customer.manage` (owner). Adjustments are audited.
+
+### D56 — Kitchen tickets are rows, written when food is sent
+
+With `features.kitchen_display` in a non-retail build, `kitchen_tickets`
+rows are written at the same points the kitchen printer prints: firing a
+course, paying an order with unsent lines, and a pay-now sale. Changing or
+cancelling already-sent items, and voiding a sale that reached the kitchen,
+writes a `void` ticket, so the kitchen sees what to stop. Items carry
+names, options and notes as sent (a snapshot, like a printed ticket).
+Tickets sync last-write-wins, so any till's display can bump them. A
+ticket is `open` or `ready`; per-item `done_at` is the cook's strike.
+
+### D57 — The kitchen display is a second window with its own capability
+
+The display is the `kds` window (`index.html?window=kds`), opened from the
+back office. `capabilities/kitchen.json` grants that window only the board
+commands and fullscreen. Board commands accept the `kds` window without a
+session, so the display keeps working while the till is signed out; any
+other window needs `sale.create`. The device setting
+`kitchen_display.enabled` reopens it at start. While it is open, sync runs
+every 5 s instead of the normal interval, so tickets from other tills
+arrive quickly. `KitchenHub` emits `kitchen://changed` on every local
+change, and the main window shows a toast when a ticket is marked ready.
+
+### D58 — Updates are signed, offered per client, installed on exit
+
+`tauri-plugin-updater` is registered only when the build embeds
+`POS_UPDATER_PUBLIC_KEY`. Tills ask the client's own Supabase project
+through the `app-update` edge function, which checks the till's license and
+device key and asks `app_update_check` for a newer release
+(`app_releases`, compared as semver integers). It answers with a signed,
+short-lived storage URL, or 204. The installer's minisign signature is
+checked against the embedded key, so the download location is not trusted.
+The till checks in the background and downloads the update. It then
+installs it when the app exits (`installMode: quiet`), or at once with
+"Restart now", which needs `shift.close`. After the restart the till shows
+"Updated from X to Y" with the release notes, once.
+
+### D59 — Each client has its own version series
+
+The generator gives every build a version: the app's MAJOR.MINOR and a
+build number per client (`next_client_version`), so each client's releases
+always increase. The build workflow passes the version, notes and a
+`publish` flag. When `publish` is set, it signs the build with
+`TAURI_SIGNING_PRIVATE_KEY`, and `scripts/publish-release.mjs` uploads
+the installer to the `releases` bucket of the client's project and records
+it with `publish_app_release`.
+
+### D60 — Motion is decoration, and it follows the OS setting
+
+Framer Motion animates page changes, ticket lines, the receipt check, the
+kitchen board and the update banner. Page changes take 160 ms and the rest
+are short springs. Nothing waits for an animation to finish before taking
+input. `MotionConfig reducedMotion="user"` turns movement off when the OS
+asks for reduced motion.
+
 ## Open items for upcoming phases
 
 - **Arabic receipts (next).** Text-mode ESC/POS cannot render Arabic.
   The plan is to rasterise the receipt layout (shaping + bidi, a bundled
   OFL font) through the existing `GS v 0` path, which logos already use.
 
-- **Discount rules UI, customers and loyalty, multi-currency tenders.** The
-  engine supports discount rules (tested); creating them needs back-office
-  UI. Customer and loyalty payloads and foreign-currency tenders are
-  rejected with a clear message until their phases.
+- **Discount rules UI, multi-currency tenders.** The engine supports
+  discount rules (tested); creating them needs back-office UI.
+  Foreign-currency tenders are rejected with a clear message.
+- **Points expiry.** The ledger has an `expire` reason, but nothing writes
+  it yet. Expiry needs a rule (for example, points unused for 12 months)
+  and a job that runs on one till only, so points don't expire twice.
+- **Negative balances.** Offline double redemption is allowed and shows as
+  a negative balance (D53). A shop that wants a hard limit needs an online
+  check before redeeming.
 - **Outbox retention.** Acknowledged `sync_queue` rows are kept (no hard
   deletes). A later phase can compact old sent rows into an archive table,
   or soft-delete them, once the Z-report period is closed.
@@ -632,8 +740,15 @@ every Phase 7 command starts with `authorize` on the same permission.
 - **Code signing.** Installers are unsigned. `build-client.yml` is the place
   to add Authenticode signing from repository secrets, so SmartScreen
   doesn't warn.
-- **Versions per client.** Builds use the repository's app version; the
-  auto-updater (Phase 8) brings per-client release channels.
+- **Kitchen-only PCs.** A PC that only runs the display still shows the
+  main window at the login screen. A device setting could start it
+  display-only.
+- **Ready notices across tills.** The "ready" toast shows on the till
+  running the display. Other tills see the ticket change after sync but
+  don't raise a toast yet.
+- **Staged rollouts.** A published release goes to every till of the
+  client at once. A percentage or per-till rollout would need a column on
+  `app_releases`.
 - **Floor plan overlap.** Tables can be placed overlapping on the grid; the
   editor could refuse overlapping cells.
 - **Moving and merging tables.** An order can change table through

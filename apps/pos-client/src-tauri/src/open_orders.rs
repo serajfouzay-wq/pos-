@@ -19,6 +19,7 @@ use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::kitchen::{self, Draft, TicketItem, TicketKind};
 use crate::repo::audit::{self, Actor};
 use crate::repo::orders::{self, ComboRef, OpenOrder, OpenOrderItem, OpenOrderStatus};
 use crate::repo::sales::{
@@ -293,6 +294,18 @@ pub fn update(
     };
     orders::save(conn, &updated, now).ipc()?;
     if !voided.is_empty() {
+        let lines = kitchen_lines(conn, &voided.iter().collect::<Vec<_>>())?;
+        kitchen_ticket(
+            conn,
+            config,
+            actor,
+            &current,
+            TicketKind::Void,
+            None,
+            &lines,
+            None,
+            now,
+        )?;
         audit::record(
             conn,
             &actor.audit(),
@@ -358,6 +371,88 @@ pub fn split_line(
 pub struct Fired {
     pub order: OpenOrder,
     pub ticket: KitchenTicket,
+    /// The kitchen display's copy (builds with the kitchen display).
+    pub kitchen: Option<kitchen::KitchenTicket>,
+}
+
+/// Kitchen lines (names and options as they are now) for order items.
+fn kitchen_lines(
+    conn: &Connection,
+    items: &[&OpenOrderItem],
+) -> IpcResult<Vec<(Uuid, KitchenLine)>> {
+    let options: HashMap<Uuid, String> = menu::modifiers(conn)
+        .ipc()?
+        .into_iter()
+        .map(|m| (m.meta.id, m.name))
+        .collect();
+    let mut lines = Vec::with_capacity(items.len());
+    for item in items {
+        let name = catalog::get(conn, item.product_id)
+            .ipc()?
+            .map_or_else(|| "?".to_owned(), |p| p.name);
+        lines.push((
+            item.line_id,
+            KitchenLine {
+                quantity_milli: item.quantity_milli,
+                name,
+                modifiers: item
+                    .modifier_ids
+                    .iter()
+                    .filter_map(|id| options.get(id).cloned())
+                    .collect(),
+                note: item.note.clone(),
+                course: item.course,
+            },
+        ));
+    }
+    lines.sort_by_key(|(_, l)| l.course.unwrap_or(0));
+    Ok(lines)
+}
+
+fn order_title(conn: &Connection, order: &OpenOrder) -> IpcResult<String> {
+    Ok(match (order.table_id, &order.label) {
+        (Some(table_id), _) => format!("Table {}", table_label(conn, table_id)?),
+        (None, Some(label)) => format!("Tab {label}"),
+        (None, None) => "Order".to_owned(),
+    })
+}
+
+/// Writes the kitchen display's ticket for these order lines.
+#[allow(clippy::too_many_arguments)]
+fn kitchen_ticket(
+    conn: &Connection,
+    config: &ClientConfig,
+    actor: &OrderActor,
+    order: &OpenOrder,
+    kind: TicketKind,
+    course: Option<i64>,
+    lines: &[(Uuid, KitchenLine)],
+    transaction_id: Option<Uuid>,
+    now: Timestamp,
+) -> IpcResult<Option<kitchen::KitchenTicket>> {
+    if !kitchen::enabled(config) || lines.is_empty() {
+        return Ok(None);
+    }
+    kitchen::create(
+        conn,
+        actor.device_id,
+        Draft {
+            kind,
+            order_id: Some(order.meta.id),
+            transaction_id,
+            title: order_title(conn, order)?,
+            order_type: order.order_type,
+            course,
+            server_name: actor.display_name.clone(),
+            guests: order.guests,
+            items: lines
+                .iter()
+                .map(|(id, line)| TicketItem::new(*id, line))
+                .collect(),
+        },
+        now,
+    )
+    .map(Some)
 }
 
 /// Sends the unsent lines of `course` (or all unsent lines) to the kitchen.
@@ -367,46 +462,33 @@ pub fn fire(
     order_id: Uuid,
     course: Option<i64>,
     expected_updated_at: Timestamp,
+    config: &ClientConfig,
     now: Timestamp,
 ) -> IpcResult<Fired> {
     let current = load_open(conn, order_id)?;
     check_version(&current, expected_updated_at)?;
-    let options: HashMap<Uuid, String> = menu::modifiers(conn)
-        .ipc()?
-        .into_iter()
-        .map(|m| (m.meta.id, m.name))
-        .collect();
-    let mut items = current.items.clone();
-    let mut lines = Vec::new();
-    for item in items
-        .iter_mut()
+    let chosen: Vec<&OpenOrderItem> = current
+        .items
+        .iter()
         .filter(|i| i.fired_at.is_none() && course.map_or(true, |c| i.course == Some(c)))
-    {
-        item.fired_at = Some(now);
-        let name = catalog::get(conn, item.product_id)
-            .ipc()?
-            .map_or_else(|| "?".to_owned(), |p| p.name);
-        lines.push(KitchenLine {
-            quantity_milli: item.quantity_milli,
-            name,
-            modifiers: item
-                .modifier_ids
-                .iter()
-                .filter_map(|id| options.get(id).cloned())
-                .collect(),
-            note: item.note.clone(),
-            course: item.course,
-        });
-    }
+        .collect();
+    let lines = kitchen_lines(conn, &chosen)?;
     if lines.is_empty() {
         return Err(invalid("Nothing new to send to the kitchen."));
     }
-    lines.sort_by_key(|l| l.course.unwrap_or(0));
-    let title = match (current.table_id, &current.label) {
-        (Some(table_id), _) => format!("Table {}", table_label(conn, table_id)?),
-        (None, Some(label)) => format!("Tab {label}"),
-        (None, None) => "Order".to_owned(),
-    };
+    let fired: HashSet<Uuid> = lines.iter().map(|(id, _)| *id).collect();
+    let items = current
+        .items
+        .iter()
+        .map(|i| OpenOrderItem {
+            fired_at: if fired.contains(&i.line_id) {
+                Some(now)
+            } else {
+                i.fired_at
+            },
+            ..i.clone()
+        })
+        .collect();
     let order = OpenOrder {
         meta: Meta {
             updated_at: now,
@@ -416,16 +498,28 @@ pub fn fire(
         ..current.clone()
     };
     orders::save(conn, &order, now).ipc()?;
+    let kitchen = kitchen_ticket(
+        conn,
+        config,
+        actor,
+        &order,
+        TicketKind::Order,
+        course,
+        &lines,
+        None,
+        now,
+    )?;
     Ok(Fired {
         ticket: KitchenTicket {
-            title,
+            title: order_title(conn, &current)?,
             course,
             server: actor.display_name.clone(),
             guests: current.guests,
             at: now,
             zone: Zone::System,
-            lines,
+            lines: lines.into_iter().map(|(_, l)| l).collect(),
         },
+        kitchen,
         order,
     })
 }
@@ -435,6 +529,7 @@ pub fn cancel(
     actor: &OrderActor,
     order_id: Uuid,
     expected_updated_at: Timestamp,
+    config: &ClientConfig,
     now: Timestamp,
 ) -> IpcResult<OpenOrder> {
     let current = load_open(conn, order_id)?;
@@ -455,6 +550,23 @@ pub fn cancel(
         ..current.clone()
     };
     orders::save(conn, &cancelled, now).ipc()?;
+    let sent: Vec<&OpenOrderItem> = current
+        .items
+        .iter()
+        .filter(|i| i.fired_at.is_some())
+        .collect();
+    let lines = kitchen_lines(conn, &sent)?;
+    kitchen_ticket(
+        conn,
+        config,
+        actor,
+        &current,
+        TicketKind::Void,
+        None,
+        &lines,
+        None,
+        now,
+    )?;
     audit::record(
         conn,
         &actor.audit(),
@@ -482,6 +594,10 @@ pub struct PayInput {
     pub line_ids: Option<Vec<Uuid>>,
     #[serde(default)]
     pub discount_rule_ids: Vec<Uuid>,
+    #[serde(default)]
+    pub customer_id: Option<Uuid>,
+    #[serde(default)]
+    pub loyalty_points_to_redeem: i64,
     pub payments: Vec<PayloadPayment>,
 }
 
@@ -540,16 +656,42 @@ pub fn pay(
     };
     let payload = TransactionPayload {
         idempotency_key: input.idempotency_key,
-        customer_id: None,
+        customer_id: input.customer_id,
         order_type: order.order_type,
         table_label: table_label.map(|t| t.chars().take(32).collect()),
         items: payload_items(&selected),
         discount_rule_ids: input.discount_rule_ids.clone(),
-        loyalty_points_to_redeem: 0,
+        loyalty_points_to_redeem: input.loyalty_points_to_redeem,
         payments: input.payments.clone(),
         notes: order.notes.clone(),
     };
     let created = sales::create_in(tx, actor, &payload, config, now)?;
+    // Lines paid without ever being sent still have to be made.
+    if created.is_new {
+        let unsent: Vec<&OpenOrderItem> =
+            selected.iter().filter(|i| i.fired_at.is_none()).collect();
+        let lines = kitchen_lines(tx, &unsent)?;
+        let server = OrderActor {
+            user_id: actor.user_id,
+            display_name: crate::repo::users::get(tx, actor.user_id)
+                .ipc()?
+                .map(|u| u.display_name)
+                .unwrap_or_default(),
+            role: actor.role,
+            device_id: crate::repo::device::id(tx).ipc()?,
+        };
+        kitchen_ticket(
+            tx,
+            config,
+            &server,
+            &order,
+            TicketKind::Order,
+            None,
+            &lines,
+            Some(created.transaction_id),
+            now,
+        )?;
+    }
     let remaining: Vec<OpenOrderItem> = order
         .items
         .iter()

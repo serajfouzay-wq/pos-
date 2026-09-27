@@ -8,6 +8,7 @@
 
 pub mod audit;
 pub mod catalog;
+pub mod customers;
 pub mod device;
 pub mod menu;
 pub mod orders;
@@ -17,6 +18,7 @@ pub mod rows;
 pub mod sales;
 pub mod settings;
 pub mod shifts;
+pub mod shop;
 pub mod users;
 
 use pos_core::time::Timestamp;

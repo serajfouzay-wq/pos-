@@ -15,14 +15,14 @@
           "before": null,
           "created_at": "2026-09-23T10:00:40.000Z",
           "deleted_at": null,
-          "device_id": "01a0d13b-bf99-761a-9f6b-655d42dd3934",
-          "entity_id": "01a0d13b-bfc0-77c5-9df3-dd7a2b827640",
+          "device_id": "01a0e2ee-d639-729e-ada8-478d84054bd1",
+          "entity_id": "01a0e2ee-d668-722b-b271-dfddf4cc4c37",
           "entity_type": "z_reports",
-          "id": "01a0d13b-bfc1-7782-a529-2b6fc418fdaf",
+          "id": "01a0e2ee-d668-722b-b271-dfdf555596ce",
           "occurred_at": "2026-09-23T10:00:40.000Z",
           "role": "manager",
           "updated_at": "2026-09-23T10:00:40.000Z",
-          "user_id": "01a0d13b-bfb4-7411-864e-d1c821f1a621",
+          "user_id": "01a0e2ee-d659-7598-af76-dffb3f5c3d3d",
           "user_name": "Omar"
         },
         {
@@ -46,14 +46,14 @@
           },
           "created_at": "2026-09-23T10:00:10.000Z",
           "deleted_at": null,
-          "device_id": "01a0d13b-bf99-761a-9f6b-655d42dd3934",
-          "entity_id": "01a0d13b-bfbd-7302-ab0c-fc3aea7b0ae1",
+          "device_id": "01a0e2ee-d639-729e-ada8-478d84054bd1",
+          "entity_id": "01a0e2ee-d664-7247-b315-5d03e5768c88",
           "entity_type": "transactions",
-          "id": "01a0d13b-bfbd-7302-ab0c-fc4047b51369",
+          "id": "01a0e2ee-d664-7247-b315-5d091e4f28bb",
           "occurred_at": "2026-09-23T10:00:10.000Z",
           "role": "manager",
           "updated_at": "2026-09-23T10:00:10.000Z",
-          "user_id": "01a0d13b-bfb4-7411-864e-d1c821f1a621",
+          "user_id": "01a0e2ee-d659-7598-af76-dffb3f5c3d3d",
           "user_name": "Omar"
         },
         {
@@ -65,14 +65,14 @@
           "before": null,
           "created_at": "2026-09-23T10:00:02.000Z",
           "deleted_at": null,
-          "device_id": "01a0d13b-bf99-761a-9f6b-655d42dd3934",
-          "entity_id": "01a0d13b-bfbb-72c4-909b-ef5a602239b1",
+          "device_id": "01a0e2ee-d639-729e-ada8-478d84054bd1",
+          "entity_id": "01a0e2ee-d662-710a-b3a2-bd8ab73fd586",
           "entity_type": "transactions",
-          "id": "01a0d13b-bfbc-74f1-913c-f5c4f516247f",
+          "id": "01a0e2ee-d662-710a-b3a2-bd909e6b48b0",
           "occurred_at": "2026-09-23T10:00:02.000Z",
           "role": "cashier",
           "updated_at": "2026-09-23T10:00:02.000Z",
-          "user_id": "01a0d13b-bfb3-7408-821c-97b8b32a2a78",
+          "user_id": "01a0e2ee-d659-7598-af76-dff955c0de5a",
           "user_name": "Sara"
         },
         {
@@ -84,14 +84,14 @@
           "before": null,
           "created_at": "2026-09-23T10:00:00.000Z",
           "deleted_at": null,
-          "device_id": "01a0d13b-bf99-761a-9f6b-655d42dd3934",
-          "entity_id": "01a0d13b-bfb5-7404-a9a4-143a4b763007",
+          "device_id": "01a0e2ee-d639-729e-ada8-478d84054bd1",
+          "entity_id": "01a0e2ee-d65a-77d7-b161-2835165ab741",
           "entity_type": "transactions",
-          "id": "01a0d13b-bfb6-7565-8bad-824019cb3dc5",
+          "id": "01a0e2ee-d65b-7557-8cc6-ee515e848815",
           "occurred_at": "2026-09-23T10:00:00.000Z",
           "role": "cashier",
           "updated_at": "2026-09-23T10:00:00.000Z",
-          "user_id": "01a0d13b-bfb3-7408-821c-97b8b32a2a78",
+          "user_id": "01a0e2ee-d659-7598-af76-dff955c0de5a",
           "user_name": "Sara"
         }
       ],
@@ -101,12 +101,68 @@
       "color": "#8B5E3C",
       "created_at": "2026-09-23T10:00:00.000Z",
       "deleted_at": null,
-      "id": "01a0d13b-bfb6-7565-8bad-824371a28c6b",
+      "id": "01a0e2ee-d65c-77a3-84a5-6bae29bf18ff",
       "name": "Coffee",
       "name_localized": {},
       "parent_id": null,
       "sort_order": 0,
       "updated_at": "2026-09-23T10:00:00.000Z"
+    },
+    "customer": {
+      "created_at": "2026-09-23T10:00:51.000Z",
+      "deleted_at": null,
+      "display_name": "Layla",
+      "email": "layla@example.com",
+      "id": "01a0e2ee-d66a-776a-bce6-a30fd8426e01",
+      "loyalty_points": 401,
+      "notes": null,
+      "phone": "+96555551234",
+      "updated_at": "2026-09-23T10:00:51.000Z"
+    },
+    "customer_detail": {
+      "customer": {
+        "created_at": "2026-09-23T10:00:51.000Z",
+        "deleted_at": null,
+        "display_name": "Layla",
+        "email": "layla@example.com",
+        "id": "01a0e2ee-d66a-776a-bce6-a30fd8426e01",
+        "loyalty_points": 401,
+        "notes": null,
+        "phone": "+96555551234",
+        "updated_at": "2026-09-23T10:00:51.000Z"
+      },
+      "last_visit_at": "2026-09-23T10:00:54.000Z",
+      "ledger": [
+        {
+          "id": "01a0e2ee-d66c-77d9-b518-d1674eacea98",
+          "occurred_at": "2026-09-23T10:00:54.000Z",
+          "points_delta": 1,
+          "reason": "earn",
+          "receipt_number": "01A0-000004",
+          "transaction_id": "01a0e2ee-d66c-77d9-b518-d15faadc264d",
+          "user_name": "Sara"
+        },
+        {
+          "id": "01a0e2ee-d66c-77d9-b518-d1655bb973b9",
+          "occurred_at": "2026-09-23T10:00:54.000Z",
+          "points_delta": -100,
+          "reason": "redeem",
+          "receipt_number": "01A0-000004",
+          "transaction_id": "01a0e2ee-d66c-77d9-b518-d15faadc264d",
+          "user_name": "Sara"
+        },
+        {
+          "id": "01a0e2ee-d66a-776a-bce6-a313d6e753f9",
+          "occurred_at": "2026-09-23T10:00:52.000Z",
+          "points_delta": 500,
+          "reason": "adjust",
+          "receipt_number": null,
+          "transaction_id": null,
+          "user_name": "Omar"
+        }
+      ],
+      "spent": 1500,
+      "visits": 1
     },
     "dashboard_data": {
       "average_ticket": 1975,
@@ -115,7 +171,7 @@
           "amount": 3950,
           "count": 2,
           "name": "Sara",
-          "user_id": "01a0d13b-bfb3-7408-821c-97b8b32a2a78"
+          "user_id": "01a0e2ee-d659-7598-af76-dff955c0de5a"
         }
       ],
       "by_category": [
@@ -270,7 +326,7 @@
       "currency": "KWD",
       "devices": [
         {
-          "device_id": "01a0d13b-bf99-761a-9f6b-655d42dd3934",
+          "device_id": "01a0e2ee-d639-729e-ada8-478d84054bd1",
           "label": "01A0"
         }
       ],
@@ -283,12 +339,12 @@
         "from": "2026-09-23T09:00:00.000Z",
         "to": "2026-09-23T11:00:00.000Z"
       },
-      "this_device_id": "01a0d13b-bf99-761a-9f6b-655d42dd3934",
+      "this_device_id": "01a0e2ee-d639-729e-ada8-478d84054bd1",
       "top_products": [
         {
           "amount": 2700,
           "name": "Latte",
-          "product_id": "01a0d13b-bfb4-7411-864e-d1cc2f456c0e",
+          "product_id": "01a0e2ee-d659-7598-af76-dfffc2d50c37",
           "quantity_milli": 2000
         }
       ],
@@ -339,30 +395,30 @@
         "closed_at": null,
         "created_at": "2026-09-23T10:00:00.000Z",
         "deleted_at": null,
-        "device_id": "01a0d13b-bf99-761a-9f6b-655d42dd3934",
+        "device_id": "01a0e2ee-d639-729e-ada8-478d84054bd1",
         "guests": 2,
-        "id": "01a0d13b-bfb8-7047-a09d-bdcb977355f9",
+        "id": "01a0e2ee-d65e-73dd-b02a-b29e316c564c",
         "items": [
           {
             "added_at": "2026-09-23T10:00:01.000Z",
-            "added_by": "01a0d13b-bfb3-7408-821c-97b8b32a2a78",
+            "added_by": "01a0e2ee-d659-7598-af76-dff955c0de5a",
             "combo": null,
             "course": 1,
             "fired_at": "2026-09-23T10:00:02.000Z",
-            "line_id": "01a0d13b-bfb8-7047-a09d-bdcdf3e78453",
-            "modifier_ids": ["01a0d13b-bfb6-7565-8bad-82468170e49b"],
+            "line_id": "01a0e2ee-d65f-758d-ad5e-16e7fc52a265",
+            "modifier_ids": ["01a0e2ee-d65c-77a3-84a5-6bb10b17fd0f"],
             "note": "extra hot",
-            "product_id": "01a0d13b-bfb4-7411-864e-d1cc2f456c0e",
+            "product_id": "01a0e2ee-d659-7598-af76-dfffc2d50c37",
             "quantity_milli": 1000
           }
         ],
         "label": null,
         "notes": null,
         "opened_at": "2026-09-23T10:00:00.000Z",
-        "opened_by": "01a0d13b-bfb3-7408-821c-97b8b32a2a78",
+        "opened_by": "01a0e2ee-d659-7598-af76-dff955c0de5a",
         "order_type": "dine_in",
         "status": "open",
-        "table_id": "01a0d13b-bfb8-7047-a09d-bdc9c5da6647",
+        "table_id": "01a0e2ee-d65d-74b2-9a94-82935535639d",
         "table_label": "T4",
         "total": 1450,
         "transaction_ids": [],
@@ -373,11 +429,182 @@
       "printed": false,
       "ticket_text": "Table T4\nCOURSE 1\nSara · 10:00 · 2 guests\n------------------------------------------------\n1 x Latte\n   + Oat\n   ! extra hot\n------------------------------------------------"
     },
+    "kitchen_board": {
+      "open": [
+        {
+          "course": 1,
+          "created_at": "2026-09-23T10:00:55.000Z",
+          "deleted_at": null,
+          "device_id": "01a0e2ee-d639-729e-ada8-478d84054bd1",
+          "fired_at": "2026-09-23T10:00:55.000Z",
+          "guests": 2,
+          "id": "01a0e2ee-d66d-729c-81c8-d89c6e267d93",
+          "items": [
+            {
+              "course": 1,
+              "done_at": "2026-09-23T10:00:56.000Z",
+              "line_id": "01a0e2ee-d66d-729c-81c8-d89b52cb3246",
+              "modifiers": ["No croutons"],
+              "name": "Soup",
+              "note": "hot",
+              "quantity_milli": 2000
+            }
+          ],
+          "kind": "order",
+          "order_id": "01a0e2ee-d66d-729c-81c8-d89ab095d72a",
+          "order_type": "dine_in",
+          "ready_at": null,
+          "server_name": "Sara",
+          "status": "open",
+          "ticket_number": 1,
+          "title": "Table T4",
+          "transaction_id": null,
+          "updated_at": "2026-09-23T10:00:55.000Z"
+        }
+      ],
+      "ready": [
+        {
+          "course": null,
+          "created_at": "2026-09-23T10:00:55.000Z",
+          "deleted_at": null,
+          "device_id": "01a0e2ee-d639-729e-ada8-478d84054bd1",
+          "fired_at": "2026-09-23T10:00:55.000Z",
+          "guests": 0,
+          "id": "01a0e2ee-d66e-77e0-a4f1-6b3eb4b8d182",
+          "items": [
+            {
+              "course": 1,
+              "done_at": "2026-09-23T10:00:56.000Z",
+              "line_id": "01a0e2ee-d66d-729c-81c8-d89b52cb3246",
+              "modifiers": ["No croutons"],
+              "name": "Soup",
+              "note": "hot",
+              "quantity_milli": 2000
+            }
+          ],
+          "kind": "void",
+          "order_id": null,
+          "order_type": "takeaway",
+          "ready_at": "2026-09-23T10:00:57.000Z",
+          "server_name": "Sara",
+          "status": "ready",
+          "ticket_number": 2,
+          "title": "Takeaway",
+          "transaction_id": "01a0e2ee-d66c-77d9-b518-d15faadc264d",
+          "updated_at": "2026-09-23T10:00:57.000Z"
+        }
+      ],
+      "server_time": "2026-09-23T10:00:58.000Z"
+    },
+    "kitchen_change": {
+      "kind": "order",
+      "status": "open",
+      "ticket_id": "01a0e2ee-d66d-729c-81c8-d89c6e267d93",
+      "ticket_number": 1,
+      "title": "Table T4"
+    },
+    "kitchen_display_status": {
+      "available": true,
+      "enabled": true,
+      "open": false
+    },
     "login_user": {
       "display_name": "Sara",
-      "id": "01a0d13b-bfb3-7408-821c-97b8b32a2a78",
+      "id": "01a0e2ee-d659-7598-af76-dff955c0de5a",
       "locked_until": "2026-09-23T10:00:00.000Z",
       "role": "cashier"
+    },
+    "loyalty_program": {
+      "available": true,
+      "settings": {
+        "enabled": true,
+        "max_redeem_bps": 10000,
+        "min_redeem_points": 100,
+        "point_value": 10,
+        "points_per_unit": 1
+      }
+    },
+    "loyalty_quote": {
+      "currency": "KWD",
+      "discount_total": 1000,
+      "lines": [
+        {
+          "discount_amount": 1000,
+          "gross": 2500,
+          "line_total": 1500,
+          "name": "Latte",
+          "product_id": "01a0e2ee-d659-7598-af76-dfffc2d50c37",
+          "quantity_milli": 2000,
+          "tax_amount": 71,
+          "tax_rate_bps": 500,
+          "unit_price": 1250
+        }
+      ],
+      "loyalty": {
+        "balance": 500,
+        "customer_id": "01a0e2ee-d66a-776a-bce6-a30fd8426e01",
+        "customer_name": "Layla",
+        "enabled": true,
+        "max_redeem_points": 250,
+        "points_earned": 1,
+        "redeem_points": 100,
+        "redeem_value": 1000
+      },
+      "subtotal": 2500,
+      "tax_lines": [
+        {
+          "rate_bps": 500,
+          "tax_amount": 71,
+          "taxable_amount": 1429
+        }
+      ],
+      "tax_total": 71,
+      "total": 1500
+    },
+    "loyalty_receipt": {
+      "cashier_name": "Sara",
+      "change_due": 3500,
+      "currency": "KWD",
+      "customer_name": "Layla",
+      "discount_total": 1000,
+      "drawer_opened": false,
+      "issued_at": "2026-09-23T10:00:54.000Z",
+      "kind": "sale",
+      "lines": [
+        {
+          "discount_amount": 1000,
+          "line_total": 1500,
+          "modifiers": [],
+          "name": "Latte",
+          "quantity_milli": 2000,
+          "unit_price": 1250
+        }
+      ],
+      "loyalty": {
+        "balance": 401,
+        "earned": 1,
+        "redeemed": 100
+      },
+      "payments": [
+        {
+          "amount": 1500,
+          "method": "cash",
+          "tendered_amount": 5000,
+          "tendered_currency": "KWD"
+        }
+      ],
+      "printed": true,
+      "receipt_number": "01A0-000004",
+      "subtotal": 2500,
+      "tax_lines": [
+        {
+          "rate_bps": 500,
+          "tax_amount": 71,
+          "taxable_amount": 1429
+        }
+      ],
+      "total": 1500,
+      "transaction_id": "01a0e2ee-d66c-77d9-b518-d15faadc264d"
     },
     "menu": {
       "combos": [
@@ -385,25 +612,25 @@
           "color": "#B7791F",
           "created_at": "2026-09-23T10:00:00.000Z",
           "deleted_at": null,
-          "id": "01a0d13b-bfb7-70d4-af48-355c2abf3307",
+          "id": "01a0e2ee-d65d-74b2-9a94-828d352b3def",
           "is_active": true,
           "items": [
             {
-              "combo_id": "01a0d13b-bfb7-70d4-af48-355c2abf3307",
+              "combo_id": "01a0e2ee-d65d-74b2-9a94-828d352b3def",
               "created_at": "2026-09-23T10:00:00.000Z",
               "deleted_at": null,
-              "id": "01a0d13b-bfb7-70d4-af48-355d4db5d199",
-              "product_id": "01a0d13b-bfb4-7411-864e-d1cc2f456c0e",
+              "id": "01a0e2ee-d65d-74b2-9a94-828ee4a44115",
+              "product_id": "01a0e2ee-d659-7598-af76-dfffc2d50c37",
               "quantity_milli": 1000,
               "sort_order": 0,
               "updated_at": "2026-09-23T10:00:00.000Z"
             },
             {
-              "combo_id": "01a0d13b-bfb7-70d4-af48-355c2abf3307",
+              "combo_id": "01a0e2ee-d65d-74b2-9a94-828d352b3def",
               "created_at": "2026-09-23T10:00:00.000Z",
               "deleted_at": null,
-              "id": "01a0d13b-bfb7-70d4-af48-355eff93ad50",
-              "product_id": "01a0d13b-bfb7-70d4-af48-355a98d11d5f",
+              "id": "01a0e2ee-d65d-74b2-9a94-828f0d332ade",
+              "product_id": "01a0e2ee-d65c-77a3-84a5-6bb621326042",
               "quantity_milli": 1000,
               "sort_order": 0,
               "updated_at": "2026-09-23T10:00:00.000Z"
@@ -423,7 +650,7 @@
           "deleted_at": null,
           "grid_x": 1,
           "grid_y": 1,
-          "id": "01a0d13b-bfb8-7047-a09d-bdc9c5da6647",
+          "id": "01a0e2ee-d65d-74b2-9a94-82935535639d",
           "is_active": true,
           "label": "T4",
           "seats": 4,
@@ -436,7 +663,7 @@
         {
           "created_at": "2026-09-23T10:00:00.000Z",
           "deleted_at": null,
-          "id": "01a0d13b-bfb6-7565-8bad-824519d41e5f",
+          "id": "01a0e2ee-d65c-77a3-84a5-6bb01c215e06",
           "is_active": true,
           "max_select": 1,
           "min_select": 0,
@@ -444,8 +671,8 @@
             {
               "created_at": "2026-09-23T10:00:00.000Z",
               "deleted_at": null,
-              "group_id": "01a0d13b-bfb6-7565-8bad-824519d41e5f",
-              "id": "01a0d13b-bfb6-7565-8bad-82468170e49b",
+              "group_id": "01a0e2ee-d65c-77a3-84a5-6bb01c215e06",
+              "id": "01a0e2ee-d65c-77a3-84a5-6bb10b17fd0f",
               "is_active": true,
               "is_default": false,
               "name": "Oat",
@@ -464,37 +691,37 @@
         }
       ],
       "product_modifier_groups": {
-        "00000000-0000-4000-8000-000000000000": ["01a0d13b-bfb6-7565-8bad-824519d41e5f"]
+        "00000000-0000-4000-8000-000000000000": ["01a0e2ee-d65c-77a3-84a5-6bb01c215e06"]
       }
     },
     "open_order_view": {
       "closed_at": null,
       "created_at": "2026-09-23T10:00:00.000Z",
       "deleted_at": null,
-      "device_id": "01a0d13b-bf99-761a-9f6b-655d42dd3934",
+      "device_id": "01a0e2ee-d639-729e-ada8-478d84054bd1",
       "guests": 2,
-      "id": "01a0d13b-bfb8-7047-a09d-bdcb977355f9",
+      "id": "01a0e2ee-d65e-73dd-b02a-b29e316c564c",
       "items": [
         {
           "added_at": "2026-09-23T10:00:01.000Z",
-          "added_by": "01a0d13b-bfb3-7408-821c-97b8b32a2a78",
+          "added_by": "01a0e2ee-d659-7598-af76-dff955c0de5a",
           "combo": null,
           "course": 1,
           "fired_at": "2026-09-23T10:00:02.000Z",
-          "line_id": "01a0d13b-bfb8-7047-a09d-bdcdf3e78453",
-          "modifier_ids": ["01a0d13b-bfb6-7565-8bad-82468170e49b"],
+          "line_id": "01a0e2ee-d65f-758d-ad5e-16e7fc52a265",
+          "modifier_ids": ["01a0e2ee-d65c-77a3-84a5-6bb10b17fd0f"],
           "note": "extra hot",
-          "product_id": "01a0d13b-bfb4-7411-864e-d1cc2f456c0e",
+          "product_id": "01a0e2ee-d659-7598-af76-dfffc2d50c37",
           "quantity_milli": 1000
         }
       ],
       "label": null,
       "notes": null,
       "opened_at": "2026-09-23T10:00:00.000Z",
-      "opened_by": "01a0d13b-bfb3-7408-821c-97b8b32a2a78",
+      "opened_by": "01a0e2ee-d659-7598-af76-dff955c0de5a",
       "order_type": "dine_in",
       "status": "open",
-      "table_id": "01a0d13b-bfb8-7047-a09d-bdc9c5da6647",
+      "table_id": "01a0e2ee-d65d-74b2-9a94-82935535639d",
       "table_label": "T4",
       "total": 1450,
       "transaction_ids": [],
@@ -506,30 +733,30 @@
         "closed_at": null,
         "created_at": "2026-09-23T10:00:00.000Z",
         "deleted_at": null,
-        "device_id": "01a0d13b-bf99-761a-9f6b-655d42dd3934",
+        "device_id": "01a0e2ee-d639-729e-ada8-478d84054bd1",
         "guests": 2,
-        "id": "01a0d13b-bfb8-7047-a09d-bdcb977355f9",
+        "id": "01a0e2ee-d65e-73dd-b02a-b29e316c564c",
         "items": [
           {
             "added_at": "2026-09-23T10:00:01.000Z",
-            "added_by": "01a0d13b-bfb3-7408-821c-97b8b32a2a78",
+            "added_by": "01a0e2ee-d659-7598-af76-dff955c0de5a",
             "combo": null,
             "course": 1,
             "fired_at": "2026-09-23T10:00:02.000Z",
-            "line_id": "01a0d13b-bfb8-7047-a09d-bdcdf3e78453",
-            "modifier_ids": ["01a0d13b-bfb6-7565-8bad-82468170e49b"],
+            "line_id": "01a0e2ee-d65f-758d-ad5e-16e7fc52a265",
+            "modifier_ids": ["01a0e2ee-d65c-77a3-84a5-6bb10b17fd0f"],
             "note": "extra hot",
-            "product_id": "01a0d13b-bfb4-7411-864e-d1cc2f456c0e",
+            "product_id": "01a0e2ee-d659-7598-af76-dfffc2d50c37",
             "quantity_milli": 1000
           }
         ],
         "label": null,
         "notes": null,
         "opened_at": "2026-09-23T10:00:00.000Z",
-        "opened_by": "01a0d13b-bfb3-7408-821c-97b8b32a2a78",
+        "opened_by": "01a0e2ee-d659-7598-af76-dff955c0de5a",
         "order_type": "dine_in",
         "status": "open",
-        "table_id": "01a0d13b-bfb8-7047-a09d-bdc9c5da6647",
+        "table_id": "01a0e2ee-d65d-74b2-9a94-82935535639d",
         "table_label": "T4",
         "total": 1450,
         "transaction_ids": [],
@@ -551,7 +778,7 @@
             "line_total": 1450,
             "modifiers": [
               {
-                "modifier_id": "01a0d13b-bfb6-7565-8bad-82468170e49b",
+                "modifier_id": "01a0e2ee-d65c-77a3-84a5-6bb10b17fd0f",
                 "name": "Oat",
                 "price_delta": 200
               }
@@ -581,7 +808,7 @@
           }
         ],
         "total": 1450,
-        "transaction_id": "01a0d13b-bfbb-72c4-909b-ef5a602239b1"
+        "transaction_id": "01a0e2ee-d662-710a-b3a2-bd8ab73fd586"
       }
     },
     "period_report": {
@@ -595,7 +822,7 @@
         "variance": 2750
       },
       "currency": "KWD",
-      "device_id": "01a0d13b-bf99-761a-9f6b-655d42dd3934",
+      "device_id": "01a0e2ee-d639-729e-ada8-478d84054bd1",
       "device_label": "01A0",
       "generated_at": "2026-09-23T10:00:40.000Z",
       "generated_by_name": "Omar",
@@ -611,7 +838,7 @@
           "expected_cash": 21250,
           "opened_at": "2026-09-23T10:00:00.000Z",
           "opened_by_name": "Omar",
-          "shift_id": "01a0d13b-bfb4-7411-864e-d1cacf575ca4",
+          "shift_id": "01a0e2ee-d659-7598-af76-dffd1c9aa208",
           "variance": 2750
         }
       ],
@@ -648,7 +875,7 @@
         "void_total": 0
       },
       "z_number": 1,
-      "z_report_id": "01a0d13b-bfc0-77c5-9df3-dd7a2b827640"
+      "z_report_id": "01a0e2ee-d668-722b-b271-dfddf4cc4c37"
     },
     "print_outcome": {
       "printed": false,
@@ -690,7 +917,7 @@
       "cost": null,
       "created_at": "2026-09-23T10:00:00.000Z",
       "deleted_at": null,
-      "id": "01a0d13b-bfb4-7411-864e-d1cc2f456c0e",
+      "id": "01a0e2ee-d659-7598-af76-dfffc2d50c37",
       "image_asset": null,
       "is_active": true,
       "name": "Latte",
@@ -716,13 +943,14 @@
           "gross": 2500,
           "line_total": 2500,
           "name": "Latte",
-          "product_id": "01a0d13b-bfb4-7411-864e-d1cc2f456c0e",
+          "product_id": "01a0e2ee-d659-7598-af76-dfffc2d50c37",
           "quantity_milli": 2000,
           "tax_amount": 119,
           "tax_rate_bps": 500,
           "unit_price": 1250
         }
       ],
+      "loyalty": null,
       "subtotal": 2500,
       "tax_lines": [
         {
@@ -748,7 +976,7 @@
           "variance": null
         },
         "currency": "KWD",
-        "device_id": "01a0d13b-bf99-761a-9f6b-655d42dd3934",
+        "device_id": "01a0e2ee-d639-729e-ada8-478d84054bd1",
         "device_label": "01A0",
         "generated_at": "2026-09-23T10:00:20.000Z",
         "generated_by_name": "Omar",
@@ -764,7 +992,7 @@
             "expected_cash": 21250,
             "opened_at": "2026-09-23T10:00:00.000Z",
             "opened_by_name": "Omar",
-            "shift_id": "01a0d13b-bfb4-7411-864e-d1cacf575ca4",
+            "shift_id": "01a0e2ee-d659-7598-af76-dffd1c9aa208",
             "variance": null
           }
         ],
@@ -844,7 +1072,7 @@
         }
       ],
       "total": 2500,
-      "transaction_id": "01a0d13b-bfb5-7404-a9a4-143a4b763007"
+      "transaction_id": "01a0e2ee-d65a-77d7-b161-2835165ab741"
     },
     "session": {
       "display_name": "Sara",
@@ -858,7 +1086,7 @@
       ],
       "role": "cashier",
       "started_at": "2026-09-23T10:00:00.000Z",
-      "user_id": "01a0d13b-bfb3-7408-821c-97b8b32a2a78"
+      "user_id": "01a0e2ee-d659-7598-af76-dff955c0de5a"
     },
     "session_status": {
       "needs_setup": false,
@@ -874,7 +1102,7 @@
         ],
         "role": "cashier",
         "started_at": "2026-09-23T10:00:00.000Z",
-        "user_id": "01a0d13b-bfb3-7408-821c-97b8b32a2a78"
+        "user_id": "01a0e2ee-d659-7598-af76-dff955c0de5a"
       }
     },
     "shift_history_item": {
@@ -885,16 +1113,16 @@
       "shift": {
         "actual_cash": 24000,
         "closed_at": "2026-09-23T10:00:30.000Z",
-        "closed_by": "01a0d13b-bfb4-7411-864e-d1c821f1a621",
+        "closed_by": "01a0e2ee-d659-7598-af76-dffb3f5c3d3d",
         "closing_float": 20000,
         "created_at": "2026-09-23T10:00:00.000Z",
         "deleted_at": null,
-        "device_id": "01a0d13b-bf99-761a-9f6b-655d42dd3934",
+        "device_id": "01a0e2ee-d639-729e-ada8-478d84054bd1",
         "expected_cash": 21250,
-        "id": "01a0d13b-bfb4-7411-864e-d1cacf575ca4",
+        "id": "01a0e2ee-d659-7598-af76-dffd1c9aa208",
         "notes": null,
         "opened_at": "2026-09-23T10:00:00.000Z",
-        "opened_by": "01a0d13b-bfb4-7411-864e-d1c821f1a621",
+        "opened_by": "01a0e2ee-d659-7598-af76-dffb3f5c3d3d",
         "opening_float": 20000,
         "updated_at": "2026-09-23T10:00:30.000Z",
         "variance": 2750
@@ -916,12 +1144,12 @@
         "closing_float": null,
         "created_at": "2026-09-23T10:00:00.000Z",
         "deleted_at": null,
-        "device_id": "01a0d13b-bf99-761a-9f6b-655d42dd3934",
+        "device_id": "01a0e2ee-d639-729e-ada8-478d84054bd1",
         "expected_cash": null,
-        "id": "01a0d13b-bfb4-7411-864e-d1cacf575ca4",
+        "id": "01a0e2ee-d659-7598-af76-dffd1c9aa208",
         "notes": null,
         "opened_at": "2026-09-23T10:00:00.000Z",
-        "opened_by": "01a0d13b-bfb4-7411-864e-d1c821f1a621",
+        "opened_by": "01a0e2ee-d659-7598-af76-dffb3f5c3d3d",
         "opening_float": 20000,
         "updated_at": "2026-09-23T10:00:00.000Z",
         "variance": null
@@ -938,11 +1166,11 @@
       "can_refund": true,
       "lines": [
         {
-          "item_id": "01a0d13b-bfb5-7404-a9a4-143c1d07fea5",
+          "item_id": "01a0e2ee-d65a-77d7-b161-2837eb7aca33",
           "line_number": 1,
           "line_total": 2500,
           "name": "Latte",
-          "product_id": "01a0d13b-bfb4-7411-864e-d1cc2f456c0e",
+          "product_id": "01a0e2ee-d659-7598-af76-dfffc2d50c37",
           "quantity_milli": 2000,
           "refundable_quantity_milli": 1000,
           "reversed_quantity_milli": 1000,
@@ -988,26 +1216,26 @@
           }
         ],
         "total": 2500,
-        "transaction_id": "01a0d13b-bfb5-7404-a9a4-143a4b763007"
+        "transaction_id": "01a0e2ee-d65a-77d7-b161-2835165ab741"
       },
       "reversals": [
         {
           "approved_by_name": "Omar",
           "cashier_name": "Omar",
           "currency": "KWD",
-          "device_id": "01a0d13b-bf99-761a-9f6b-655d42dd3934",
-          "id": "01a0d13b-bfbd-7302-ab0c-fc3aea7b0ae1",
+          "device_id": "01a0e2ee-d639-729e-ada8-478d84054bd1",
+          "id": "01a0e2ee-d664-7247-b315-5d03e5768c88",
           "kind": "refund",
           "line_count": 1,
           "notes": "Spilled",
           "occurred_at": "2026-09-23T10:00:10.000Z",
           "order_type": "counter",
-          "original_id": "01a0d13b-bfb5-7404-a9a4-143a4b763007",
+          "original_id": "01a0e2ee-d65a-77d7-b161-2835165ab741",
           "original_receipt_number": "01A0-000001",
           "payment_methods": ["cash"],
           "receipt_number": "01A0-000003",
           "reversed_total": 0,
-          "shift_id": "01a0d13b-bfb4-7411-864e-d1cacf575ca4",
+          "shift_id": "01a0e2ee-d659-7598-af76-dffd1c9aa208",
           "table_label": null,
           "total": -1250
         }
@@ -1016,8 +1244,8 @@
         "approved_by_name": null,
         "cashier_name": "Sara",
         "currency": "KWD",
-        "device_id": "01a0d13b-bf99-761a-9f6b-655d42dd3934",
-        "id": "01a0d13b-bfb5-7404-a9a4-143a4b763007",
+        "device_id": "01a0e2ee-d639-729e-ada8-478d84054bd1",
+        "id": "01a0e2ee-d65a-77d7-b161-2835165ab741",
         "kind": "sale",
         "line_count": 1,
         "notes": null,
@@ -1028,7 +1256,7 @@
         "payment_methods": ["cash"],
         "receipt_number": "01A0-000001",
         "reversed_total": 1250,
-        "shift_id": "01a0d13b-bfb4-7411-864e-d1cacf575ca4",
+        "shift_id": "01a0e2ee-d659-7598-af76-dffd1c9aa208",
         "table_label": null,
         "total": 2500
       },
@@ -1038,37 +1266,48 @@
       "approved_by_name": "Omar",
       "cashier_name": "Omar",
       "currency": "KWD",
-      "device_id": "01a0d13b-bf99-761a-9f6b-655d42dd3934",
-      "id": "01a0d13b-bfbd-7302-ab0c-fc3aea7b0ae1",
+      "device_id": "01a0e2ee-d639-729e-ada8-478d84054bd1",
+      "id": "01a0e2ee-d664-7247-b315-5d03e5768c88",
       "kind": "refund",
       "line_count": 1,
       "notes": "Spilled",
       "occurred_at": "2026-09-23T10:00:10.000Z",
       "order_type": "counter",
-      "original_id": "01a0d13b-bfb5-7404-a9a4-143a4b763007",
+      "original_id": "01a0e2ee-d65a-77d7-b161-2835165ab741",
       "original_receipt_number": "01A0-000001",
       "payment_methods": ["cash"],
       "receipt_number": "01A0-000003",
       "reversed_total": 0,
-      "shift_id": "01a0d13b-bfb4-7411-864e-d1cacf575ca4",
+      "shift_id": "01a0e2ee-d659-7598-af76-dffd1c9aa208",
       "table_label": null,
       "total": -1250
+    },
+    "update_status": {
+      "available_version": "0.1.4",
+      "current_version": "0.1.3",
+      "error": null,
+      "last_checked_at": "2026-09-23T10:01:00.000Z",
+      "notes": "Loyalty points",
+      "progress_bps": 10000,
+      "state": "ready",
+      "updated_from": "0.1.2",
+      "updated_notes": "Kitchen display"
     },
     "user": {
       "created_at": "2026-09-23T10:00:00.000Z",
       "deleted_at": null,
       "display_name": "Sara",
-      "id": "01a0d13b-bfb3-7408-821c-97b8b32a2a78",
+      "id": "01a0e2ee-d659-7598-af76-dff955c0de5a",
       "is_active": true,
       "locked_until": null,
       "role": "cashier",
       "updated_at": "2026-09-23T10:00:00.000Z"
     },
     "z_report_summary": {
-      "device_id": "01a0d13b-bf99-761a-9f6b-655d42dd3934",
+      "device_id": "01a0e2ee-d639-729e-ada8-478d84054bd1",
       "device_label": "01A0",
       "grand_total": 2700,
-      "id": "01a0d13b-bfc0-77c5-9df3-dd7a2b827640",
+      "id": "01a0e2ee-d668-722b-b271-dfddf4cc4c37",
       "net_sales": 2700,
       "period_end": "2026-09-23T10:00:40.000Z",
       "period_start": "2026-09-23T10:00:00.000Z",

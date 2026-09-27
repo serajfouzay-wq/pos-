@@ -10,7 +10,7 @@ use pos_core::currency::CurrencyCode;
 use pos_core::money;
 use pos_core::pricing::{self, Discount, DiscountScope, DiscountValue, PriceLine, Quote, TaxLine};
 use pos_core::rbac::Role;
-use pos_core::receipt::{ModifierLine, Receipt, ReceiptLine, ReceiptPayment};
+use pos_core::receipt::{LoyaltySummary, ModifierLine, Receipt, ReceiptLine, ReceiptPayment};
 use pos_core::sales::{OrderType, PaymentMethod, TransactionKind};
 use pos_core::tender::{self, Tender};
 use pos_core::time::Timestamp;
@@ -21,12 +21,14 @@ use uuid::Uuid;
 
 use super::audit::{self, Actor};
 use super::catalog::{self, StockReason};
+use super::customers;
 use super::menu;
 pub use super::orders::ComboRef;
 use super::outbox::{self, EventType};
 use super::{
     device, enum_at, enum_str, opt_ts_at, print_jobs, shifts, ts_at, uuid_at, Meta, SqlResultExt,
 };
+use crate::loyalty::{self, LoyaltyQuote, LoyaltyRequest};
 
 pub const MAX_LINES: usize = 500;
 
@@ -73,6 +75,8 @@ pub struct QuoteRequest {
     pub items: Vec<PayloadItem>,
     #[serde(default)]
     pub discount_rule_ids: Vec<Uuid>,
+    #[serde(default)]
+    pub loyalty: Option<LoyaltyRequest>,
 }
 
 /// Mirrors `QuoteSchema`.
@@ -85,6 +89,7 @@ pub struct QuoteView {
     pub tax_total: i64,
     pub total: i64,
     pub tax_lines: Vec<TaxLine>,
+    pub loyalty: Option<LoyaltyQuote>,
 }
 
 fn invalid(message: impl Into<String>) -> IpcError {
@@ -141,9 +146,13 @@ fn load_discounts(conn: &Connection, ids: &[Uuid], now: Timestamp) -> IpcResult<
 }
 
 /// A priced cart plus what each line was sold with (for the snapshots).
+#[derive(Debug)]
 pub struct PricedCart {
     pub quote: Quote,
     pub modifiers: Vec<Vec<ModifierLine>>,
+    /// What was priced, kept so a redemption can be priced on top.
+    pub lines: Vec<PriceLine>,
+    pub discounts: Vec<Discount>,
 }
 
 /// Modifiers of one line, validated against the product's groups: options
@@ -367,7 +376,12 @@ pub fn price_cart(
     discounts.extend(load_discounts(conn, discount_rule_ids, now)?);
     let quote = pricing::price(&lines, &discounts, config.tax.prices_include_tax)
         .map_err(|e| invalid(e.to_string()))?;
-    Ok(PricedCart { quote, modifiers })
+    Ok(PricedCart {
+        quote,
+        modifiers,
+        lines,
+        discounts,
+    })
 }
 
 pub fn quote(
@@ -380,9 +394,14 @@ pub fn quote(
     price_cart(conn, items, discount_rule_ids, config, now).map(|p| p.quote)
 }
 
-pub fn quote_view(quote: Quote, currency: CurrencyCode) -> QuoteView {
+pub fn quote_view(
+    quote: Quote,
+    currency: CurrencyCode,
+    loyalty: Option<LoyaltyQuote>,
+) -> QuoteView {
     QuoteView {
         currency,
+        loyalty,
         subtotal: quote.subtotal,
         discount_total: quote.discount_total,
         tax_total: quote.tax_total,
@@ -487,6 +506,10 @@ pub fn create(
 ) -> IpcResult<CreatedSale> {
     let tx = conn.transaction().ipc()?;
     let created = create_in(&tx, actor, payload, config, now)?;
+    // A pay-now sale goes straight to the kitchen display.
+    if created.is_new && crate::kitchen::enabled(config) {
+        crate::kitchen::for_sale(&tx, created.transaction_id, now)?;
+    }
     tx.commit().ipc()?;
     Ok(created)
 }
@@ -508,8 +531,8 @@ pub fn create_in(
             includes_cash,
         });
     }
-    if payload.customer_id.is_some() || payload.loyalty_points_to_redeem != 0 {
-        return Err(invalid("Customers and loyalty are not available yet."));
+    if payload.customer_id.is_none() && payload.loyalty_points_to_redeem != 0 {
+        return Err(invalid("Choose the customer whose points to use."));
     }
     let base = config.currency.base;
     if payload.payments.iter().any(|p| p.tendered_currency != base) {
@@ -521,8 +544,21 @@ pub fn create_in(
         .ipc()?
         .ok_or_else(|| IpcError::new(IpcErrorCode::Conflict, "Open a shift before selling."))?;
 
-    let PricedCart { quote, modifiers } =
-        price_cart(tx, &payload.items, &payload.discount_rule_ids, config, now)?;
+    let priced = loyalty::price(
+        tx,
+        &payload.items,
+        &payload.discount_rule_ids,
+        payload.customer_id.map(|customer_id| LoyaltyRequest {
+            customer_id,
+            redeem_points: payload.loyalty_points_to_redeem,
+        }),
+        config,
+        now,
+    )?;
+    let points = priced.loyalty;
+    let PricedCart {
+        quote, modifiers, ..
+    } = priced.cart;
     let tenders: Vec<Tender> = payload
         .payments
         .iter()
@@ -543,7 +579,7 @@ pub fn create_in(
         shift_id: shift.meta.id,
         cashier_id: actor.user_id,
         approved_by: None,
-        customer_id: None,
+        customer_id: points.as_ref().map(|p| p.customer_id),
         order_type: payload.order_type,
         table_label: payload.table_label.clone().filter(|t| !t.trim().is_empty()),
         currency: base,
@@ -551,8 +587,8 @@ pub fn create_in(
         discount_total: quote.discount_total,
         tax_total: quote.tax_total,
         total: quote.total,
-        loyalty_points_earned: 0,
-        loyalty_points_redeemed: 0,
+        loyalty_points_earned: points.as_ref().map_or(0, |p| p.points_earned),
+        loyalty_points_redeemed: points.as_ref().map_or(0, |p| p.redeem_points),
         notes: payload.notes.clone().filter(|n| !n.trim().is_empty()),
         idempotency_key: payload.idempotency_key,
         occurred_at: now,
@@ -607,7 +643,12 @@ pub fn create_in(
         }
     }
 
-    for applied in &settlement.tenders {
+    // A bill paid entirely with points has nothing tendered.
+    for applied in settlement
+        .tenders
+        .iter()
+        .filter(|t| t.amount != 0 || t.tendered != 0)
+    {
         let payment = PaymentRow {
             meta: Meta::new(now),
             transaction_id: row.meta.id,
@@ -621,6 +662,10 @@ pub fn create_in(
             reference: applied.reference.clone(),
         };
         insert_payment(tx, &payment)?;
+    }
+
+    if let Some(points) = &points {
+        loyalty::record_sale_points(tx, points, row.meta.id, &audit_actor, now)?;
     }
 
     audit::record(
@@ -803,6 +848,23 @@ pub fn load_receipt(conn: &Connection, transaction_id: Uuid, printed: bool) -> I
             },
         )
         .ipc()?;
+    let (customer_id, customer_name, earned, redeemed): (Option<Uuid>, Option<String>, i64, i64) =
+        conn.query_row(
+            "SELECT t.customer_id, c.display_name, t.loyalty_points_earned, t.loyalty_points_redeemed
+             FROM transactions t LEFT JOIN customers c ON c.id = t.customer_id WHERE t.id = ?1",
+            [&id],
+            |r| Ok((super::opt_uuid_at(r, 0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        )
+        .ipc()?;
+    // Balance as of this transaction, so a reprint shows the same figure.
+    let loyalty = match customer_id {
+        Some(customer) if earned > 0 || redeemed > 0 => Some(LoyaltySummary {
+            earned,
+            redeemed,
+            balance: customers::balance_at(conn, customer, issued_at).ipc()?,
+        }),
+        _ => None,
+    };
 
     let items: Vec<(ReceiptLine, i64, i64)> = conn
         .prepare(
@@ -872,7 +934,7 @@ pub fn load_receipt(conn: &Connection, transaction_id: Uuid, printed: bool) -> I
         receipt_number,
         issued_at,
         cashier_name,
-        customer_name: None,
+        customer_name,
         currency,
         lines: items.into_iter().map(|(line, _, _)| line).collect(),
         subtotal,
@@ -881,7 +943,7 @@ pub fn load_receipt(conn: &Connection, transaction_id: Uuid, printed: bool) -> I
         total,
         change_due: payments.iter().map(|(_, change)| change).sum(),
         payments: payments.into_iter().map(|(p, _)| p).collect(),
-        loyalty: None,
+        loyalty,
         printed,
     })
 }

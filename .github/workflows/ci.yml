@@ -46,7 +46,7 @@ jobs:
       - run: deno test --no-config --allow-read supabase/functions/_shared
       - name: Type-check every function and the local dev router
         run: |
-          for fn in license-validate sync-push sync-pull; do
+          for fn in license-validate sync-push sync-pull app-update; do
             (cd "supabase/functions/$fn" && deno check --config deno.json index.ts)
           done
           deno check --no-config supabase/functions/dev-server.ts

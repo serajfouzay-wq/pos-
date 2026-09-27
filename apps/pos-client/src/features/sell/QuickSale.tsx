@@ -105,6 +105,7 @@ export function QuickSale({ session, orderType, retail = false, header, onHold }
           key={String(paying)}
           open={paying}
           total={quote.data.total}
+          request={request ?? { items: [], discount_rule_ids: [] }}
           submit={submit}
           onClose={() => {
             setPaying(false);

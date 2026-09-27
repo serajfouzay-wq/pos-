@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-kitchen-display-status"
+description = "Enables the kitchen_display_status command without any pre-configured scope."
+commands.allow = ["kitchen_display_status"]
+
+[[permission]]
+identifier = "deny-kitchen-display-status"
+description = "Denies the kitchen_display_status command without any pre-configured scope."
+commands.deny = ["kitchen_display_status"]

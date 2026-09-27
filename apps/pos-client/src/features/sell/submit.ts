@@ -10,16 +10,16 @@ export function useCartSubmit(
 ): PaymentSubmit {
   const create = useCreateTransaction();
   return {
-    run: (payments, key, { onSuccess }) => {
+    run: (payments, key, customer, { onSuccess }) => {
       create.mutate(
         {
           idempotency_key: key,
-          customer_id: null,
+          customer_id: customer?.customer_id ?? null,
           order_type: orderType,
           table_label: null,
           items: toCartItems(lines),
           discount_rule_ids: [],
-          loyalty_points_to_redeem: 0,
+          loyalty_points_to_redeem: customer?.loyalty_points_to_redeem ?? 0,
           payments,
           notes: null,
         },
@@ -36,7 +36,7 @@ export function useCartSubmit(
 export function useOrderSubmit(orderId: Uuid | null, lineIds: Uuid[] | null): PaymentSubmit {
   const pay = usePayOrder();
   return {
-    run: (payments, key, { onSuccess }) => {
+    run: (payments, key, customer, { onSuccess }) => {
       if (!orderId) return;
       pay.mutate(
         {
@@ -44,6 +44,8 @@ export function useOrderSubmit(orderId: Uuid | null, lineIds: Uuid[] | null): Pa
           idempotency_key: key,
           line_ids: lineIds,
           discount_rule_ids: [],
+          customer_id: customer?.customer_id ?? null,
+          loyalty_points_to_redeem: customer?.loyalty_points_to_redeem ?? 0,
           payments,
         },
         {

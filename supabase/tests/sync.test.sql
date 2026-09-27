@@ -371,3 +371,82 @@ begin
   end;
   raise notice 'ok 12 z reports';
 end $$;
+
+-- 13. Kitchen tickets and shop settings: LWW, nested items, other tills see them
+do $$
+declare
+  ids record := (select t from t_ids t);
+  k uuid := '00000000-0000-4000-8000-00000000d001';
+  s uuid := '0199a000-0000-7000-8000-000000000001';
+  items jsonb := jsonb_build_array(jsonb_build_object(
+    'line_id', '00000000-0000-4000-8000-00000000d002', 'quantity_milli', 2000, 'name', 'Burger',
+    'modifiers', jsonb_build_array('No onion'), 'note', 'well done', 'course', 1, 'done_at', null));
+  ticket jsonb := jsonb_build_object(
+    'id', k, 'created_at', '2026-09-24T12:00:00.000Z', 'updated_at', '2026-09-24T12:00:00.000Z',
+    'deleted_at', null, 'device_id', ids.dev_a1, 'ticket_number', 1, 'kind', 'order',
+    'order_id', null, 'transaction_id', null, 'title', 'Table T4', 'order_type', 'dine_in',
+    'course', 1, 'server_name', 'Sara', 'guests', 2, 'items', items, 'status', 'open',
+    'fired_at', '2026-09-24T12:00:00.000Z', 'ready_at', null);
+  r jsonb;
+  pulled jsonb;
+  row jsonb;
+begin
+  r := public.sync_push(ids.client_a, ids.fp_a1, ids.dev_a1, jsonb_build_array(
+    pg_temp.event('e0000000-0000-4000-8000-00000000d001', 'upsert', 'kitchen_tickets', ticket),
+    pg_temp.event('e0000000-0000-4000-8000-00000000d002', 'upsert', 'shop_settings', jsonb_build_object(
+      'id', s, 'created_at', '2026-09-24T12:00:00.000Z', 'updated_at', '2026-09-24T12:00:00.000Z',
+      'deleted_at', null, 'key', 'loyalty', 'value', jsonb_build_object('enabled', true, 'points_per_unit', 1)))));
+  assert jsonb_array_length(r->'acknowledged') = 2 and jsonb_array_length(r->'rejected') = 0, r::text;
+  -- The kitchen (another till) bumps it later: that version wins.
+  r := public.sync_push(ids.client_a, ids.fp_a2, ids.dev_a2, jsonb_build_array(
+    pg_temp.event('e0000000-0000-4000-8000-00000000d003', 'upsert', 'kitchen_tickets',
+      ticket || jsonb_build_object('updated_at', '2026-09-24T12:09:00.000Z', 'status', 'ready',
+        'ready_at', '2026-09-24T12:09:00.000Z'))));
+  assert jsonb_array_length(r->'acknowledged') = 1, r::text;
+  pulled := public.sync_pull(ids.client_a, ids.fp_a1, ids.dev_a1, 0, 1000);
+  select c->'row' into row from jsonb_array_elements(pulled->'changes') c
+    where c->>'entity_type' = 'kitchen_tickets' order by (c->>'server_seq')::bigint desc limit 1;
+  assert row->>'status' = 'ready' and row->'items' = items, coalesce(row::text, 'missing');
+  pulled := public.sync_pull(ids.client_a, ids.fp_a2, ids.dev_a2, 0, 1000);
+  select c->'row' into row from jsonb_array_elements(pulled->'changes') c where c->>'entity_type' = 'shop_settings';
+  assert (row->'value'->>'enabled')::boolean, coalesce(row::text, 'missing');
+  raise notice 'ok 13 kitchen tickets + shop settings';
+end $$;
+
+-- 14. Releases: newest above the till's version, per client, activated tills only
+do $$
+declare
+  ids record := (select t from t_ids t);
+  found_version text;
+begin
+  perform public.publish_app_release(ids.client_a, '0.1.2', 'windows-x86_64', 'Faster receipts',
+    ids.client_a || '/0.1.2/POS_0.1.2_x64-setup.exe', 'sig-2');
+  perform public.publish_app_release(ids.client_a, '0.1.10', 'windows-x86_64', 'Loyalty',
+    ids.client_a || '/0.1.10/POS_0.1.10_x64-setup.exe', 'sig-10');
+  perform public.publish_app_release(ids.client_b, '0.1.20', 'windows-x86_64', 'B only',
+    ids.client_b || '/0.1.20/POS_0.1.20_x64-setup.exe', 'sig-b');
+  -- Numeric, not lexical: 0.1.10 > 0.1.2.
+  select version into found_version from public.app_update_check(ids.client_a, ids.fp_a1, '0.1.1', 'windows-x86_64');
+  assert found_version = '0.1.10', coalesce(found_version, 'none');
+  select version into found_version from public.app_update_check(ids.client_a, ids.fp_a1, '0.1.10', 'windows-x86_64');
+  assert found_version is null, 'up to date';
+  -- Withdrawing the newest offers the previous one again.
+  update app_releases set withdrawn_at = now() where client_id = ids.client_a and version = '0.1.10';
+  select version into found_version from public.app_update_check(ids.client_a, ids.fp_a1, '0.1.1', 'windows-x86_64');
+  assert found_version = '0.1.2', coalesce(found_version, 'none');
+  -- Re-publishing is idempotent and un-withdraws.
+  perform public.publish_app_release(ids.client_a, '0.1.10', 'windows-x86_64', 'Loyalty',
+    ids.client_a || '/0.1.10/POS_0.1.10_x64-setup.exe', 'sig-10');
+  assert (select count(*) from app_releases where client_id = ids.client_a) = 2, 'no duplicate';
+  begin
+    perform public.app_update_check(ids.client_a, repeat('ff', 32), '0.1.1', 'windows-x86_64');
+    raise exception 'unknown till got a release';
+  exception when sqlstate '28000' then null;
+  end;
+  begin
+    perform public.app_update_check(ids.client_a, ids.fp_a1, 'latest', 'windows-x86_64');
+    raise exception 'bad version accepted';
+  exception when sqlstate '22023' then null;
+  end;
+  raise notice 'ok 14 releases';
+end $$;

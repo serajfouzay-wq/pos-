@@ -15,9 +15,11 @@
 
 pub mod app_info;
 pub mod catalog;
+pub mod customers;
 pub mod hardware;
 pub mod history;
 pub mod inventory;
+pub mod kitchen;
 pub mod license;
 pub mod menu;
 pub mod orders;
@@ -26,6 +28,7 @@ pub mod sales;
 pub mod session;
 pub mod shifts;
 pub mod sync;
+pub mod updates;
 pub mod users;
 
 use std::sync::Arc;

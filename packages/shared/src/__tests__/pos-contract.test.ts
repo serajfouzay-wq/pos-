@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import fixture from '../../contracts/pos-examples.json';
 import { CategorySchema, ProductSchema } from '../entities/catalog';
-import { UserSchema } from '../entities/people';
+import { CustomerSchema, UserSchema } from '../entities/people';
+import {
+  KitchenBoardSchema,
+  KitchenChangeSchema,
+  KitchenDisplayStatusSchema,
+} from '../ipc/kitchen-types';
+import { CustomerDetailSchema, LoyaltyProgramSchema } from '../ipc/loyalty-types';
+import { UpdateStatusSchema } from '../ipc/updater-types';
 import { PaidOrderSchema, SaleReceiptSchema, TransactionDetailSchema } from '../ipc/pos-contract';
 import {
   AuditPageSchema,
@@ -52,6 +59,15 @@ const cases = {
   dashboard_data: DashboardDataSchema,
   audit_page: AuditPageSchema,
   shift_history_item: ShiftHistoryItemSchema,
+  customer: CustomerSchema,
+  customer_detail: CustomerDetailSchema,
+  loyalty_program: LoyaltyProgramSchema,
+  loyalty_quote: QuoteSchema,
+  loyalty_receipt: SaleReceiptSchema,
+  kitchen_board: KitchenBoardSchema,
+  kitchen_change: KitchenChangeSchema,
+  kitchen_display_status: KitchenDisplayStatusSchema,
+  update_status: UpdateStatusSchema,
 } as const;
 
 describe('POS response contract (Rust → Zod)', () => {
@@ -93,6 +109,26 @@ describe('POS response contract (Rust → Zod)', () => {
     expect(printed.text).toContain('X REPORT');
     const dashboard = DashboardDataSchema.parse(fixture.examples.dashboard_data);
     expect(dashboard.by_hour).toHaveLength(24);
+  });
+
+  it('pins the Phase 8 behaviour Rust produced', () => {
+    // 2 lattes (2.500) for Layla, 100 of her 500 points off (1.000).
+    const quote = QuoteSchema.parse(fixture.examples.loyalty_quote);
+    expect(quote.total).toBe(1_500);
+    expect(quote.loyalty?.redeem_value).toBe(1_000);
+    expect(quote.loyalty?.max_redeem_points).toBe(250);
+    expect(quote.loyalty?.points_earned).toBe(1);
+    const receipt = SaleReceiptSchema.parse(fixture.examples.loyalty_receipt);
+    expect(receipt.customer_name).toBe('Layla');
+    expect(receipt.loyalty).toEqual({ earned: 1, redeemed: 100, balance: 401 });
+    const customer = CustomerSchema.parse(fixture.examples.customer);
+    expect(customer.phone).toBe('+96555551234');
+    expect(customer.loyalty_points).toBe(401);
+    const detail = CustomerDetailSchema.parse(fixture.examples.customer_detail);
+    expect(detail.ledger.map((l) => l.reason)).toEqual(['earn', 'redeem', 'adjust']);
+    const board = KitchenBoardSchema.parse(fixture.examples.kitchen_board);
+    expect(board.open[0]?.items[0]?.done_at).not.toBeNull();
+    expect(board.ready[0]?.kind).toBe('void');
   });
 
   it('pins the sale arithmetic Rust produced', () => {

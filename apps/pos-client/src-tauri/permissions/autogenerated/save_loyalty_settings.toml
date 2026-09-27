@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-save-loyalty-settings"
+description = "Enables the save_loyalty_settings command without any pre-configured scope."
+commands.allow = ["save_loyalty_settings"]
+
+[[permission]]
+identifier = "deny-save-loyalty-settings"
+description = "Denies the save_loyalty_settings command without any pre-configured scope."
+commands.deny = ["save_loyalty_settings"]

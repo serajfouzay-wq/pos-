@@ -63,6 +63,22 @@
     "allow-print-report",
     "allow-list-shifts",
     "allow-get-dashboard-metrics",
-    "allow-list-audit-log"
+    "allow-list-audit-log",
+    "allow-search-customers",
+    "allow-get-customer",
+    "allow-save-customer",
+    "allow-delete-customer",
+    "allow-adjust-loyalty-points",
+    "allow-get-loyalty-settings",
+    "allow-save-loyalty-settings",
+    "allow-kitchen-display-status",
+    "allow-set-kitchen-display",
+    "allow-list-kitchen-tickets",
+    "allow-bump-kitchen-ticket",
+    "allow-set-kitchen-item-done",
+    "allow-update-status",
+    "allow-check-for-updates",
+    "allow-install-update",
+    "allow-dismiss-update-notice"
   ]
 }

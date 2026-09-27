@@ -493,6 +493,7 @@ fn courses_fire_to_the_kitchen_and_fired_items_need_a_manager() {
         order.meta.id,
         Some(1),
         order.meta.updated_at,
+        &config(),
         at(30),
     )
     .expect("fire 1");
@@ -506,6 +507,7 @@ fn courses_fire_to_the_kitchen_and_fired_items_need_a_manager() {
         order.meta.id,
         Some(1),
         fired.order.meta.updated_at,
+        &config(),
         at(31),
     )
     .expect_err("nothing new");
@@ -516,6 +518,7 @@ fn courses_fire_to_the_kitchen_and_fired_items_need_a_manager() {
         order.meta.id,
         None,
         fired.order.meta.updated_at,
+        &config(),
         at(32),
     )
     .expect("rest");
@@ -531,6 +534,7 @@ fn courses_fire_to_the_kitchen_and_fired_items_need_a_manager() {
         &w.cashier,
         order.meta.id,
         order.meta.updated_at,
+        &config(),
         at(40),
     )
     .expect_err("cancel");
@@ -580,6 +584,8 @@ fn split_bill_pays_lines_separately_then_settles() {
         idempotency_key: Uuid::new_v4(),
         line_ids: Some(vec![order.items[0].line_id, order.items[3].line_id]),
         discount_rule_ids: vec![],
+        customer_id: None,
+        loyalty_points_to_redeem: 0,
         payments: cash(2_000),
     };
     let (after, sale) = {
@@ -672,6 +678,8 @@ fn a_combo_is_paid_as_a_whole() {
         idempotency_key: Uuid::new_v4(),
         line_ids: Some(vec![order.items[0].line_id]),
         discount_rule_ids: vec![],
+        customer_id: None,
+        loyalty_points_to_redeem: 0,
         payments: cash(2_000),
     };
     let err = pay(

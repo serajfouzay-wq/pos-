@@ -15,13 +15,17 @@ use uuid::Uuid;
 use crate::github::{GitHub, GitHubError, RepoCheck, RepoTarget, WorkflowRun};
 use crate::secrets::SecretStore;
 use crate::signing::KeyStore;
-use crate::store::{sha256_hex, AssetKind, BuildRecord, BuildStatus, BuildUpdate, Store};
+use crate::store::{
+    sha256_hex, AssetKind, BuildRecord, BuildStatus, BuildUpdate, ReleaseOptions, Store,
+};
 
 pub const SETTINGS_KEY: &str = "build.settings";
 /// Every client lives in `clients/<slug>/` of the build repository.
 pub const CLIENTS_DIR: &str = "clients";
 pub const CONFIG_FILE: &str = "client.json";
 pub const PUBLIC_KEY_FILE: &str = "license-public-key.pem";
+/// The workflow input (and the tills' update notice) keeps notes short.
+pub const MAX_NOTES: usize = 1000;
 /// A dispatched build whose run never shows up is reported after this long.
 const RUN_APPEAR_TIMEOUT_MINUTES: i64 = 30;
 
@@ -225,13 +229,23 @@ impl BuildService {
 
     /// Publishes and dispatches. Failures are recorded on the build (status
     /// `error`) so the history shows them; the record is returned either way.
-    pub fn start(&self, client_id: Uuid, now: Timestamp) -> IpcResult<BuildRecord> {
+    pub fn start(
+        &self,
+        client_id: Uuid,
+        release: &ReleaseOptions,
+        now: Timestamp,
+    ) -> IpcResult<BuildRecord> {
+        if release.release_notes.trim().chars().count() > MAX_NOTES {
+            return Err(IpcError::validation(format!(
+                "Release notes are limited to {MAX_NOTES} characters."
+            )));
+        }
         let (target, token) = self.ready()?;
         let (slug, files) = self.build_files(client_id)?;
         let config_sha = sha256_hex(&files[CONFIG_FILE]);
-        let build = self
-            .store
-            .create_build(client_id, &config_sha, &self.app_version, now)?;
+        let build =
+            self.store
+                .create_build(client_id, &config_sha, &self.app_version, release, now)?;
         let fail = |error: IpcError| {
             self.store.update_build(
                 build.build_id,
@@ -262,6 +276,9 @@ impl BuildService {
         let inputs = BTreeMap::from([
             ("client".to_owned(), slug),
             ("build_id".to_owned(), build.build_id.to_string()),
+            ("version".to_owned(), build.app_version.clone()),
+            ("notes".to_owned(), build.release_notes.clone()),
+            ("publish".to_owned(), build.publish_update.to_string()),
         ]);
         if let Err(e) = self.github.dispatch(&token, &target, &inputs) {
             return fail(github_error(e));

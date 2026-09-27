@@ -13,6 +13,7 @@
 use std::collections::{HashMap, HashSet};
 
 use pos_core::currency::CurrencyCode;
+use pos_core::loyalty;
 use pos_core::rbac::Role;
 use pos_core::receipt::ModifierLine;
 use pos_core::sales::{OrderType, PaymentMethod, TransactionKind};
@@ -24,8 +25,9 @@ use uuid::Uuid;
 
 use crate::repo::audit::{self, Actor};
 use crate::repo::catalog::{self, StockReason};
+use crate::repo::customers::{self, LedgerReason};
 use crate::repo::sales::{self, CreatedSale, ItemRow, PaymentRow, TransactionRow};
-use crate::repo::{device, enum_at, print_jobs, shifts, uuid_at, Meta, SqlResultExt};
+use crate::repo::{device, enum_at, opt_uuid_at, print_jobs, shifts, uuid_at, Meta, SqlResultExt};
 
 fn invalid(message: impl Into<String>) -> IpcError {
     IpcError::validation(message)
@@ -98,13 +100,19 @@ pub struct SaleHeader {
     pub subtotal: i64,
     pub discount_total: i64,
     pub total: i64,
+    pub customer_id: Option<Uuid>,
+    pub points_earned: i64,
+    pub points_redeemed: i64,
+    /// Gross (before discounts) already taken back by earlier reversals.
+    pub reversed_subtotal: i64,
 }
 
 pub fn header(conn: &Connection, id: Uuid) -> IpcResult<SaleHeader> {
     conn.query_row(
         "SELECT id, kind, receipt_number, device_id, shift_id, order_type, table_label, currency,
-                subtotal, discount_total, total
-         FROM transactions WHERE id = ?1",
+                subtotal, discount_total, total, customer_id, loyalty_points_earned, loyalty_points_redeemed,
+                (SELECT COALESCE(-SUM(r.subtotal), 0) FROM transactions r WHERE r.original_transaction_id = t.id)
+         FROM transactions t WHERE id = ?1",
         [id.to_string()],
         |r| {
             Ok(SaleHeader {
@@ -119,6 +127,10 @@ pub fn header(conn: &Connection, id: Uuid) -> IpcResult<SaleHeader> {
                 subtotal: r.get(8)?,
                 discount_total: r.get(9)?,
                 total: r.get(10)?,
+                customer_id: opt_uuid_at(r, 11)?,
+                points_earned: r.get(12)?,
+                points_redeemed: r.get(13)?,
+                reversed_subtotal: r.get(14)?,
             })
         },
     )
@@ -301,6 +313,27 @@ fn reverse(
     if tender_sum != total {
         return Err(IpcError::internal("refund tenders do not add up"));
     }
+    // The same share of the sale's points comes back: earned points are
+    // taken away, redeemed points are returned (cumulative, like money). The
+    // share is of the goods (gross), so a bill paid entirely with points —
+    // total zero — still gives its points back.
+    let (points_back, points_returned) = match sale.customer_id {
+        Some(_) => (
+            loyalty::reversal(
+                sale.points_earned,
+                sale.subtotal,
+                sale.reversed_subtotal,
+                subtotal,
+            ),
+            loyalty::reversal(
+                sale.points_redeemed,
+                sale.subtotal,
+                sale.reversed_subtotal,
+                subtotal,
+            ),
+        ),
+        None => (0, 0),
+    };
 
     let row = TransactionRow {
         meta: id.clone(),
@@ -311,7 +344,7 @@ fn reverse(
         shift_id: shift.meta.id,
         cashier_id: actor.user_id,
         approved_by: Some(actor.user_id),
-        customer_id: None,
+        customer_id: sale.customer_id,
         order_type: sale.order_type,
         table_label: sale.table_label.clone(),
         currency: sale.currency,
@@ -319,8 +352,9 @@ fn reverse(
         discount_total: -discount,
         tax_total: -tax,
         total: -total,
-        loyalty_points_earned: 0,
-        loyalty_points_redeemed: 0,
+        // On a reversal: the points taken back and the points returned.
+        loyalty_points_earned: points_back,
+        loyalty_points_redeemed: points_returned,
         notes: Some(reason.trim().to_owned()),
         idempotency_key,
         occurred_at: now,
@@ -343,6 +377,20 @@ fn reverse(
                 item.product_id,
                 item.quantity_milli,
                 StockReason::Refund,
+                Some(row.meta.id),
+                &audit_actor,
+                now,
+            )
+            .ipc()?;
+        }
+    }
+    if let Some(customer) = sale.customer_id {
+        for delta in [points_returned, -points_back] {
+            customers::add_points(
+                tx,
+                customer,
+                delta,
+                LedgerReason::RefundReversal,
                 Some(row.meta.id),
                 &audit_actor,
                 now,
@@ -594,6 +642,14 @@ pub fn void(
         input.idempotency_key,
         now,
     )?;
+    // Food already sent to the kitchen for this sale is called off.
+    if created.is_new {
+        let server = crate::repo::users::get(&tx, actor.user_id)
+            .ipc()?
+            .map(|u| u.display_name)
+            .unwrap_or_default();
+        crate::kitchen::void_sale(&tx, sale.id, &server, now)?;
+    }
     tx.commit().ipc()?;
     Ok(created)
 }

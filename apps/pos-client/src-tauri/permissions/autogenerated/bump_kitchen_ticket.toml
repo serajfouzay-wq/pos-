@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-bump-kitchen-ticket"
+description = "Enables the bump_kitchen_ticket command without any pre-configured scope."
+commands.allow = ["bump_kitchen_ticket"]
+
+[[permission]]
+identifier = "deny-bump-kitchen-ticket"
+description = "Denies the bump_kitchen_ticket command without any pre-configured scope."
+commands.deny = ["bump_kitchen_ticket"]

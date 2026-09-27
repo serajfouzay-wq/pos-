@@ -137,9 +137,17 @@ fn builds_move_through_their_states() {
         .expect("create")
         .client_id;
     let build = store
-        .create_build(id, &"ab".repeat(32), "0.1.0", now())
+        .create_build(
+            id,
+            &"ab".repeat(32),
+            "0.3.7",
+            &ReleaseOptions::default(),
+            now(),
+        )
         .expect("build");
     assert_eq!(build.status, BuildStatus::Publishing);
+    assert_eq!(build.app_version, "0.3.1");
+
     assert_eq!(store.active_builds().expect("active").len(), 1);
 
     let queued = store
@@ -214,5 +222,28 @@ fn settings_round_trip() {
     assert_eq!(
         store.setting::<String>("k").expect("get").as_deref(),
         Some("w")
+    );
+}
+
+#[test]
+fn every_build_of_a_client_gets_a_higher_version() {
+    let store = Store::open_in_memory().expect("store");
+    let id = store
+        .create_client(&config("zeta"), now())
+        .expect("create")
+        .client_id;
+    let build = |app: &str| {
+        store
+            .create_build(id, &"ab".repeat(32), app, &ReleaseOptions::default(), now())
+            .expect("build")
+            .app_version
+    };
+    assert_eq!(build("0.3.7"), "0.3.1");
+    assert_eq!(build("0.3.7"), "0.3.2");
+    // A new app series starts the client's numbering again, still upwards.
+    assert_eq!(build("0.4.0"), "0.4.1");
+    assert_eq!(
+        next_client_version((0, 4), &["0.4.9".into(), "0.1.0".into(), "junk".into()]),
+        "0.4.10"
     );
 }

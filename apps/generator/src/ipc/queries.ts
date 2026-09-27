@@ -6,6 +6,7 @@ import {
   type ClientDetail,
   type IssueLicenseRequest,
   type NewClientInput,
+  type ReleaseOptions,
 } from '@pos/shared';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { inTauri, ipc } from './index';
@@ -218,7 +219,8 @@ function useBuildsChanged() {
 export function useStartBuild() {
   const changed = useBuildsChanged();
   return useMutation({
-    mutationFn: (clientId: string) => ipc.call('start_build', { client_id: clientId }),
+    mutationFn: ({ clientId, release }: { clientId: string; release: ReleaseOptions }) =>
+      ipc.call('start_build', { client_id: clientId, release }),
     onSettled: changed,
   });
 }

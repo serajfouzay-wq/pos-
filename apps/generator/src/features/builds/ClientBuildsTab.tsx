@@ -1,4 +1,5 @@
 import { isActiveBuild, type ClientDetail } from '@pos/shared';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ErrorText } from '../../components/ErrorText';
 import { useBuilds, useBuildSettings, useSigningKey, useStartBuild } from '../../ipc/queries';
@@ -12,6 +13,8 @@ export function ClientBuildsTab({ detail, unsaved }: { detail: ClientDetail; uns
   const key = useSigningKey();
   const start = useStartBuild();
   const navigate = useNavigationStore((s) => s.navigate);
+  const [notes, setNotes] = useState('');
+  const [publish, setPublish] = useState(true);
 
   const configured = Boolean(settings.data?.repo_owner && settings.data.token_configured);
   const hasKey = key.data !== undefined && key.data.state !== 'absent';
@@ -52,13 +55,48 @@ export function ClientBuildsTab({ detail, unsaved }: { detail: ClientDetail; uns
             )}
           </p>
         )}
+        <label>
+          <span>{t('builds.start.notes')}</span>
+          <textarea
+            rows={3}
+            maxLength={1000}
+            value={notes}
+            onChange={(e) => {
+              setNotes(e.target.value);
+            }}
+          />
+          <span className="muted small">{t('builds.start.notesHelp')}</span>
+        </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={publish}
+            onChange={(e) => {
+              setPublish(e.target.checked);
+            }}
+          />
+          <span>
+            {t('builds.start.publish')}
+            <span className="muted small"> — {t('builds.start.publishHelp')}</span>
+          </span>
+        </label>
         <ErrorText error={start.error} />
         <button
           type="button"
           className="button button--primary"
           disabled={blocker !== null || start.isPending || running}
           onClick={() => {
-            start.mutate(detail.client_id);
+            start.mutate(
+              {
+                clientId: detail.client_id,
+                release: { release_notes: notes, publish_update: publish },
+              },
+              {
+                onSuccess: () => {
+                  setNotes('');
+                },
+              },
+            );
           }}
         >
           {start.isPending

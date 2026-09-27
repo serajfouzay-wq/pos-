@@ -13,7 +13,7 @@ use super::blocking;
 use crate::builds::{BuildSettings, BuildSettingsView};
 use crate::github::RepoCheck;
 use crate::state::AppState;
-use crate::store::BuildRecord;
+use crate::store::{BuildRecord, ReleaseOptions};
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn get_build_settings(state: State<'_, AppState>) -> IpcResult<BuildSettingsView> {
@@ -46,9 +46,13 @@ pub async fn check_build_settings(state: State<'_, AppState>) -> IpcResult<RepoC
 }
 
 #[tauri::command(rename_all = "snake_case")]
-pub async fn start_build(state: State<'_, AppState>, client_id: Uuid) -> IpcResult<BuildRecord> {
+pub async fn start_build(
+    state: State<'_, AppState>,
+    client_id: Uuid,
+    release: ReleaseOptions,
+) -> IpcResult<BuildRecord> {
     let builds = Arc::clone(&state.builds);
-    blocking(move || builds.start(client_id, SystemClock.now())).await
+    blocking(move || builds.start(client_id, &release, SystemClock.now())).await
 }
 
 #[tauri::command(rename_all = "snake_case")]

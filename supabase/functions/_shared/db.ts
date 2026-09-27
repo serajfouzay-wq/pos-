@@ -16,6 +16,15 @@ export interface ValidateDeviceArgs {
   deviceName: string;
 }
 
+/** A release the till may install (see `app_update_check`). */
+export interface ReleaseRow {
+  version: string;
+  notes: string;
+  published_at: Date;
+  storage_path: string;
+  signature: string;
+}
+
 export interface Db {
   validateDevice(
     args: ValidateDeviceArgs,
@@ -33,6 +42,12 @@ export interface Db {
     cursor: string | null,
     limit: number,
   ): Promise<unknown>;
+  updateCheck(
+    clientId: string,
+    fingerprint: string,
+    currentVersion: string,
+    target: string,
+  ): Promise<ReleaseRow | null>;
 }
 
 /** SQLSTATE raised by `_sync_authorize` when a device may not sync. */
@@ -57,6 +72,11 @@ export function connect(url: string): Db {
       const [row] = await sql`
         select public.sync_pull(${clientId}, ${fingerprint}, ${deviceId}, ${cursor ?? '0'}::bigint, ${limit}) as result`;
       return row?.['result'];
+    },
+    async updateCheck(clientId, fingerprint, currentVersion, target) {
+      const [row] = await sql`
+        select * from public.app_update_check(${clientId}, ${fingerprint}, ${currentVersion}, ${target})`;
+      return (row as ReleaseRow | undefined) ?? null;
     },
   };
 }

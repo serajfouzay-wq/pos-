@@ -276,10 +276,30 @@ fn layout(receipt: &Receipt, template: &ReceiptTemplate, copy: bool) -> Vec<Bloc
         ));
     }
     if let Some(loyalty) = &receipt.loyalty {
-        out.push(text(
-            two_columns("Points earned", &loyalty.earned.to_string(), width),
-            Align::Left,
-        ));
+        // On a refund or void the figures are what was reversed.
+        let sale = receipt.kind == TransactionKind::Sale;
+        if loyalty.redeemed > 0 {
+            let label = if sale {
+                "Points redeemed"
+            } else {
+                "Points returned"
+            };
+            out.push(text(
+                two_columns(label, &loyalty.redeemed.to_string(), width),
+                Align::Left,
+            ));
+        }
+        if sale || loyalty.earned > 0 {
+            let label = if sale {
+                "Points earned"
+            } else {
+                "Points taken back"
+            };
+            out.push(text(
+                two_columns(label, &loyalty.earned.to_string(), width),
+                Align::Left,
+            ));
+        }
         out.push(text(
             two_columns("Points balance", &loyalty.balance.to_string(), width),
             Align::Left,

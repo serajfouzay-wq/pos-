@@ -4,3 +4,7 @@ project_id = "pos-factory"
 [functions.license-validate]
 # Called by tills with the project's anon key as the bearer token.
 verify_jwt = true
+
+[functions.app-update]
+# Called by tills' updater with the project's anon key as the bearer token.
+verify_jwt = true

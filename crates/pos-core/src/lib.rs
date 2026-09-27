@@ -6,6 +6,7 @@
 pub mod config;
 pub mod currency;
 pub mod error;
+pub mod loyalty;
 pub mod money;
 pub mod pricing;
 pub mod rbac;

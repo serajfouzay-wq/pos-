@@ -477,6 +477,35 @@
       "append_only": true,
       "sync": "append_only"
     },
+    "shop_settings": {
+      "columns": ["id", "created_at", "updated_at", "deleted_at", "key", "value"],
+      "append_only": false,
+      "sync": "last_write_wins"
+    },
+    "kitchen_tickets": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "device_id",
+        "ticket_number",
+        "kind",
+        "order_id",
+        "transaction_id",
+        "title",
+        "order_type",
+        "course",
+        "server_name",
+        "guests",
+        "items",
+        "status",
+        "fired_at",
+        "ready_at"
+      ],
+      "append_only": false,
+      "sync": "last_write_wins"
+    },
     "sync_queue": {
       "columns": [
         "id",

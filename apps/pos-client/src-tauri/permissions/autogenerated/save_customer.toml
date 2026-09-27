@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-save-customer"
+description = "Enables the save_customer command without any pre-configured scope."
+commands.allow = ["save_customer"]
+
+[[permission]]
+identifier = "deny-save-customer"
+description = "Denies the save_customer command without any pre-configured scope."
+commands.deny = ["save_customer"]

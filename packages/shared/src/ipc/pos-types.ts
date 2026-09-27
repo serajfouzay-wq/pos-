@@ -17,6 +17,7 @@ import {
   UuidSchema,
 } from '../primitives';
 import { PermissionSchema, PinSchema, RoleSchema } from '../rbac';
+import { LoyaltyQuoteSchema, LoyaltyRequestSchema } from './loyalty-types';
 
 // ── Sessions ───────────────────────────────────────────────────────────────
 
@@ -105,6 +106,8 @@ export type CartItem = z.input<typeof CartItemSchema>;
 export const QuoteRequestSchema = z.object({
   items: z.array(CartItemSchema).min(1).max(500),
   discount_rule_ids: z.array(UuidSchema),
+  /** The customer (and points to spend): the quote then includes the points. */
+  loyalty: LoyaltyRequestSchema.nullable().default(null),
 });
 export type QuoteRequest = z.input<typeof QuoteRequestSchema>;
 
@@ -134,6 +137,8 @@ export const QuoteSchema = z.object({
       tax_amount: MinorUnitsSchema,
     }),
   ),
+  /** Present when the request named a customer. */
+  loyalty: LoyaltyQuoteSchema.nullable(),
 });
 export type Quote = z.infer<typeof QuoteSchema>;
 

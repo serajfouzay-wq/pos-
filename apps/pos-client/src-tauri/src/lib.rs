@@ -5,7 +5,9 @@ mod commands;
 mod db;
 mod history;
 mod inventory;
+mod kitchen;
 mod license;
+mod loyalty;
 mod open_orders;
 mod printing;
 mod refunds;
@@ -15,6 +17,7 @@ mod sample_catalog;
 mod session;
 mod state;
 mod sync;
+mod updater;
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -31,9 +34,15 @@ const LICENSE_STATUS_EVENT: &str = "license://status";
 const PRINTER_STATUS_EVENT: &str = "printer://status";
 /// Event name of `POS_EVENTS.sync_status`.
 const SYNC_STATUS_EVENT: &str = "sync://status";
+/// Event name of `POS_EVENTS.kitchen_changed`.
+const KITCHEN_CHANGED_EVENT: &str = "kitchen://changed";
+/// Event name of `POS_EVENTS.update_status`.
+const UPDATE_STATUS_EVENT: &str = "updater://status";
 const PRINT_QUEUE_EVERY: Duration = Duration::from_secs(30);
 /// `SYNC_INTERVAL_MS`; changes also nudge the worker immediately.
 const SYNC_EVERY: Duration = Duration::from_secs(60);
+/// While a kitchen display is open on this till.
+const SYNC_FAST_EVERY: Duration = Duration::from_secs(5);
 /// Lets the license worker read hardware and open the database first.
 const SYNC_FIRST_AFTER: Duration = Duration::from_secs(5);
 /// How often the gate is re-evaluated, so expiry and grace take effect on a
@@ -42,7 +51,7 @@ const REEVALUATE_EVERY: Duration = Duration::from_secs(15 * 60);
 const CLOUD_CHECK_AFTER_SUCCESS: Duration = Duration::from_secs(6 * 60 * 60);
 
 pub fn run() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         // Must be registered first: a second launch focuses the running till
         // instead of opening another process against the same database.
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
@@ -50,7 +59,12 @@ pub fn run() {
                 let _ = window.unminimize();
                 let _ = window.set_focus();
             }
-        }))
+        }));
+    // Only builds signed for updates can verify (and so install) them.
+    if let Some(key) = updater::PUBLIC_KEY.filter(|k| !k.trim().is_empty()) {
+        builder = builder.plugin(tauri_plugin_updater::Builder::new().pubkey(key).build());
+    }
+    let app = builder
         .setup(|app| {
             let state = state::AppState::load(app.handle())?;
             let handle = app.handle().clone();
@@ -65,9 +79,26 @@ pub fn run() {
             state.sync.set_listener(move |status| {
                 let _ = handle.emit(SYNC_STATUS_EVENT, status);
             });
+            let handle = app.handle().clone();
+            state.kitchen.set_listener(move |change| {
+                let _ = handle.emit(KITCHEN_CHANGED_EVENT, change);
+            });
+            let handle = app.handle().clone();
+            state.updates.set_listener(move |status| {
+                let _ = handle.emit(UPDATE_STATUS_EVENT, status);
+            });
+            if state.updates.configured() {
+                updater::spawn_worker(
+                    app.handle().clone(),
+                    Arc::clone(&state.updates),
+                    Arc::clone(&state.license),
+                    Arc::clone(&state.client),
+                );
+            }
             spawn_license_worker(Arc::clone(&state.license));
             spawn_sync_worker(Arc::clone(&state.license), Arc::clone(&state.sync));
             spawn_print_queue_worker(Arc::clone(&state.license), Arc::clone(&state.printer));
+            commands::kitchen::restore_window(app.handle().clone(), &state);
             app.manage(state);
             Ok(())
         })
@@ -131,9 +162,33 @@ pub fn run() {
             commands::reports::list_shifts,
             commands::reports::get_dashboard_metrics,
             commands::reports::list_audit_log,
+            commands::customers::search_customers,
+            commands::customers::get_customer,
+            commands::customers::save_customer,
+            commands::customers::delete_customer,
+            commands::customers::adjust_loyalty_points,
+            commands::customers::get_loyalty_settings,
+            commands::customers::save_loyalty_settings,
+            commands::kitchen::kitchen_display_status,
+            commands::kitchen::set_kitchen_display,
+            commands::kitchen::list_kitchen_tickets,
+            commands::kitchen::bump_kitchen_ticket,
+            commands::kitchen::set_kitchen_item_done,
+            commands::updates::update_status,
+            commands::updates::check_for_updates,
+            commands::updates::install_update,
+            commands::updates::dismiss_update_notice,
         ])
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("failed to start the POS client");
+    app.run(|handle, event| {
+        // A downloaded update installs as the till closes.
+        if let tauri::RunEvent::Exit = event {
+            if let Some(state) = handle.try_state::<state::AppState>() {
+                state.updates.install_on_exit();
+            }
+        }
+    });
 }
 
 /// Background license upkeep: evaluates at start-up (reading hardware off the
@@ -191,8 +246,13 @@ fn spawn_sync_worker(license: Arc<LicenseService>, sync: Arc<SyncEngine>) {
             let (service, engine) = (Arc::clone(&license), Arc::clone(&sync));
             let _ =
                 tauri::async_runtime::spawn_blocking(move || sync::round(&service, &engine)).await;
+            let every = if sync.is_fast() {
+                SYNC_FAST_EVERY
+            } else {
+                SYNC_EVERY
+            };
             tokio::select! {
-                () = tokio::time::sleep(SYNC_EVERY) => {}
+                () = tokio::time::sleep(every) => {}
                 () = sync.nudged() => {}
             }
         }

@@ -7,7 +7,9 @@
 import { z } from 'zod';
 import { CurrencyCodeSchema } from '../currency';
 import { CategorySchema, ProductSchema } from '../entities/catalog';
-import { UserSchema } from '../entities/people';
+import { KitchenTicketSchema } from '../entities/kitchen';
+import { LoyaltySettingsSchema } from '../entities/shop';
+import { CustomerSchema, UserSchema } from '../entities/people';
 import {
   ModifierSnapshotSchema,
   OrderTypeSchema,
@@ -72,6 +74,15 @@ import {
   ShiftSummarySchema,
 } from './pos-types';
 import { PinSchema, RoleSchema } from '../rbac';
+import { KitchenBoardSchema, KitchenDisplayStatusSchema } from './kitchen-types';
+import {
+  CustomerDetailSchema,
+  CustomerInputSchema,
+  CustomerSearchSchema,
+  LoyaltyProgramSchema,
+  PointsAdjustmentSchema,
+} from './loyalty-types';
+import { UpdateStatusSchema } from './updater-types';
 
 // ── create_transaction ─────────────────────────────────────────────────────
 
@@ -349,6 +360,8 @@ export const POS_IPC = {
         idempotency_key: UuidSchema,
         line_ids: z.array(UuidSchema).min(1).nullable(),
         discount_rule_ids: z.array(UuidSchema),
+        customer_id: UuidSchema.nullable().default(null),
+        loyalty_points_to_redeem: NonNegativeIntSchema.default(0),
         payments: TransactionPayloadSchema.shape.payments,
       }),
     }),
@@ -404,6 +417,53 @@ export const POS_IPC = {
     7,
   ),
   list_audit_log: command(z.object({ filter: AuditFilterSchema }), AuditPageSchema, 7),
+
+  // Customers — lookup and registering: customer.lookup; editing, removing and
+  // adjusting points: customer.manage. Loyalty settings: settings.manage.
+  search_customers: command(z.object({ search: CustomerSearchSchema }), z.array(CustomerSchema), 8),
+  get_customer: command(z.object({ customer_id: UuidSchema }), CustomerDetailSchema, 8),
+  save_customer: command(z.object({ customer: CustomerInputSchema }), CustomerSchema, 8),
+  delete_customer: command(z.object({ customer_id: UuidSchema }), z.null(), 8),
+  adjust_loyalty_points: command(
+    z.object({ adjustment: PointsAdjustmentSchema }),
+    CustomerSchema,
+    8,
+  ),
+  get_loyalty_settings: command(NoArgs, LoyaltyProgramSchema, 8),
+  save_loyalty_settings: command(
+    z.object({ settings: LoyaltySettingsSchema }),
+    LoyaltyProgramSchema,
+    8,
+  ),
+
+  // Kitchen display — the window: settings.manage; the board: the kitchen
+  // window itself (no sign-in there) or sale.create.
+  kitchen_display_status: command(NoArgs, KitchenDisplayStatusSchema, 8),
+  /** Shows (and reopens at every start) or closes this till's kitchen window. */
+  set_kitchen_display: command(z.object({ enabled: z.boolean() }), KitchenDisplayStatusSchema, 8),
+  list_kitchen_tickets: command(
+    z.object({ recent_minutes: z.int().min(0).max(240) }),
+    KitchenBoardSchema,
+    8,
+  ),
+  /** `ready: true` bumps the ticket off the board; `false` recalls it. */
+  bump_kitchen_ticket: command(
+    z.object({ ticket_id: UuidSchema, ready: z.boolean() }),
+    KitchenTicketSchema,
+    8,
+  ),
+  set_kitchen_item_done: command(
+    z.object({ ticket_id: UuidSchema, line_id: UuidSchema, done: z.boolean() }),
+    KitchenTicketSchema,
+    8,
+  ),
+
+  // Updates — status/check: any signed-in user; installing now restarts the
+  // till: shift.close. Otherwise a downloaded update installs at the next start.
+  update_status: command(NoArgs, UpdateStatusSchema, 8),
+  check_for_updates: command(NoArgs, UpdateStatusSchema, 8),
+  install_update: command(NoArgs, z.null(), 8),
+  dismiss_update_notice: command(NoArgs, UpdateStatusSchema, 8),
 } as const;
 
 export type PosIpcContract = typeof POS_IPC;

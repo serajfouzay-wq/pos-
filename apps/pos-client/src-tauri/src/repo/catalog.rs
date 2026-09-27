@@ -82,7 +82,7 @@ fn read_product(row: &rusqlite::Row<'_>) -> rusqlite::Result<Product> {
     })
 }
 
-fn like_pattern(term: &str) -> String {
+pub(crate) fn like_pattern(term: &str) -> String {
     let escaped = term
         .replace('\\', "\\\\")
         .replace('%', "\\%")

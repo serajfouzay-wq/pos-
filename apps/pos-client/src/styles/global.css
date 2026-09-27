@@ -1828,3 +1828,455 @@ h2 {
   background: color-mix(in srgb, var(--brand-primary) 15%, transparent);
   color: var(--text);
 }
+
+/* ── Phase 8: loyalty, kitchen display, updates, motion ────────────────── */
+
+.workspace__view {
+  block-size: 100%;
+  min-block-size: 0;
+}
+
+.banner--info {
+  background: color-mix(in srgb, var(--brand-primary) 85%, #000);
+  color: #fff;
+}
+
+/* The customer on a bill (payment dialog). */
+.loyalty-add {
+  border-style: dashed;
+}
+
+.loyalty {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--brand-accent) 50%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--brand-accent) 8%, var(--surface-raised));
+}
+
+.loyalty p {
+  margin: 0;
+}
+
+.loyalty__redeem {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.loyalty__redeem .field {
+  flex: 1;
+  min-inline-size: 110px;
+}
+
+.loyalty__redeem input {
+  inline-size: 100%;
+}
+
+.customer-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  max-block-size: 50vh;
+  overflow-y: auto;
+}
+
+.customer-list__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  inline-size: 100%;
+  min-block-size: 48px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  text-align: start;
+}
+
+.customer-list__item:hover,
+.customer-list__item[aria-current='true'] {
+  border-color: var(--brand-primary);
+  background: color-mix(in srgb, var(--brand-primary) 14%, var(--surface-raised));
+}
+
+/* Customers screen: the page scrolls; the list and the detail scroll inside. */
+.customers__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 460px);
+  gap: 16px;
+  align-items: start;
+}
+
+.customers__detail {
+  max-block-size: 75vh;
+}
+
+.customers__list {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+  min-block-size: 0;
+}
+
+.customers__list .customer-list {
+  max-block-size: 70vh;
+}
+
+.customers__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  overflow-y: auto;
+}
+
+.customers__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.customers__head h2,
+.customers__head p {
+  margin: 0;
+}
+
+.customers__points {
+  display: grid;
+  justify-items: end;
+  text-align: end;
+}
+
+.customers__points strong {
+  font-size: 2rem;
+  line-height: 1;
+  color: var(--brand-accent);
+}
+
+.program {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.program .field input {
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.program .check,
+.program__example,
+.program > .row,
+.program > .error-text {
+  grid-column: 1 / -1;
+}
+
+/* Updates. */
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+  text-align: start;
+}
+
+.update-banner__bar {
+  inline-size: 160px;
+  block-size: 6px;
+  border-radius: 3px;
+  background: rgb(255 255 255 / 25%);
+  overflow: hidden;
+}
+
+.update-banner__bar span {
+  display: block;
+  block-size: 100%;
+  background: #fff;
+}
+
+.update-notes {
+  white-space: pre-wrap;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--surface-sunken);
+}
+
+.update-check {
+  justify-self: center;
+  display: grid;
+  place-items: center;
+  inline-size: 64px;
+  block-size: 64px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ok) 20%, transparent);
+  color: var(--ok);
+  font-size: 2rem;
+}
+
+/* Kitchen display window. */
+.kitchen {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  block-size: 100vh;
+  background: var(--surface-sunken);
+}
+
+.kitchen__bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--surface-raised);
+  border-block-end: 1px solid var(--border);
+}
+
+.kitchen__count {
+  color: var(--text-muted);
+}
+
+.kitchen__clock {
+  font-size: 1.3rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.kitchen__main {
+  display: flex;
+  min-block-size: 0;
+}
+
+.kitchen__tickets {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-auto-rows: min-content;
+  gap: 12px;
+  margin: 0;
+  padding: 14px;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.kitchen__empty {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  font-size: 1.6rem;
+  color: var(--text-muted);
+}
+
+.kitchen__allday {
+  inline-size: 280px;
+  padding: 14px;
+  overflow-y: auto;
+  background: var(--surface-raised);
+  border-inline-start: 1px solid var(--border);
+}
+
+.kitchen__allday h2 {
+  margin-block-start: 0;
+}
+
+.kitchen__allday ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 1.1rem;
+}
+
+.kitchen__recall {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  overflow-x: auto;
+  background: var(--surface-raised);
+  border-block-start: 1px solid var(--border);
+}
+
+.kitchen__recall .chip {
+  flex: none;
+}
+
+.ticket {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 12px;
+  border-block-start: 6px solid var(--ok);
+  background: var(--surface-raised);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 35%);
+}
+
+.ticket--warn {
+  border-block-start-color: var(--warn);
+}
+
+.ticket--late {
+  border-block-start-color: var(--danger);
+  animation: ticket-late 2s ease-in-out infinite;
+}
+
+.ticket--void {
+  border-block-start-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, var(--surface-raised));
+}
+
+@keyframes ticket-late {
+  50% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 45%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticket--late {
+    animation: none;
+  }
+}
+
+.ticket__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.ticket__number {
+  font-size: 1.4rem;
+  font-weight: 800;
+}
+
+.ticket__title {
+  flex: 1;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.ticket__void {
+  color: var(--danger);
+}
+
+.ticket__timer {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.ticket--warn .ticket__timer {
+  color: var(--warn);
+}
+
+.ticket--late .ticket__timer {
+  color: var(--danger);
+}
+
+.ticket__meta {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.ticket__items {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ticket__item {
+  display: flex;
+  gap: 8px;
+  inline-size: 100%;
+  min-block-size: 44px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--surface-sunken);
+  text-align: start;
+  font-size: 1.1rem;
+}
+
+.ticket__item:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.ticket__item--done {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.ticket__qty {
+  font-weight: 800;
+}
+
+.ticket__name {
+  display: grid;
+}
+
+.ticket__modifier {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.ticket__note {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--brand-accent);
+}
+
+.ticket__bump {
+  min-block-size: 48px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.ticket__bump--go {
+  border-color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 25%, var(--surface));
+}
+
+.receipt-done__check {
+  margin-block-end: 4px;
+}
+
+.receipt-done__check--refund,
+.receipt-done__check--void {
+  background: color-mix(in srgb, var(--warn) 20%, transparent);
+  color: var(--warn);
+}
+
+.receipt-done__customer {
+  margin: 0;
+  text-align: center;
+  color: var(--brand-accent);
+}
+
+.history__customer {
+  text-align: start;
+}
+
+/* Narrow screens: the printer shows as a dot (its text is the tooltip) so
+   the navigation keeps its room. */
+@media (max-width: 1500px) {
+  .topbar {
+    gap: 12px;
+  }
+
+  .topbar .status-dot__label {
+    display: none;
+  }
+}

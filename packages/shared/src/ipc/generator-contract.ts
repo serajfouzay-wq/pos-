@@ -12,6 +12,7 @@ import { command } from './contract';
 import {
   AssetKindSchema,
   BuildRecordSchema,
+  ReleaseOptionsSchema,
   BuildSettingsInputSchema,
   BuildSettingsSchema,
   ClientDetailSchema,
@@ -126,7 +127,7 @@ export const GENERATOR_IPC = {
   ),
   clear_github_token: command(z.object({}), BuildSettingsSchema, 5),
   check_build_settings: command(z.object({}), RepoCheckSchema, 5),
-  start_build: command(ClientRef, BuildRecordSchema, 5),
+  start_build: command(ClientRef.extend({ release: ReleaseOptionsSchema }), BuildRecordSchema, 5),
   list_builds: command(
     z.object({ client_id: UuidSchema.nullable() }),
     z.array(BuildRecordSchema),

@@ -2,8 +2,9 @@
 // HTTP-layer tests of sync-push / sync-pull with a fake database. Tokens are
 // signed in-test with the committed DEVELOPMENT key (keys/dev).
 import assert from 'node:assert/strict';
-import type { Db } from './db.ts';
+import type { Db, ReleaseRow } from './db.ts';
 import { importVerificationKey } from './license.ts';
+import { handleUpdate } from './app-update.ts';
 import { handlePull, handlePush } from './sync.ts';
 
 const root = new URL('../../../', import.meta.url);
@@ -67,7 +68,10 @@ interface Call {
   op: string;
   args: unknown[];
 }
-function fakeDb(fail?: { code: string }): Db & { calls: Call[] } {
+function fakeDb(
+  fail?: { code: string },
+  release: ReleaseRow | null = null,
+): Db & { calls: Call[] } {
   const calls: Call[] = [];
   const maybeFail = () => {
     if (fail) throw Object.assign(new Error('boom'), fail);
@@ -84,6 +88,11 @@ function fakeDb(fail?: { code: string }): Db & { calls: Call[] } {
       calls.push({ op: 'pull', args });
       maybeFail();
       return Promise.resolve({ changes: [], next_cursor: '0', has_more: false });
+    },
+    updateCheck: (...args) => {
+      calls.push({ op: 'update', args });
+      maybeFail();
+      return Promise.resolve(release);
     },
   };
 }
@@ -180,4 +189,74 @@ Deno.test('authorization failures are 403, other database errors 503', async () 
   assert.equal((await handlePull(request(body), deps(fakeDb({ code: '28000' })))).status, 403);
   assert.equal((await handlePull(request(body), deps(fakeDb({ code: '57P01' })))).status, 503);
   assert.equal((await handlePull(request(body), deps(fakeDb()))).status, 200);
+});
+
+// ── app-update ────────────────────────────────────────────────────────────
+
+const release: ReleaseRow = {
+  version: '0.1.4',
+  notes: 'Loyalty points',
+  published_at: new Date('2026-09-27T10:00:00Z'),
+  storage_path: `${CLIENT}/0.1.4/POS_0.1.4_x64-setup.exe`,
+  signature: 'dW50cnVzdGVkIGNvbW1lbnQ6',
+};
+const updateDeps = (db: Db) => ({
+  ...deps(db),
+  signUrl: (path: string, seconds: number) =>
+    Promise.resolve(`https://cdn.test/${path}?expires=${String(seconds)}`),
+});
+function updateRequest(
+  query = 'current_version=0.1.3&target=windows&arch=x86_64',
+  headers: Record<string, string> = { 'x-pos-license': token, 'x-pos-device-key': deviceKey },
+) {
+  return new Request(`http://x/functions/v1/app-update?${query}`, { headers });
+}
+
+Deno.test('app-update returns the Tauri manifest for the verified tenant', async () => {
+  const db = fakeDb(undefined, release);
+  const res = await handleUpdate(updateRequest(), updateDeps(db));
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), {
+    version: '0.1.4',
+    notes: 'Loyalty points',
+    pub_date: '2026-09-27T10:00:00.000Z',
+    url: `https://cdn.test/${CLIENT}/0.1.4/POS_0.1.4_x64-setup.exe?expires=3600`,
+    signature: 'dW50cnVzdGVkIGNvbW1lbnQ6',
+  });
+  assert.deepEqual(db.calls[0]?.args, [CLIENT, '3f'.repeat(32), '0.1.3', 'windows-x86_64']);
+});
+
+Deno.test('app-update: 204 when up to date, 401 without the device key', async () => {
+  const res = await handleUpdate(updateRequest(), updateDeps(fakeDb()));
+  assert.equal(res.status, 204);
+  const denied = await handleUpdate(
+    updateRequest(undefined, { 'x-pos-license': token }),
+    updateDeps(fakeDb(undefined, release)),
+  );
+  assert.equal(denied.status, 401);
+});
+
+Deno.test('app-update validates the query before the database', async () => {
+  const db = fakeDb(undefined, release);
+  for (const query of [
+    'current_version=latest&target=windows&arch=x86_64',
+    'current_version=0.1.3&target=darwin&arch=aarch64',
+    'target=windows&arch=x86_64',
+  ]) {
+    const res = await handleUpdate(updateRequest(query), updateDeps(db));
+    assert.equal(res.status, 400, query);
+  }
+  assert.equal(db.calls.length, 0);
+  const post = await handleUpdate(
+    new Request('http://x/functions/v1/app-update', { method: 'POST' }),
+    updateDeps(db),
+  );
+  assert.equal(post.status, 405);
+});
+
+Deno.test('app-update: unknown tills are 403, other failures 503', async () => {
+  const forbidden = await handleUpdate(updateRequest(), updateDeps(fakeDb({ code: '28000' })));
+  assert.equal(forbidden.status, 403);
+  const down = await handleUpdate(updateRequest(), updateDeps(fakeDb({ code: '08006' })));
+  assert.equal(down.status, 503);
 });

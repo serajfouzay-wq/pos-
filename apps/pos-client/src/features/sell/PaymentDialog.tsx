@@ -3,7 +3,9 @@ import {
   CURRENCIES,
   newUuid,
   type CurrencyCode,
+  type Customer,
   type PaymentMethod,
+  type QuoteRequest,
   type SaleReceipt,
   type Uuid,
 } from '@pos/shared';
@@ -11,7 +13,10 @@ import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AmountPad } from '../../components/AmountPad';
 import { Modal } from '../../components/Modal';
+import { useLoyaltyProgram, useQuote } from '../../ipc/queries';
 import { useMoney } from '../../lib/money';
+import { CustomerPicker } from '../customers/CustomerPicker';
+import { LoyaltyPanel } from '../customers/LoyaltyPanel';
 
 export type TenderMethod = Extract<PaymentMethod, 'cash' | 'card' | 'wallet'>;
 const METHODS: readonly TenderMethod[] = ['cash', 'card', 'wallet'];
@@ -28,11 +33,18 @@ export interface PaymentInput {
   reference: null;
 }
 
+/** The customer on the bill and the points they spend. */
+export interface BillCustomer {
+  customer_id: Uuid;
+  loyalty_points_to_redeem: number;
+}
+
 /** What the dialog asks the caller to do (create a sale / pay an order). */
 export interface PaymentSubmit {
   run: (
     payments: PaymentInput[],
     idempotencyKey: Uuid,
+    customer: BillCustomer | null,
     callbacks: { onSuccess: (receipt: SaleReceipt) => void },
   ) => void;
   pending: boolean;
@@ -42,8 +54,10 @@ export interface PaymentSubmit {
 
 interface Props {
   open: boolean;
-  /** Authoritative total from Rust (`quote_transaction`). */
+  /** Authoritative total from Rust (`quote_transaction`) without a customer. */
   total: number;
+  /** What is being paid, to re-price it when a customer spends points. */
+  request: QuoteRequest;
   /** Offer "split equally" between this many guests (0/1 = hidden). */
   guests?: number;
   submit: PaymentSubmit;
@@ -55,10 +69,37 @@ interface Props {
  * Tender entry. The sums shown here are for guidance; Rust re-prices the cart
  * from the catalogue and re-validates every tender before recording the sale.
  */
-export function PaymentDialog({ open, total, guests = 0, submit, onClose, onComplete }: Props) {
+export function PaymentDialog({
+  open,
+  total: baseTotal,
+  request,
+  guests = 0,
+  submit,
+  onClose,
+  onComplete,
+}: Props) {
   const { t } = useTranslation();
   const { format, currency } = useMoney();
   const create = submit;
+  const program = useLoyaltyProgram();
+  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [picking, setPicking] = useState(false);
+  // What the cashier typed; only a redemption the rules allow is priced, so
+  // half-typed numbers never break the quote.
+  const [redeemDraft, setRedeemDraft] = useState(0);
+  const [maxRedeem, setMaxRedeem] = useState(0);
+  const minRedeem = Math.max(1, program.data?.settings.min_redeem_points ?? 1);
+  const redeem = redeemDraft >= minRedeem && redeemDraft <= maxRedeem ? redeemDraft : 0;
+  // With a customer, Rust prices the bill again (points off, points earned).
+  const customerQuote = useQuote(
+    customer ? { ...request, loyalty: { customer_id: customer.id, redeem_points: redeem } } : null,
+  );
+  const loyalty = customer ? customerQuote.data?.loyalty : null;
+  if (loyalty && loyalty.max_redeem_points !== maxRedeem) {
+    setMaxRedeem(loyalty.max_redeem_points);
+  }
+  const total = customer ? (customerQuote.data?.total ?? baseTotal) : baseTotal;
+  const repricing = customer !== null && (customerQuote.isFetching || !customerQuote.data);
   const [splitWays, setSplitWays] = useState(Math.max(guests, 2));
   // Equal shares in integer minor units (largest remainder), from Rust's rules.
   const shares = useMemo(
@@ -72,6 +113,13 @@ export function PaymentDialog({ open, total, guests = 0, submit, onClose, onComp
   const [tenders, setTenders] = useState<Tender[]>([]);
   const [method, setMethod] = useState<TenderMethod>('cash');
   const [entry, setEntry] = useState(total);
+  // A new amount due (points spent) starts the tenders again.
+  const [dueFor, setDueFor] = useState(total);
+  if (dueFor !== total) {
+    setDueFor(total);
+    setTenders([]);
+    setEntry(total);
+  }
   // One key per sale attempt: retries after an error can never double-charge.
   const idempotencyKey = useRef(newUuid());
 
@@ -82,7 +130,10 @@ export function PaymentDialog({ open, total, guests = 0, submit, onClose, onComp
   const nonCash = withEntry
     .filter((x) => x.method !== 'cash')
     .reduce((sum, x) => sum + x.amount, 0);
-  const canComplete = allPaid >= total && nonCash <= total && withEntry.length > 0;
+  // Points can pay a whole bill: nothing is tendered then.
+  const paidByPoints = total === 0 && customer !== null;
+  const canComplete =
+    !repricing && (paidByPoints || (allPaid >= total && nonCash <= total && withEntry.length > 0));
 
   const quickCash = useMemo(() => {
     const unit = 10 ** CURRENCIES[currency].exponent;
@@ -103,18 +154,22 @@ export function PaymentDialog({ open, total, guests = 0, submit, onClose, onComp
 
   const complete = () => {
     if (!canComplete) return;
+    const tendered = paidByPoints ? [{ method: 'cash' as const, amount: 0 }] : withEntry;
     create.run(
-      withEntry.map((x) => ({
+      tendered.map((x) => ({
         method: x.method,
         tendered_currency: currency,
         tendered_amount: x.amount,
         reference: null,
       })),
       idempotencyKey.current,
+      customer ? { customer_id: customer.id, loyalty_points_to_redeem: redeem } : null,
       {
         onSuccess: (receipt) => {
           idempotencyKey.current = newUuid();
           setTenders([]);
+          setCustomer(null);
+          setRedeemDraft(0);
           onComplete(receipt);
         },
       },
@@ -223,6 +278,27 @@ export function PaymentDialog({ open, total, guests = 0, submit, onClose, onComp
           )}
         </div>
         <div className="payment__summary">
+          {program.data && (
+            <LoyaltyPanel
+              customer={customer}
+              quote={loyalty}
+              redeem={redeemDraft}
+              minRedeem={minRedeem}
+              onRedeem={setRedeemDraft}
+              onPick={() => {
+                setPicking(true);
+              }}
+              onClear={() => {
+                setCustomer(null);
+                setRedeemDraft(0);
+              }}
+            />
+          )}
+          {customerQuote.error && (
+            <p role="alert" className="error-text">
+              {customerQuote.error.message}
+            </p>
+          )}
           <ul className="tenders">
             {tenders.map((x, i) => (
               <li key={`${x.method}-${String(i)}`}>
@@ -278,6 +354,17 @@ export function PaymentDialog({ open, total, guests = 0, submit, onClose, onComp
           </button>
         </div>
       </div>
+      <CustomerPicker
+        open={picking}
+        onClose={() => {
+          setPicking(false);
+        }}
+        onPick={(c) => {
+          setPicking(false);
+          setCustomer(c);
+          setRedeemDraft(0);
+        }}
+      />
     </Modal>
   );
 }

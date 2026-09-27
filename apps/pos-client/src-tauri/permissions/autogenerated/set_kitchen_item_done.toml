@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-kitchen-item-done"
+description = "Enables the set_kitchen_item_done command without any pre-configured scope."
+commands.allow = ["set_kitchen_item_done"]
+
+[[permission]]
+identifier = "deny-set-kitchen-item-done"
+description = "Denies the set_kitchen_item_done command without any pre-configured scope."
+commands.deny = ["set_kitchen_item_done"]

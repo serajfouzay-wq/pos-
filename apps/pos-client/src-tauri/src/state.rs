@@ -5,11 +5,13 @@ use pos_core::time::SystemClock;
 use pos_hwid::HardwareComponents;
 use tauri::{AppHandle, Manager};
 
+use crate::kitchen::KitchenHub;
 use crate::license::cloud::{CloudValidator, SupabaseValidator};
 use crate::license::{LicenseEnv, LicenseService};
 use crate::printing::{template_for, PrintService, SystemPrinters};
 use crate::session::SessionStore;
 use crate::sync::{HttpTransport, SyncEngine, SyncTransport};
+use crate::updater::UpdateService;
 
 /// Validated at build time by `build.rs`; parsed again at startup.
 const EMBEDDED_CLIENT_CONFIG: &str = include_str!(concat!(env!("OUT_DIR"), "/client_config.json"));
@@ -42,6 +44,8 @@ pub struct AppState {
     pub session: SessionStore,
     pub printer: Arc<PrintService>,
     pub sync: Arc<SyncEngine>,
+    pub kitchen: Arc<KitchenHub>,
+    pub updates: Arc<UpdateService>,
 }
 
 /// Receipt logo from the client's bundled assets (`<resources>/client-assets/`).
@@ -94,11 +98,16 @@ impl AppState {
             template_for(&client, load_logo(app, &client)),
         );
         Ok(Self {
-            client,
             license: Arc::new(license),
             session: SessionStore::default(),
             printer: Arc::new(printer),
             sync: Arc::new(SyncEngine::new(transport, Arc::new(SystemClock))),
+            kitchen: Arc::new(KitchenHub::default()),
+            updates: Arc::new(UpdateService::new(
+                app.package_info().version.to_string(),
+                &client,
+            )),
+            client,
         })
     }
 }

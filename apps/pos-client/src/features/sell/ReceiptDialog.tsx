@@ -1,4 +1,5 @@
-import type { SaleReceipt, Session } from '@pos/shared';
+import type { Receipt, SaleReceipt, Session } from '@pos/shared';
+import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { Modal } from '../../components/Modal';
 import { usePrintReceipt } from '../../ipc/queries';
@@ -13,10 +14,28 @@ interface Props {
   doneLabel?: string;
 }
 
+/** Points on a receipt: earned on a sale; returned / taken back on a reversal. */
+export function usePointsText(): (receipt: Receipt) => string {
+  const { t } = useTranslation();
+  return (receipt) => {
+    const points = receipt.loyalty;
+    if (!points) return '';
+    const parts =
+      receipt.kind === 'sale'
+        ? [t('customers.earns', { count: points.earned })]
+        : [
+            ...(points.redeemed > 0 ? [t('customers.returned', { count: points.redeemed })] : []),
+            ...(points.earned > 0 ? [t('customers.takenBack', { count: points.earned })] : []),
+          ];
+    return [...parts, t('customers.balance', { count: points.balance })].join(' · ');
+  };
+}
+
 export function ReceiptDialog({ receipt, session, onNewSale, doneLabel }: Props) {
   const { t } = useTranslation();
   const { format } = useMoney();
   const print = usePrintReceipt();
+  const pointsText = usePointsText();
   if (!receipt) return null;
 
   const printedNow = print.data?.printed ?? receipt.printed;
@@ -34,6 +53,16 @@ export function ReceiptDialog({ receipt, session, onNewSale, doneLabel }: Props)
       }
     >
       <div className="stack receipt-done">
+        <motion.div
+          key={receipt.transaction_id}
+          className={`update-check receipt-done__check receipt-done__check--${receipt.kind}`}
+          initial={{ scale: 0.4, opacity: 0, rotate: -30 }}
+          animate={{ scale: 1, opacity: 1, rotate: 0 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 15 }}
+          aria-hidden="true"
+        >
+          {receipt.kind === 'sale' ? '✓' : '↺'}
+        </motion.div>
         {receipt.change_due > 0 ? (
           <>
             <span className="muted">{t('receipt.changeDue')}</span>
@@ -41,6 +70,17 @@ export function ReceiptDialog({ receipt, session, onNewSale, doneLabel }: Props)
           </>
         ) : (
           <output className="receipt-done__change">{format(receipt.total)}</output>
+        )}
+        {receipt.customer_name && (
+          <motion.p
+            className="receipt-done__customer"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+          >
+            <strong>{receipt.customer_name}</strong>
+            {receipt.loyalty && <> · {pointsText(receipt)}</>}
+          </motion.p>
         )}
         <ul className="status-list">
           <li className={printedNow ? 'ok' : 'warn'}>

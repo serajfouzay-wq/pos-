@@ -73,7 +73,16 @@ fn generator_response_shapes_match_the_contract_fixture() {
         )
         .expect("license");
     let build = store
-        .create_build(id, &"cd".repeat(32), "0.1.0", now)
+        .create_build(
+            id,
+            &"cd".repeat(32),
+            "0.1.0",
+            &crate::store::ReleaseOptions {
+                release_notes: "Kitchen display".into(),
+                publish_update: true,
+            },
+            now,
+        )
         .expect("build");
     let build = store
         .update_build(

@@ -473,6 +473,7 @@ fn pos_response_shapes_match_the_contract_fixture() {
     let quote = sales::quote_view(
         sales::quote(&conn, &sale.items, &[], &config(), now()).expect("quote"),
         CurrencyCode::KWD,
+        None,
     );
     let receipt = sales::load_receipt(&conn, created.transaction_id, true).expect("receipt");
     let open = shifts::current_open(&conn, w.device)
@@ -595,6 +596,7 @@ fn pos_response_shapes_match_the_contract_fixture() {
             order.meta.id,
             Some(1),
             order.meta.updated_at,
+            &config(),
             later2,
         )
         .expect("fire");
@@ -618,6 +620,8 @@ fn pos_response_shapes_match_the_contract_fixture() {
                 idempotency_key: Uuid::new_v4(),
                 line_ids: None,
                 discount_rule_ids: vec![],
+                customer_id: None,
+                loyalty_points_to_redeem: 0,
                 payments: vec![pay(PaymentMethod::Card, 1_450)],
             },
             &config(),
@@ -741,6 +745,139 @@ fn pos_response_shapes_match_the_contract_fixture() {
         })
     };
 
+    // Phase 8: a customer earning and redeeming points, the kitchen board,
+    // the kitchen window and updater status.
+    let phase8 = {
+        use crate::commands::customers::LoyaltyProgram;
+        use crate::commands::kitchen::KitchenDisplayStatus;
+        use crate::kitchen::{self, Draft, TicketItem, TicketKind};
+        use crate::loyalty::{self, CustomerInput, LoyaltyRequest, PointsAdjustment};
+        use crate::repo::{audit::Actor, customers, shop};
+        use crate::updater::{UpdateState, UpdateStatus};
+
+        let at = |s: i64| now().checked_add(Duration::seconds(s)).expect("ts");
+        shifts::open(&conn, w.device, w.manager, 0, at(50)).expect("shift");
+        let owner = Actor {
+            user_id: w.manager,
+            role: Role::Manager,
+            device_id: w.device,
+        };
+        let layla = loyalty::save(
+            &conn,
+            &owner,
+            CustomerInput {
+                id: None,
+                display_name: "Layla".into(),
+                phone: Some("+965 5555 1234".into()),
+                email: Some("layla@example.com".into()),
+                notes: None,
+            },
+            at(51),
+        )
+        .expect("customer");
+        loyalty::adjust(
+            &conn,
+            &owner,
+            &PointsAdjustment {
+                customer_id: layla.meta.id,
+                points_delta: 500,
+                note: "Welcome".into(),
+            },
+            at(52),
+        )
+        .expect("adjust");
+        let request = LoyaltyRequest {
+            customer_id: layla.meta.id,
+            redeem_points: 100,
+        };
+        let priced = loyalty::price(&conn, &sale.items, &[], Some(request), &config(), at(53))
+            .expect("quote");
+        let loyalty_quote = sales::quote_view(priced.cart.quote, CurrencyCode::KWD, priced.loyalty);
+        let with_points = TransactionPayload {
+            idempotency_key: Uuid::new_v4(),
+            customer_id: Some(layla.meta.id),
+            loyalty_points_to_redeem: 100,
+            ..sale.clone()
+        };
+        let paid = sales::create(&mut conn, &cashier(&w), &with_points, &config(), at(54))
+            .expect("sale with points");
+        let loyalty_receipt = SaleReceipt {
+            receipt: sales::load_receipt(&conn, paid.transaction_id, true).expect("receipt"),
+            drawer_opened: false,
+        };
+        let customer = customers::get(&conn, layla.meta.id).expect("q").expect("c");
+        let detail = customers::detail(&conn, customer.clone()).expect("detail");
+        let program = LoyaltyProgram {
+            available: true,
+            settings: shop::loyalty(&conn, &config()).expect("settings"),
+        };
+        let ticket = kitchen::create(
+            &conn,
+            w.device,
+            Draft {
+                kind: TicketKind::Order,
+                order_id: Some(Uuid::now_v7()),
+                transaction_id: None,
+                title: "Table T4".into(),
+                order_type: OrderType::DineIn,
+                course: Some(1),
+                server_name: "Sara".into(),
+                guests: 2,
+                items: vec![TicketItem {
+                    line_id: Uuid::now_v7(),
+                    quantity_milli: 2000,
+                    name: "Soup".into(),
+                    modifiers: vec!["No croutons".into()],
+                    note: Some("hot".into()),
+                    course: Some(1),
+                    done_at: Some(at(56)),
+                }],
+            },
+            at(55),
+        )
+        .expect("ticket");
+        let ready = kitchen::create(
+            &conn,
+            w.device,
+            Draft {
+                kind: TicketKind::Void,
+                order_id: None,
+                transaction_id: Some(paid.transaction_id),
+                title: "Takeaway".into(),
+                order_type: OrderType::Takeaway,
+                course: None,
+                server_name: "Sara".into(),
+                guests: 0,
+                items: ticket.items.clone(),
+            },
+            at(55),
+        )
+        .expect("ticket");
+        kitchen::bump(&conn, ready.meta.id, true, at(57)).expect("bump");
+        let board = kitchen::board(&conn, 30, at(58)).expect("board");
+        json!({
+            "customer": customer,
+            "customer_detail": detail,
+            "loyalty_program": program,
+            "loyalty_quote": loyalty_quote,
+            "loyalty_receipt": loyalty_receipt,
+            "kitchen_board": board,
+            "kitchen_change": kitchen::Change::from(&ticket),
+            "kitchen_display_status": KitchenDisplayStatus { available: true, enabled: true, open: false },
+            "update_status": UpdateStatus {
+                state: UpdateState::Ready,
+                current_version: "0.1.3".into(),
+                available_version: Some("0.1.4".into()),
+                notes: Some("Loyalty points".into()),
+                progress_bps: Some(10_000),
+                error: None,
+                last_checked_at: Some(at(60)),
+                updated_from: Some("0.1.2".into()),
+                updated_notes: Some("Kitchen display".into()),
+            },
+        })
+    };
+
     // Map keys are product ids (random per run): pin them for the shape.
     let mut menu_example = serde_json::to_value(&menu_example).expect("menu");
     if let Some(links) = menu_example["product_modifier_groups"].as_object_mut() {
@@ -782,8 +919,12 @@ fn pos_response_shapes_match_the_contract_fixture() {
         },
     });
 
-    if let (Some(all), Some(extra)) = (examples.as_object_mut(), phase7.as_object()) {
-        all.extend(extra.clone());
+    if let Some(all) = examples.as_object_mut() {
+        for extra in [&phase7, &phase8] {
+            if let Some(extra) = extra.as_object() {
+                all.extend(extra.clone());
+            }
+        }
     }
 
     fn shape(v: &Value) -> Value {

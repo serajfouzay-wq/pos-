@@ -1,9 +1,21 @@
-import type { FireOutcome, OpenOrderView, SaleReceipt, Session, Uuid } from '@pos/shared';
+import type {
+  FireOutcome,
+  OpenOrderView,
+  QuoteRequest,
+  SaleReceipt,
+  Session,
+  Uuid,
+} from '@pos/shared';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal } from '../../components/Modal';
 import { errorText, useToast } from '../../components/Toast';
-import { useCancelOrder, useFireCourse, useQuote } from '../../ipc/queries';
+import {
+  useCancelOrder,
+  useFireCourse,
+  useKitchenDisplayStatus,
+  useQuote,
+} from '../../ipc/queries';
 import { useMoney } from '../../lib/money';
 import { can } from '../../lib/permissions';
 import { CartPanel } from '../sell/CartPanel';
@@ -31,7 +43,7 @@ interface Props {
   onPaid: (receipt: SaleReceipt) => void;
 }
 
-type Paying = { lineIds: Uuid[] | null; total: number } | null;
+type Paying = { lineIds: Uuid[] | null; total: number; request: QuoteRequest } | null;
 
 /** A cafe tab or a restaurant table: add, send, split and pay. */
 export function OrderEditor({ session, order, courses, backLabel, onBack, onPaid }: Props) {
@@ -45,6 +57,7 @@ export function OrderEditor({ session, order, courses, backLabel, onBack, onPaid
   const cancel = useCancelOrder();
   const [course, setCourse] = useState<number | null>(courses ? 1 : null);
   const [ticket, setTicket] = useState<FireOutcome | null>(null);
+  const kitchenDisplay = useKitchenDisplayStatus().data?.available ?? false;
   const [splitting, setSplitting] = useState(false);
   const [paying, setPaying] = useState<Paying>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
@@ -87,6 +100,8 @@ export function OrderEditor({ session, order, courses, backLabel, onBack, onPaid
       {
         onSuccess: (outcome) => {
           if (outcome.printed) toast.show(t('orders.sentToKitchen'));
+          // The kitchen display has it: the text is only needed without one.
+          else if (kitchenDisplay && !outcome.print_error) toast.show(t('orders.sentToDisplay'));
           else setTicket(outcome);
         },
       },
@@ -238,7 +253,9 @@ export function OrderEditor({ session, order, courses, backLabel, onBack, onPaid
         }
         payDisabled={dirty}
         onPay={() => {
-          if (quote.data) setPaying({ lineIds: null, total: quote.data.total });
+          if (quote.data && request) {
+            setPaying({ lineIds: null, total: quote.data.total, request });
+          }
         }}
       />
       {picker.dialogs}
@@ -253,7 +270,14 @@ export function OrderEditor({ session, order, courses, backLabel, onBack, onPaid
           }}
           onPay={(lineIds, total) => {
             setSplitting(false);
-            setPaying({ lineIds, total });
+            setPaying({
+              lineIds,
+              total,
+              request: {
+                items: toCartItems(lines.filter((l) => lineIds.includes(l.line_id))),
+                discount_rule_ids: [],
+              },
+            });
           }}
         />
       )}
@@ -261,6 +285,7 @@ export function OrderEditor({ session, order, courses, backLabel, onBack, onPaid
         <PaymentDialog
           open
           total={paying.total}
+          request={paying.request}
           guests={paying.lineIds ? 0 : order.guests}
           submit={submit}
           onClose={() => {

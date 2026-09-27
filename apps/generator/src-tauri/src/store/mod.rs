@@ -14,7 +14,10 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-const MIGRATIONS: &[(i64, &str)] = &[(1, include_str!("0001_init.sql"))];
+const MIGRATIONS: &[(i64, &str)] = &[
+    (1, include_str!("0001_init.sql")),
+    (2, include_str!("0002_releases.sql")),
+];
 
 pub trait SqlResultExt<T> {
     fn ipc(self) -> IpcResult<T>;
@@ -178,7 +181,11 @@ pub struct BuildRecord {
     pub client_slug: String,
     pub status: BuildStatus,
     pub config_sha256: String,
+    /// The client version this build produces.
     pub app_version: String,
+    pub release_notes: String,
+    /// The installer is published to the tills as an update.
+    pub publish_update: bool,
     pub commit_sha: Option<String>,
     pub run_id: Option<u64>,
     pub run_url: Option<String>,
@@ -589,25 +596,43 @@ impl Store {
 
     // ── Builds ──────────────────────────────────────────────────────────
 
+    /// Records a new build with the next version of this client:
+    /// `MAJOR.MINOR` of `app_version`, then one more than the highest build
+    /// number this client had in that series (so every build, even a
+    /// failed one, gets a version no till has seen).
     pub fn create_build(
         &self,
         client_id: Uuid,
         config_sha256: &str,
         app_version: &str,
+        release: &ReleaseOptions,
         now: Timestamp,
     ) -> IpcResult<BuildRecord> {
         let conn = self.conn();
         Self::detail(&conn, client_id)?;
+        let series = release_series(app_version)
+            .ok_or_else(|| IpcError::internal(format!("bad app version {app_version}")))?;
+        let previous: Vec<String> = conn
+            .prepare("SELECT app_version FROM builds WHERE client_id = ?1")
+            .ipc()?
+            .query_map([client_id.to_string()], |r| r.get(0))
+            .ipc()?
+            .collect::<rusqlite::Result<_>>()
+            .ipc()?;
+        let version = next_client_version(series, &previous);
         let id = Uuid::now_v7();
         conn.execute(
-            "INSERT INTO builds (id, created_at, updated_at, client_id, status, config_sha256, app_version)
-             VALUES (?1, ?2, ?2, ?3, 'publishing', ?4, ?5)",
+            "INSERT INTO builds (id, created_at, updated_at, client_id, status, config_sha256, app_version,
+                                 release_notes, publish_update)
+             VALUES (?1, ?2, ?2, ?3, 'publishing', ?4, ?5, ?6, ?7)",
             params![
                 id.to_string(),
                 now.to_string(),
                 client_id.to_string(),
                 config_sha256,
-                app_version
+                version,
+                release.release_notes.trim(),
+                release.publish_update,
             ],
         )
         .ipc()?;
@@ -737,8 +762,35 @@ impl Store {
 
 const BUILD_SELECT: &str = "SELECT b.id, b.client_id, c.slug, b.status, b.config_sha256, b.app_version,
     b.commit_sha, b.run_id, b.run_url, b.artifact_id, b.artifact_name, b.artifact_size, b.download_path,
-    b.message, b.created_at, b.updated_at, b.completed_at
+    b.message, b.created_at, b.updated_at, b.completed_at, b.release_notes, b.publish_update
   FROM builds b JOIN clients c ON c.id = b.client_id";
+
+/// Mirrors `ReleaseOptionsSchema`.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct ReleaseOptions {
+    pub release_notes: String,
+    pub publish_update: bool,
+}
+
+/// `MAJOR.MINOR` of a semantic version.
+fn release_series(version: &str) -> Option<(u64, u64)> {
+    let mut parts = version.split('.').map(|p| p.parse::<u64>().ok());
+    Some((parts.next()??, parts.next()??))
+}
+
+/// One more than the highest build number of `series` among `previous`.
+pub fn next_client_version(series: (u64, u64), previous: &[String]) -> String {
+    let highest = previous
+        .iter()
+        .filter_map(|v| {
+            let mut parts = v.split('.').map(|p| p.parse::<u64>().ok());
+            let (major, minor, patch) = (parts.next()??, parts.next()??, parts.next()??);
+            ((major, minor) == series).then_some(patch)
+        })
+        .max()
+        .unwrap_or(0);
+    format!("{}.{}.{}", series.0, series.1, highest + 1)
+}
 
 fn read_build(r: &Row<'_>) -> rusqlite::Result<BuildRecord> {
     Ok(BuildRecord {
@@ -759,6 +811,8 @@ fn read_build(r: &Row<'_>) -> rusqlite::Result<BuildRecord> {
         requested_at: ts_at(r, 14)?,
         updated_at: ts_at(r, 15)?,
         completed_at: opt_ts_at(r, 16)?,
+        release_notes: r.get(17)?,
+        publish_update: r.get(18)?,
     })
 }
 

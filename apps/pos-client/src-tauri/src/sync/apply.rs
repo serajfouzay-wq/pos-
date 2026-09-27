@@ -42,6 +42,8 @@ pub const ENTITIES: &[(&str, Strategy)] = &[
     ("combo_items", Strategy::LastWriteWins),
     ("dining_tables", Strategy::LastWriteWins),
     ("open_orders", Strategy::LastWriteWins),
+    ("shop_settings", Strategy::LastWriteWins),
+    ("kitchen_tickets", Strategy::LastWriteWins),
     ("transactions", Strategy::AppendOnly),
     ("transaction_items", Strategy::AppendOnly),
     ("transaction_payments", Strategy::AppendOnly),
