@@ -1,7 +1,7 @@
 //! Kitchen tickets: what to cook, for which table, which course. Printed on
 //! the kitchen printer when a course is fired (the KDS screen is Phase 8).
 
-use pos_core::time::Timestamp;
+use pos_core::time::{Timestamp, Zone};
 
 use crate::escpos::{Align, EscPos};
 use crate::receipt::{columns_for_paper, format_quantity};
@@ -24,6 +24,8 @@ pub struct KitchenTicket {
     pub server: String,
     pub guests: i64,
     pub at: Timestamp,
+    /// The wall clock the time prints in.
+    pub zone: Zone,
     pub lines: Vec<KitchenLine>,
 }
 
@@ -33,8 +35,7 @@ fn layout(ticket: &KitchenTicket, width: usize) -> Vec<(String, bool, bool)> {
     if let Some(course) = ticket.course {
         out.push((format!("COURSE {course}"), true, false));
     }
-    let time = ticket.at.to_string();
-    let mut meta = format!("{} · {} UTC", ticket.server, &time[11..16]);
+    let mut meta = format!("{} · {}", ticket.server, ticket.zone.format_time(ticket.at));
     if ticket.guests > 0 {
         meta.push_str(&format!(" · {} guests", ticket.guests));
     }
@@ -100,6 +101,7 @@ mod tests {
             server: "Omar".into(),
             guests: 3,
             at: "2026-09-24T19:05:00.000Z".parse().expect("ts"),
+            zone: Zone::Utc,
             lines: vec![
                 KitchenLine {
                     quantity_milli: 2000,

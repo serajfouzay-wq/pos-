@@ -16,10 +16,12 @@
 pub mod app_info;
 pub mod catalog;
 pub mod hardware;
+pub mod history;
 pub mod inventory;
 pub mod license;
 pub mod menu;
 pub mod orders;
+pub mod reports;
 pub mod sales;
 pub mod session;
 pub mod shifts;

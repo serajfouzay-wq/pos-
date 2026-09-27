@@ -17,12 +17,27 @@ import { PrinterAdmin } from '../admin/PrinterAdmin';
 import { ProductsAdmin } from '../admin/ProductsAdmin';
 import { StockAdmin } from '../admin/StockAdmin';
 import { UsersAdmin } from '../admin/UsersAdmin';
+import { AuditScreen } from '../audit/AuditScreen';
+import { DashboardScreen } from '../dashboard/DashboardScreen';
+import { HistoryScreen } from '../history/HistoryScreen';
+import { ReportsScreen } from '../reports/ReportsScreen';
 import { SellScreen } from '../sell/SellScreen';
 import { SyncIndicator } from '../sync/SyncIndicator';
 import { CloseShiftDialog } from '../shift/CloseShiftDialog';
 import { ShiftGate } from '../shift/ShiftGate';
 
-type View = 'sell' | 'products' | 'menu' | 'floor' | 'stock' | 'users' | 'printer';
+type View =
+  | 'sell'
+  | 'history'
+  | 'reports'
+  | 'dashboard'
+  | 'products'
+  | 'menu'
+  | 'floor'
+  | 'stock'
+  | 'users'
+  | 'printer'
+  | 'audit';
 const LOCALE_LABELS: Record<Locale, string> = { en: 'EN', ar: 'ع' };
 
 export function Workspace({ session }: { session: Session }) {
@@ -42,19 +57,44 @@ export function Workspace({ session }: { session: Session }) {
   // itself so the reconciliation result stays on screen after closing.
   const [closingShift, setClosingShift] = useState<ShiftSummary | null>(null);
 
+  // What each role sees follows the permission matrix Rust sent with the
+  // session (Rust re-checks every command). Front of house on the bar;
+  // back office in its menu.
   const views: { id: View; allowed: boolean }[] = [
     { id: 'sell', allowed: true },
+    { id: 'history', allowed: can(session, 'receipt.reprint') },
+    { id: 'reports', allowed: can(session, 'report.view') },
+    { id: 'dashboard', allowed: can(session, 'analytics.view') },
+  ];
+  const backOffice: { id: View; allowed: boolean }[] = [
     { id: 'products', allowed: can(session, 'catalog.manage') },
     { id: 'menu', allowed: business !== 'retail' && can(session, 'catalog.manage') },
     { id: 'floor', allowed: business !== 'retail' && can(session, 'catalog.manage') },
     { id: 'stock', allowed: mayViewStock },
     { id: 'users', allowed: can(session, 'user.manage') },
     { id: 'printer', allowed: can(session, 'settings.manage') },
+    { id: 'audit', allowed: can(session, 'audit.view') },
   ];
+  const office = backOffice.filter((v) => v.allowed);
+  const [menuOpen, setMenuOpen] = useState(false);
   const supported = info.data?.client.locale.supported ?? LOCALES;
 
   const renderView = (shift: ShiftSummary | null) => {
     switch (view) {
+      case 'history':
+        return <HistoryScreen session={session} />;
+      case 'reports':
+        return <ReportsScreen session={session} />;
+      case 'dashboard':
+        return (
+          <DashboardScreen
+            onLowStock={() => {
+              setView('stock');
+            }}
+          />
+        );
+      case 'audit':
+        return <AuditScreen />;
       case 'products':
         return <ProductsAdmin />;
       case 'menu':
@@ -98,6 +138,48 @@ export function Workspace({ session }: { session: Session }) {
               </button>
             ))}
         </nav>
+        {office.length > 0 && (
+          <div className="nav-menu">
+            <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              aria-current={office.some((v) => v.id === view) ? 'page' : undefined}
+              onClick={() => {
+                setMenuOpen(!menuOpen);
+              }}
+            >
+              {office.find((v) => v.id === view) ? t(`nav.${view}`) : t('nav.backOffice')} ▾
+            </button>
+            {menuOpen && (
+              <>
+                <div
+                  className="nav-menu__backdrop"
+                  onClick={() => {
+                    setMenuOpen(false);
+                  }}
+                />
+                <ul className="nav-menu__list" role="menu">
+                  {office.map((v) => (
+                    <li key={v.id} role="none">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        aria-current={view === v.id ? 'page' : undefined}
+                        onClick={() => {
+                          setView(v.id);
+                          setMenuOpen(false);
+                        }}
+                      >
+                        {t(`nav.${v.id}`)}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        )}
         <div className="topbar__status">
           <SyncIndicator />
           {lowCount > 0 && (

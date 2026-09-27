@@ -12,7 +12,7 @@ use std::collections::{HashMap, HashSet};
 use pos_core::config::ClientConfig;
 use pos_core::rbac::{self, Permission, Role};
 use pos_core::sales::OrderType;
-use pos_core::time::Timestamp;
+use pos_core::time::{Timestamp, Zone};
 use pos_core::{IpcError, IpcErrorCode, IpcResult};
 use pos_hardware::kitchen::{KitchenLine, KitchenTicket};
 use rusqlite::Connection;
@@ -423,6 +423,7 @@ pub fn fire(
             server: actor.display_name.clone(),
             guests: current.guests,
             at: now,
+            zone: Zone::System,
             lines,
         },
         order,

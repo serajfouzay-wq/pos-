@@ -16,6 +16,7 @@ export * from './entities/audit';
 export * from './entities/purchasing';
 export * from './entities/menu';
 export * from './entities/orders';
+export * from './entities/reports';
 
 export * from './ipc/contract';
 export * from './ipc/errors';
@@ -24,6 +25,7 @@ export * from './ipc/app-info';
 export * from './ipc/pos-contract';
 export * from './ipc/pos-types';
 export * from './ipc/layout-types';
+export * from './ipc/report-types';
 export * from './ipc/generator-contract';
 export * from './ipc/generator-types';
 export * from './ipc/events';

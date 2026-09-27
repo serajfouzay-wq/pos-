@@ -739,6 +739,79 @@ fn menus_floor_plans_and_open_orders_reach_the_other_till() {
 }
 
 #[test]
+fn refunds_and_z_reports_reach_the_other_till() {
+    use crate::refunds::{self, RefundInput, RefundLine, RefundMethod, ReverseActor};
+    use crate::reports::{self, ReportActor, Window};
+
+    let (_, a, b, cashier, product) = shop();
+    a.open_shift(cashier);
+    let sale = a.sell(cashier, product.meta.id, 3_000, at(10));
+    let line = refunds::original_lines(&a.db.conn(), sale).expect("lines")[0].item_id;
+    let manager = ReverseActor {
+        user_id: cashier,
+        role: Role::Manager,
+    };
+    refunds::refund(
+        &mut a.db.conn(),
+        &manager,
+        &RefundInput {
+            transaction_id: sale,
+            idempotency_key: Uuid::new_v4(),
+            lines: vec![RefundLine {
+                item_id: line,
+                quantity_milli: 1_000,
+            }],
+            method: RefundMethod::Cash,
+            restock: true,
+            reason: "Damaged".into(),
+        },
+        at(20),
+    )
+    .expect("refund");
+    {
+        let conn = a.db.conn();
+        let shift = shifts::current_open(&conn, a.device)
+            .expect("q")
+            .expect("open");
+        shifts::close(&conn, &shift, cashier, 12_500, 10_000, None, at(30)).expect("close");
+    }
+    let by = ReportActor {
+        user_id: cashier,
+        role: Role::Manager,
+        display_name: "Sara".into(),
+    };
+    let z = reports::run_z(&mut a.db.conn(), &by, CurrencyCode::KWD, at(40)).expect("z");
+    a.sync();
+    b.sync();
+
+    // Stock: 3 sold, 1 back — on both tills.
+    assert_eq!(
+        b.product(product.meta.id).expect("p").stock_on_hand_milli,
+        -2_000
+    );
+    let listed = reports::z_list(&b.db.conn(), None, 10, 0).expect("z list");
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].device_id, a.device);
+    assert_eq!(listed[0].net_sales, 2_500);
+    let stored = reports::z_get(&b.db.conn(), listed[0].id).expect("snapshot");
+    assert_eq!(stored, z, "the snapshot survives the round trip");
+    // The shop-wide dashboard on B includes A's trading.
+    let d = reports::dashboard(
+        &b.db.conn(),
+        Window {
+            from: t0(),
+            to: at(3_600),
+            device_id: None,
+        },
+        pos_core::time::Zone::Utc,
+        CurrencyCode::KWD,
+    )
+    .expect("dashboard");
+    assert_eq!((d.totals.sale_count, d.totals.refund_count), (1, 1));
+    assert_eq!(d.totals.net_sales, 2_500);
+}
+
+#[test]
 fn pulls_page_through_everything_and_resume_from_the_cursor() {
     let server = Arc::new(MemoryServer::default());
     let (a, b) = (till(&server, "A"), till(&server, "B"));

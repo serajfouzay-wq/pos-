@@ -46,6 +46,7 @@ pub const ENTITIES: &[(&str, Strategy)] = &[
     ("transaction_items", Strategy::AppendOnly),
     ("transaction_payments", Strategy::AppendOnly),
     ("audit_log", Strategy::AppendOnly),
+    ("z_reports", Strategy::AppendOnly),
     ("stock_movements", Strategy::AdditiveDelta),
     ("loyalty_ledger", Strategy::AdditiveDelta),
 ];

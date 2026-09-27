@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-refund-transaction"
+description = "Enables the refund_transaction command without any pre-configured scope."
+commands.allow = ["refund_transaction"]
+
+[[permission]]
+identifier = "deny-refund-transaction"
+description = "Denies the refund_transaction command without any pre-configured scope."
+commands.deny = ["refund_transaction"]

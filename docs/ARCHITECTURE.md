@@ -537,14 +537,81 @@ grid, cart panel, payment, option picker. Only the composition differs
 locale (Arabic: two, few, many…) reuse that locale's `_other` text rather
 than falling back to English.
 
+### D45 — Refunds and voids are signed rows that point at the sale
+
+A refund or void is a new transaction (`kind = refund | void`,
+`original_transaction_id`). Its header totals and payments are negative, and
+its item rows carry positive quantities and amounts, with the original
+`line_number`. Every report multiplies item figures by the transaction's sign
+(`CASE WHEN kind = 'sale' THEN 1 ELSE -1 END`), so one query sums sales net
+of what came back. Reversals find their sale line by `line_number`, so the
+refundable quantity is sold − already reversed. Nothing on the sale changes.
+
+### D46 — Pro-rata amounts are cumulative shares
+
+Refunding `q` of a line sold as `Q` returns
+`share(amount, before + q) − share(amount, before)` of each amount
+(line total, discount, tax), where `before` is what was already reversed and
+`share` rounds half up in i128. Refunding a line in several goes therefore
+adds up exactly to the line, with no stray fils. Card and wallet refunds are
+capped at what that method still holds (paid − already refunded that way).
+Cash is not capped, because it is how a shop settles any refund.
+`quote_refund` runs the same plan without writing, and the UI shows the
+figure from it instead of doing money arithmetic.
+
+### D47 — Voids only on the open shift
+
+A void cancels a sale as if it never happened. It is allowed only for a
+sale on this till's open shift that has no reversals, and it reverses each
+tender by its own method. Anything older is a refund. This keeps closed
+shifts, and the Z reports built from them, stable.
+
+### D48 — Z reports: per till, numbered, snapshotted, append-only
+
+`run_z_report` requires this till's shifts to be closed. The period runs
+from the previous Z's `period_end + 1 ms` (or from the till's first
+transaction or shift) to now. The numbers come from the same engine as the
+X report. The row stores the totals as columns and the full report as a
+`report` JSON snapshot, so a reprint shows exactly what was closed even
+after later syncs. `z_number` is per device (`UNIQUE(device_id, z_number)`),
+and `grand_total` is the previous grand total plus this period's net sales.
+The table is append-only on both sides (triggers) and syncs with the
+append-only strategy. Running a Z is audited as `report.z_run`. A Z with
+no sales is allowed, so a till can close a quiet day.
+
+### D49 — One reports engine over half-open windows
+
+`reports::totals(conn, window, device)` computes counts, gross, discounts,
+refunds, voids, net, tax per rate and tenders for `[from, to)`. X, Z and
+the dashboard all call it. The dashboard adds hour/day buckets, top
+products, categories, cashiers and order types, and the same totals for the
+previous window of equal length. It is limited to 400 days. The dashboard
+reads the local database, which holds every till's synced rows, so the
+shop-wide view works offline with whatever has arrived.
+
+### D50 — Local time comes from the OS
+
+`pos_core::time::Zone` is `Utc`, `System` or `Fixed(minutes)`. The till
+prints receipts, kitchen tickets and reports with `System`, and buckets the
+dashboard's hours and days in it. The frontend computes ranges from local
+midnight. Stored timestamps stay UTC. The generator's receipt preview uses
+UTC and says so. Tests pin `Fixed(180)`, so they don't depend on the
+machine's zone.
+
+### D51 — Role-based views from the session
+
+The navigation is built from `session.permissions`, which Rust computes
+from the role matrix. History needs `receipt.reprint`, Reports
+`report.view`, Dashboard `analytics.view`, and Audit `audit.view`. The
+back-office screens sit in one menu. Hiding a button is a convenience only:
+every Phase 7 command starts with `authorize` on the same permission.
+
 ## Open items for upcoming phases
 
 - **Arabic receipts (next).** Text-mode ESC/POS cannot render Arabic.
   The plan is to rasterise the receipt layout (shaping + bidi, a bundled
   OFL font) through the existing `GS v 0` path, which logos already use.
-- **Refunds and voids.** The permissions and the append-only model are ready
-  (`kind = refund | void` + `original_transaction_id`); the flow and UI are
-  still to build.
+
 - **Discount rules UI, customers and loyalty, multi-currency tenders.** The
   engine supports discount rules (tested); creating them needs back-office
   UI. Customer and loyalty payloads and foreign-currency tenders are
@@ -552,9 +619,13 @@ than falling back to English.
 - **Outbox retention.** Acknowledged `sync_queue` rows are kept (no hard
   deletes). A later phase can compact old sent rows into an archive table,
   or soft-delete them, once the Z-report period is closed.
-- **Cloud back office.** The mirror tables are ready for dashboards (Phase 7)
-  but are service-role only. Reads for owners need their own RLS policies and
-  an auth story.
+- **Cloud back office.** The dashboard runs on the till, over synced data.
+  An owner view in the browser needs RLS policies on the mirror tables
+  (service-role only today) and an auth story.
+- **Exporting reports.** X/Z and the dashboard are on screen and on paper.
+  CSV/PDF export for the accountant is still to add.
+- **History detail.** The detail panel shows lines, options and totals but
+  not the line notes sent to the kitchen.
 - **Delivering tokens.** The activation code and token are still
   copy-pasted. The generator could push issued tokens to Supabase so tills
   fetch them online, with copy-paste as the offline fallback.
@@ -563,8 +634,6 @@ than falling back to English.
   doesn't warn.
 - **Versions per client.** Builds use the repository's app version; the
   auto-updater (Phase 8) brings per-client release channels.
-- **Local time on paper.** Receipts and kitchen tickets print UTC times; the
-  client config needs a timezone (IANA name) so both print shop time.
 - **Floor plan overlap.** Tables can be placed overlapping on the grid; the
   editor could refuse overlapping cells.
 - **Moving and merging tables.** An order can change table through

@@ -450,6 +450,33 @@
       "append_only": false,
       "sync": "last_write_wins"
     },
+    "z_reports": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "device_id",
+        "z_number",
+        "period_start",
+        "period_end",
+        "run_by",
+        "currency",
+        "sale_count",
+        "refund_count",
+        "void_count",
+        "gross_sales",
+        "discount_total",
+        "refund_total",
+        "void_total",
+        "net_sales",
+        "tax_total",
+        "grand_total",
+        "report"
+      ],
+      "append_only": true,
+      "sync": "append_only"
+    },
     "sync_queue": {
       "columns": [
         "id",

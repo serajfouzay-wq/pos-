@@ -11,13 +11,14 @@
 use std::sync::{Arc, Mutex, OnceLock};
 
 use pos_core::config::ClientConfig;
-use pos_core::time::{Clock, SystemClock};
+use pos_core::time::{Clock, SystemClock, Zone};
 use pos_core::{IpcError, IpcErrorCode, IpcResult};
 use pos_hardware::escpos::{Align, EscPos, DRAWER_KICK};
 use pos_hardware::image::MonoImage;
 use pos_hardware::kitchen::KitchenTicket;
 use pos_hardware::label::ProductLabel;
 use pos_hardware::receipt::{render_escpos, ReceiptTemplate};
+use pos_hardware::report::ReportDoc;
 use pos_hardware::transport::{self, DiscoveredPrinter, PrinterTarget, TransportError};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
@@ -90,8 +91,12 @@ pub struct PrintService {
     listener: OnceLock<Listener>,
 }
 
+/// The till prints its own local time.
 pub fn template_for(client: &ClientConfig, logo: Option<MonoImage>) -> ReceiptTemplate {
-    ReceiptTemplate::for_client(client, logo)
+    ReceiptTemplate {
+        zone: Zone::System,
+        ..ReceiptTemplate::for_client(client, logo)
+    }
 }
 
 impl PrintService {
@@ -233,6 +238,26 @@ impl PrintService {
         let result = self.send_chain(&chain, &bytes);
         self.publish(db);
         result.map_err(hardware_error)
+    }
+
+    /// An X/Z report on the receipt printer chain (not queued: it can be
+    /// printed again from the report history).
+    pub fn print_report(&self, db: &Database, doc: &ReportDoc) -> IpcResult<()> {
+        let chain = Self::settings(&db.conn())?.chain;
+        if chain.is_empty() {
+            return Err(IpcError::new(
+                IpcErrorCode::Hardware,
+                "No printer is set up.",
+            ));
+        }
+        let bytes = pos_hardware::report::render_escpos(doc, self.template.paper_width_mm);
+        let result = self.send_chain(&chain, &bytes);
+        self.publish(db);
+        result.map_err(hardware_error)
+    }
+
+    pub fn paper_width_mm(&self) -> u16 {
+        self.template.paper_width_mm
     }
 
     /// Sends a kitchen ticket to the kitchen printer. `Ok(false)` when none

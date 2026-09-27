@@ -3,11 +3,14 @@
 
 mod commands;
 mod db;
+mod history;
 mod inventory;
 mod license;
 mod open_orders;
 mod printing;
+mod refunds;
 mod repo;
+mod reports;
 mod sample_catalog;
 mod session;
 mod state;
@@ -115,6 +118,19 @@ pub fn run() {
             commands::orders::pay_open_order,
             commands::inventory::adjust_stock,
             commands::inventory::print_product_labels,
+            commands::history::list_transactions,
+            commands::history::quote_refund,
+            commands::history::get_transaction,
+            commands::history::refund_transaction,
+            commands::history::void_transaction,
+            commands::reports::get_x_report,
+            commands::reports::run_z_report,
+            commands::reports::list_z_reports,
+            commands::reports::get_z_report,
+            commands::reports::print_report,
+            commands::reports::list_shifts,
+            commands::reports::get_dashboard_metrics,
+            commands::reports::list_audit_log,
         ])
         .run(tauri::generate_context!())
         .expect("failed to start the POS client");

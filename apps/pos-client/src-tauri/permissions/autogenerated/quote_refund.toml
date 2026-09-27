@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-quote-refund"
+description = "Enables the quote_refund command without any pre-configured scope."
+commands.allow = ["quote_refund"]
+
+[[permission]]
+identifier = "deny-quote-refund"
+description = "Denies the quote_refund command without any pre-configured scope."
+commands.deny = ["quote_refund"]

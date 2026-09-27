@@ -19,6 +19,7 @@ import {
  */
 export const TRANSACTION_KINDS = ['sale', 'refund', 'void'] as const;
 export const TransactionKindSchema = z.enum(TRANSACTION_KINDS);
+export type TransactionKind = z.infer<typeof TransactionKindSchema>;
 
 export const ORDER_TYPES = ['counter', 'dine_in', 'takeaway', 'delivery'] as const;
 export const OrderTypeSchema = z.enum(ORDER_TYPES);

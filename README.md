@@ -182,11 +182,16 @@ DENO_NO_PACKAGE_JSON=1 deno run --no-config -A supabase/functions/dev-server.ts
    is down, receipts queue and print once it's back. 6. **Close shift**: count
    the drawer blind, then see expected cash and variance.
 
-| Role    | Can                                                                    |
-| ------- | ---------------------------------------------------------------------- |
-| Cashier | Sell, print the receipt, "No sale" drawer open                         |
-| Manager | + open/close shifts, reprint receipts, discounts, refunds/voids (soon) |
-| Owner   | Everything: products, staff, printer settings, reports                 |
+| Role    | Can                                                                              |
+| ------- | -------------------------------------------------------------------------------- |
+| Cashier | Sell, print the receipt, "No sale" drawer open                                   |
+| Manager | + open/close shifts, discounts, history and reprints, refunds/voids, X/Z, shifts |
+| Owner   | Everything: products, staff, printer settings, dashboard, audit log              |
+
+The top bar shows only what the signed-in role may use: **Sell**, **History**,
+**Reports**, **Dashboard**, and the **Back office ▾** menu (Products, Menu,
+Floor, Stock, Staff, Printer, Audit). Rust checks the permission on every
+command anyway.
 
 ## Selling by business type
 
@@ -218,6 +223,36 @@ for placing tables on the 24 × 16 grid, and option groups per product in
 **Products**. Tabs and tables are shared between the shop's tills through
 sync.
 
+## History, reports and the audit trail
+
+- **History** (manager) lists sales, refunds and voids with date, type and
+  receipt/cashier search. Open one to reprint it, or to refund or void it.
+  Both print a receipt of their own, and the sale shows what came back.
+  - **Refund**: pick quantities per line (weighed goods take a weight), the
+    tender (cash, card, wallet) and whether to put the stock back, plus a
+    reason. Rust prices the refund from the stored sale, so discounts and tax
+    come back pro rata. Card and wallet refunds can't exceed what was paid
+    that way.
+  - **Void**: reverses the whole sale, tender by tender. Only for a sale on
+    this till's open shift that has no refunds yet; later, use a refund.
+- **Reports** (manager): the **X report** is a live read of the till since
+  its last Z (sales, discounts, refunds, voids, tenders, tax per rate, the
+  drawer and each shift's variance). **Run Z** closes the period: it needs
+  every shift closed, gets the next Z number for this till, and stores a
+  snapshot that can be printed again from the **Z reports** tab. **Shifts**
+  lists every shift with expected, counted and variance.
+- **Dashboard** (owner): today / yesterday / last 7 / last 30 days for the
+  whole shop (every till that has synced) or one till. Net sales and sale
+  count compared with the previous period, average ticket, refunds, voids,
+  sales by hour and by day, top products, categories, tenders, cashiers,
+  order types, and the low-stock count.
+- **Audit log** (owner): every sensitive action (refunds, voids, Z runs,
+  discounts, shift close, stock and staff changes, sign-ins) with who, when
+  and the before/after detail, filterable by action and person.
+
+Times on screen, receipts, kitchen tickets and reports follow the Windows
+time zone.
+
 ## Ground rules
 
 These are enforced by tooling where possible — see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -246,5 +281,5 @@ These are enforced by tooling where possible — see [`docs/ARCHITECTURE.md`](do
 | 4     | Offline sync engine: outbox, background worker, conflict resolution     | ✅     |
 | 5     | Generator: client dashboard, asset upload, GitHub Actions build trigger | ✅     |
 | 6     | Business-type layouts: retail / cafe / restaurant                       | ✅     |
-| 7     | Analytics, Z-reports, audit trail, role-based views                     |        |
+| 7     | Analytics, Z-reports, audit trail, role-based views                     | ✅     |
 | 8     | Polish: animations, KDS window, loyalty, auto-updater                   |        |

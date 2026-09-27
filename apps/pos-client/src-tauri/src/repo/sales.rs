@@ -393,64 +393,64 @@ pub fn quote_view(quote: Quote, currency: CurrencyCode) -> QuoteView {
 }
 
 #[derive(Debug, Clone, Serialize)]
-struct TransactionRow {
+pub(crate) struct TransactionRow {
     #[serde(flatten)]
-    meta: Meta,
-    kind: TransactionKind,
-    original_transaction_id: Option<Uuid>,
-    receipt_number: String,
-    device_id: Uuid,
-    shift_id: Uuid,
-    cashier_id: Uuid,
-    approved_by: Option<Uuid>,
-    customer_id: Option<Uuid>,
-    order_type: OrderType,
-    table_label: Option<String>,
-    currency: CurrencyCode,
-    subtotal: i64,
-    discount_total: i64,
-    tax_total: i64,
-    total: i64,
-    loyalty_points_earned: i64,
-    loyalty_points_redeemed: i64,
-    notes: Option<String>,
-    idempotency_key: Uuid,
-    occurred_at: Timestamp,
+    pub(crate) meta: Meta,
+    pub(crate) kind: TransactionKind,
+    pub(crate) original_transaction_id: Option<Uuid>,
+    pub(crate) receipt_number: String,
+    pub(crate) device_id: Uuid,
+    pub(crate) shift_id: Uuid,
+    pub(crate) cashier_id: Uuid,
+    pub(crate) approved_by: Option<Uuid>,
+    pub(crate) customer_id: Option<Uuid>,
+    pub(crate) order_type: OrderType,
+    pub(crate) table_label: Option<String>,
+    pub(crate) currency: CurrencyCode,
+    pub(crate) subtotal: i64,
+    pub(crate) discount_total: i64,
+    pub(crate) tax_total: i64,
+    pub(crate) total: i64,
+    pub(crate) loyalty_points_earned: i64,
+    pub(crate) loyalty_points_redeemed: i64,
+    pub(crate) notes: Option<String>,
+    pub(crate) idempotency_key: Uuid,
+    pub(crate) occurred_at: Timestamp,
 }
 
 #[derive(Debug, Clone, Serialize)]
-struct ItemRow {
+pub(crate) struct ItemRow {
     #[serde(flatten)]
-    meta: Meta,
-    transaction_id: Uuid,
-    line_number: i64,
-    product_id: Uuid,
-    product_name: String,
-    sku: Option<String>,
-    unit_price: i64,
-    quantity_milli: i64,
-    modifiers: Vec<ModifierLine>,
-    discount_amount: i64,
-    tax_rate_bps: i64,
-    tax_amount: i64,
-    line_total: i64,
-    course: Option<i64>,
-    note: Option<String>,
+    pub(crate) meta: Meta,
+    pub(crate) transaction_id: Uuid,
+    pub(crate) line_number: i64,
+    pub(crate) product_id: Uuid,
+    pub(crate) product_name: String,
+    pub(crate) sku: Option<String>,
+    pub(crate) unit_price: i64,
+    pub(crate) quantity_milli: i64,
+    pub(crate) modifiers: Vec<ModifierLine>,
+    pub(crate) discount_amount: i64,
+    pub(crate) tax_rate_bps: i64,
+    pub(crate) tax_amount: i64,
+    pub(crate) line_total: i64,
+    pub(crate) course: Option<i64>,
+    pub(crate) note: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
-struct PaymentRow {
+pub(crate) struct PaymentRow {
     #[serde(flatten)]
-    meta: Meta,
-    transaction_id: Uuid,
-    method: PaymentMethod,
-    amount: i64,
-    tendered_currency: CurrencyCode,
-    tendered_amount: i64,
-    rate_numerator: Option<i64>,
-    rate_denominator: Option<i64>,
-    change_given: i64,
-    reference: Option<String>,
+    pub(crate) meta: Meta,
+    pub(crate) transaction_id: Uuid,
+    pub(crate) method: PaymentMethod,
+    pub(crate) amount: i64,
+    pub(crate) tendered_currency: CurrencyCode,
+    pub(crate) tendered_amount: i64,
+    pub(crate) rate_numerator: Option<i64>,
+    pub(crate) rate_denominator: Option<i64>,
+    pub(crate) change_given: i64,
+    pub(crate) reference: Option<String>,
 }
 
 pub struct SaleActor {
@@ -466,7 +466,7 @@ pub struct CreatedSale {
     pub includes_cash: bool,
 }
 
-fn find_by_key(conn: &Connection, key: Uuid) -> IpcResult<Option<Uuid>> {
+pub(crate) fn find_by_key(conn: &Connection, key: Uuid) -> IpcResult<Option<Uuid>> {
     conn.query_row(
         "SELECT id FROM transactions WHERE idempotency_key = ?1",
         [key.to_string()],
@@ -534,18 +534,11 @@ pub fn create_in(
         .collect();
     let settlement = tender::settle(quote.total, &tenders).map_err(|e| invalid(e.to_string()))?;
 
-    let sequence: i64 = tx
-        .query_row(
-            "SELECT count(*) FROM transactions WHERE device_id = ?1",
-            [device_id.to_string()],
-            |r| r.get(0),
-        )
-        .ipc()?;
     let row = TransactionRow {
         meta: Meta::new(now),
         kind: TransactionKind::Sale,
         original_transaction_id: None,
-        receipt_number: format!("{}-{:06}", device::receipt_prefix(device_id), sequence + 1),
+        receipt_number: next_receipt_number(tx, device_id)?,
         device_id,
         shift_id: shift.meta.id,
         cashier_id: actor.user_id,
@@ -564,41 +557,7 @@ pub fn create_in(
         idempotency_key: payload.idempotency_key,
         occurred_at: now,
     };
-    tx.execute(
-        "INSERT INTO transactions (id, created_at, updated_at, kind, original_transaction_id, receipt_number,
-            device_id, shift_id, cashier_id, approved_by, customer_id, order_type, table_label, currency,
-            subtotal, discount_total, tax_total, total, loyalty_points_earned, loyalty_points_redeemed,
-            notes, idempotency_key, occurred_at)
-         VALUES (?1, ?2, ?2, ?3, NULL, ?4, ?5, ?6, ?7, NULL, NULL, ?8, ?9, ?10, ?11, ?12, ?13, ?14, 0, 0, ?15, ?16, ?2)",
-        params![
-            row.meta.id.to_string(),
-            now.to_string(),
-            enum_str(&row.kind),
-            row.receipt_number,
-            device_id.to_string(),
-            shift.meta.id.to_string(),
-            actor.user_id.to_string(),
-            enum_str(&row.order_type),
-            row.table_label,
-            base.as_str(),
-            row.subtotal,
-            row.discount_total,
-            row.tax_total,
-            row.total,
-            row.notes,
-            row.idempotency_key.to_string(),
-        ],
-    )
-    .ipc()?;
-    outbox::record(
-        tx,
-        "transactions",
-        EventType::Append,
-        row.meta.id,
-        &row,
-        now,
-    )
-    .ipc()?;
+    insert_transaction(tx, &row)?;
 
     let audit_actor = Actor {
         user_id: actor.user_id,
@@ -629,40 +588,7 @@ pub fn create_in(
             course: item.course,
             note: item.note.clone().filter(|n| !n.trim().is_empty()),
         };
-        tx.execute(
-            "INSERT INTO transaction_items (id, created_at, updated_at, transaction_id, line_number, product_id,
-                product_name, sku, unit_price, quantity_milli, modifiers, discount_amount, tax_rate_bps,
-                tax_amount, line_total, course, note)
-             VALUES (?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?16, ?10, ?11, ?12, ?13, ?14, ?15)",
-            params![
-                item_row.meta.id.to_string(),
-                now.to_string(),
-                row.meta.id.to_string(),
-                item_row.line_number,
-                item_row.product_id.to_string(),
-                item_row.product_name,
-                item_row.sku,
-                item_row.unit_price,
-                item_row.quantity_milli,
-                item_row.discount_amount,
-                item_row.tax_rate_bps,
-                item_row.tax_amount,
-                item_row.line_total,
-                item_row.course,
-                item_row.note,
-                serde_json::to_string(&item_row.modifiers).unwrap_or_else(|_| "[]".into()),
-            ],
-        )
-        .ipc()?;
-        outbox::record(
-            tx,
-            "transaction_items",
-            EventType::Append,
-            item_row.meta.id,
-            &item_row,
-            now,
-        )
-        .ipc()?;
+        insert_item(tx, &item_row)?;
 
         let tracks_stock = catalog::get(tx, line.product_id)
             .ipc()?
@@ -694,32 +620,7 @@ pub fn create_in(
             change_given: applied.change_given,
             reference: applied.reference.clone(),
         };
-        tx.execute(
-            "INSERT INTO transaction_payments (id, created_at, updated_at, transaction_id, method, amount,
-                tendered_currency, tendered_amount, change_given, reference)
-             VALUES (?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            params![
-                payment.meta.id.to_string(),
-                now.to_string(),
-                row.meta.id.to_string(),
-                enum_str(&payment.method),
-                payment.amount,
-                base.as_str(),
-                payment.tendered_amount,
-                payment.change_given,
-                payment.reference,
-            ],
-        )
-        .ipc()?;
-        outbox::record(
-            tx,
-            "transaction_payments",
-            EventType::Append,
-            payment.meta.id,
-            &payment,
-            now,
-        )
-        .ipc()?;
+        insert_payment(tx, &payment)?;
     }
 
     audit::record(
@@ -742,7 +643,135 @@ pub fn create_in(
     })
 }
 
-fn payments_include_cash(conn: &Connection, transaction_id: Uuid) -> IpcResult<bool> {
+/// `PREFIX-000124`: per till, one sequence for sales, refunds and voids.
+pub(crate) fn next_receipt_number(tx: &Connection, device_id: Uuid) -> IpcResult<String> {
+    let sequence: i64 = tx
+        .query_row(
+            "SELECT count(*) FROM transactions WHERE device_id = ?1",
+            [device_id.to_string()],
+            |r| r.get(0),
+        )
+        .ipc()?;
+    Ok(format!(
+        "{}-{:06}",
+        device::receipt_prefix(device_id),
+        sequence + 1
+    ))
+}
+
+pub(crate) fn insert_transaction(tx: &Connection, row: &TransactionRow) -> IpcResult<()> {
+    tx.execute(
+        "INSERT INTO transactions (id, created_at, updated_at, kind, original_transaction_id, receipt_number,
+            device_id, shift_id, cashier_id, approved_by, customer_id, order_type, table_label, currency,
+            subtotal, discount_total, tax_total, total, loyalty_points_earned, loyalty_points_redeemed,
+            notes, idempotency_key, occurred_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20,
+            ?21, ?22, ?23)",
+        params![
+            row.meta.id.to_string(),
+            row.meta.created_at.to_string(),
+            row.meta.updated_at.to_string(),
+            enum_str(&row.kind),
+            row.original_transaction_id.map(|id| id.to_string()),
+            row.receipt_number,
+            row.device_id.to_string(),
+            row.shift_id.to_string(),
+            row.cashier_id.to_string(),
+            row.approved_by.map(|id| id.to_string()),
+            row.customer_id.map(|id| id.to_string()),
+            enum_str(&row.order_type),
+            row.table_label,
+            row.currency.as_str(),
+            row.subtotal,
+            row.discount_total,
+            row.tax_total,
+            row.total,
+            row.loyalty_points_earned,
+            row.loyalty_points_redeemed,
+            row.notes,
+            row.idempotency_key.to_string(),
+            row.occurred_at.to_string(),
+        ],
+    )
+    .ipc()?;
+    outbox::record(
+        tx,
+        "transactions",
+        EventType::Append,
+        row.meta.id,
+        row,
+        row.meta.created_at,
+    )
+    .ipc()
+}
+
+pub(crate) fn insert_item(tx: &Connection, row: &ItemRow) -> IpcResult<()> {
+    tx.execute(
+        "INSERT INTO transaction_items (id, created_at, updated_at, transaction_id, line_number, product_id,
+            product_name, sku, unit_price, quantity_milli, modifiers, discount_amount, tax_rate_bps,
+            tax_amount, line_total, course, note)
+         VALUES (?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?16, ?10, ?11, ?12, ?13, ?14, ?15)",
+        params![
+            row.meta.id.to_string(),
+            row.meta.created_at.to_string(),
+            row.transaction_id.to_string(),
+            row.line_number,
+            row.product_id.to_string(),
+            row.product_name,
+            row.sku,
+            row.unit_price,
+            row.quantity_milli,
+            row.discount_amount,
+            row.tax_rate_bps,
+            row.tax_amount,
+            row.line_total,
+            row.course,
+            row.note,
+            serde_json::to_string(&row.modifiers).unwrap_or_else(|_| "[]".into()),
+        ],
+    )
+    .ipc()?;
+    outbox::record(
+        tx,
+        "transaction_items",
+        EventType::Append,
+        row.meta.id,
+        row,
+        row.meta.created_at,
+    )
+    .ipc()
+}
+
+pub(crate) fn insert_payment(tx: &Connection, row: &PaymentRow) -> IpcResult<()> {
+    tx.execute(
+        "INSERT INTO transaction_payments (id, created_at, updated_at, transaction_id, method, amount,
+            tendered_currency, tendered_amount, change_given, reference)
+         VALUES (?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        params![
+            row.meta.id.to_string(),
+            row.meta.created_at.to_string(),
+            row.transaction_id.to_string(),
+            enum_str(&row.method),
+            row.amount,
+            row.tendered_currency.as_str(),
+            row.tendered_amount,
+            row.change_given,
+            row.reference,
+        ],
+    )
+    .ipc()?;
+    outbox::record(
+        tx,
+        "transaction_payments",
+        EventType::Append,
+        row.meta.id,
+        row,
+        row.meta.created_at,
+    )
+    .ipc()
+}
+
+pub(crate) fn payments_include_cash(conn: &Connection, transaction_id: Uuid) -> IpcResult<bool> {
     conn.query_row(
         "SELECT EXISTS (SELECT 1 FROM transaction_payments WHERE transaction_id = ?1 AND method = 'cash')",
         [transaction_id.to_string()],

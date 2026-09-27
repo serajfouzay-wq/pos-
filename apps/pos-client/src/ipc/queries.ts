@@ -1,5 +1,12 @@
 import type {
+  AuditFilter,
   CommandArgs,
+  DashboardRequest,
+  RefundInput,
+  ShiftFilter,
+  TransactionFilter,
+  Uuid,
+  VoidInput,
   ComboInput,
   DiningTableInput,
   LicenseStatus,
@@ -42,6 +49,14 @@ export const queryKeys = {
   syncStatus: ['sync_status'] as const,
   menu: (includeInactive: boolean) => ['menu', includeInactive] as const,
   openOrders: ['open_orders'] as const,
+  transactions: (filter: TransactionFilter) => ['transactions', filter] as const,
+  transaction: (id: string) => ['transaction', id] as const,
+  xReport: ['x_report'] as const,
+  zReports: ['z_reports'] as const,
+  zReport: (id: string) => ['z_report', id] as const,
+  shifts: (filter: ShiftFilter) => ['shifts', filter] as const,
+  dashboard: (request: DashboardRequest) => ['dashboard', request] as const,
+  audit: (filter: AuditFilter) => ['audit', filter] as const,
 };
 
 /** Raised when the UI is loaded in a plain browser instead of the Tauri shell. */
@@ -342,6 +357,9 @@ export function useTestPrinter() {
 /** Local data another till may have changed; refetched after a sync round. */
 const SYNCED_QUERIES = [
   ['products'],
+  ['transactions'],
+  ['z_reports'],
+  ['dashboard'],
   ['menu'],
   queryKeys.openOrders,
   queryKeys.categories,
@@ -584,5 +602,140 @@ export function usePrintLabels() {
   return useMutation({
     mutationFn: (args: { productId: string; copies: number }) =>
       ipc.call('print_product_labels', { product_id: args.productId, copies: args.copies }),
+  });
+}
+
+// ── History, refunds, voids (Phase 7) ──────────────────────────────────────
+
+export function useTransactions(filter: TransactionFilter, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.transactions(filter),
+    queryFn: () => ipc.call('list_transactions', { filter }),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+export function useTransaction(id: Uuid | null) {
+  return useQuery({
+    queryKey: queryKeys.transaction(id ?? ''),
+    queryFn: () => {
+      if (id === null) throw new Error('no transaction');
+      return ipc.call('get_transaction', { transaction_id: id });
+    },
+    enabled: id !== null,
+  });
+}
+
+/** Rust prices the refund from the stored sale; the dialog shows this. */
+export function useRefundQuote(input: RefundInput | null) {
+  return useQuery({
+    queryKey: ['refund_quote', input],
+    queryFn: () => {
+      if (input === null) throw new Error('nothing to quote');
+      return ipc.call('quote_refund', { input });
+    },
+    enabled: input !== null && input.lines.length > 0,
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+}
+
+function useReversed() {
+  const queryClient = useQueryClient();
+  return () => {
+    for (const key of ['transactions', 'transaction', 'x_report', 'dashboard', 'products']) {
+      void queryClient.invalidateQueries({ queryKey: [key] });
+    }
+    void queryClient.invalidateQueries({ queryKey: queryKeys.shift });
+  };
+}
+
+export function useRefund() {
+  const reversed = useReversed();
+  return useMutation({
+    mutationFn: (input: RefundInput) => ipc.call('refund_transaction', { input }),
+    onSuccess: reversed,
+  });
+}
+
+export function useVoid() {
+  const reversed = useReversed();
+  return useMutation({
+    mutationFn: (input: VoidInput) => ipc.call('void_transaction', { input }),
+    onSuccess: reversed,
+  });
+}
+
+// ── Reports ────────────────────────────────────────────────────────────────
+
+export function useXReport(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.xReport,
+    queryFn: () => ipc.call('get_x_report'),
+    enabled,
+    refetchInterval: 30_000,
+  });
+}
+
+export function useRunZ() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => ipc.call('run_z_report'),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.xReport });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.zReports });
+      void queryClient.invalidateQueries({ queryKey: ['shifts'] });
+    },
+  });
+}
+
+export function useZReports(deviceId: Uuid | null = null) {
+  return useQuery({
+    queryKey: [...queryKeys.zReports, deviceId],
+    queryFn: () => ipc.call('list_z_reports', { device_id: deviceId, limit: 200, offset: 0 }),
+  });
+}
+
+export function useZReport(id: Uuid | null) {
+  return useQuery({
+    queryKey: queryKeys.zReport(id ?? ''),
+    queryFn: () => {
+      if (id === null) throw new Error('no report');
+      return ipc.call('get_z_report', { z_report_id: id });
+    },
+    enabled: id !== null,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+}
+
+export function usePrintReport() {
+  return useMutation({
+    mutationFn: (zReportId: Uuid | null) => ipc.call('print_report', { z_report_id: zReportId }),
+  });
+}
+
+export function useShifts(filter: ShiftFilter) {
+  return useQuery({
+    queryKey: queryKeys.shifts(filter),
+    queryFn: () => ipc.call('list_shifts', { filter }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useDashboard(request: DashboardRequest) {
+  return useQuery({
+    queryKey: queryKeys.dashboard(request),
+    queryFn: () => ipc.call('get_dashboard_metrics', { request }),
+    placeholderData: keepPreviousData,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useAuditLog(filter: AuditFilter) {
+  return useQuery({
+    queryKey: queryKeys.audit(filter),
+    queryFn: () => ipc.call('list_audit_log', { filter }),
+    placeholderData: keepPreviousData,
   });
 }

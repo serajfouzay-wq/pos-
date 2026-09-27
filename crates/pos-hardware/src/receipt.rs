@@ -6,6 +6,7 @@ use pos_core::currency::CurrencyCode;
 use pos_core::money::{to_decimal_string, MinorUnits};
 use pos_core::receipt::Receipt;
 use pos_core::sales::{PaymentMethod, TransactionKind};
+use pos_core::time::Zone;
 
 use crate::escpos::{Align, EscPos};
 use crate::image::MonoImage;
@@ -20,6 +21,8 @@ pub struct ReceiptTemplate {
     pub tax_number: Option<String>,
     pub paper_width_mm: u16,
     pub logo: Option<MonoImage>,
+    /// How the date prints (the till: its own zone; previews: UTC).
+    pub zone: Zone,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,6 +52,7 @@ impl ReceiptTemplate {
                 .flatten(),
             paper_width_mm: receipt.paper_width_mm,
             logo,
+            zone: Zone::Utc,
         }
     }
 }
@@ -81,7 +85,7 @@ fn bold(text: impl Into<String>, align: Align) -> Block {
 }
 
 /// `left ....... right` in exactly `width` characters (left side truncated).
-fn two_columns(left: &str, right: &str, width: usize) -> String {
+pub(crate) fn two_columns(left: &str, right: &str, width: usize) -> String {
     let right_len = right.chars().count();
     let room = width.saturating_sub(right_len + 1);
     let left: String = left.chars().take(room).collect();
@@ -89,7 +93,7 @@ fn two_columns(left: &str, right: &str, width: usize) -> String {
     format!("{left}{}{right}", " ".repeat(pad))
 }
 
-fn wrap(text: &str, width: usize) -> Vec<String> {
+pub(crate) fn wrap(text: &str, width: usize) -> Vec<String> {
     let mut lines = Vec::new();
     let mut current = String::new();
     for word in text.split_whitespace() {
@@ -169,9 +173,8 @@ fn layout(receipt: &Receipt, template: &ReceiptTemplate, copy: bool) -> Vec<Bloc
         two_columns("Receipt", &receipt.receipt_number, width),
         Align::Left,
     ));
-    // 2026-09-23T10:15:30.123Z → 2026-09-23 10:15 UTC
-    let issued = receipt.issued_at.to_string();
-    let issued = format!("{} {} UTC", &issued[..10], &issued[11..16]);
+    // 2026-09-23T10:15:30.123Z → 2026-09-23 13:15 (till time) / … 10:15 UTC
+    let issued = template.zone.format_minutes(receipt.issued_at);
     out.push(text(two_columns("Date", &issued, width), Align::Left));
     out.push(text(
         two_columns("Cashier", &receipt.cashier_name, width),
@@ -444,6 +447,7 @@ mod tests {
             tax_number: Some("KW-123".into()),
             paper_width_mm: 58,
             logo: None,
+            zone: Zone::Utc,
         }
     }
 

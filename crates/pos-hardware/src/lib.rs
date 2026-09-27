@@ -17,4 +17,5 @@ pub mod image;
 pub mod kitchen;
 pub mod label;
 pub mod receipt;
+pub mod report;
 pub mod transport;

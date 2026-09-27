@@ -64,6 +64,19 @@ const COMMANDS: &[&str] = &[
     "pay_open_order",
     "adjust_stock",
     "print_product_labels",
+    "list_transactions",
+    "quote_refund",
+    "get_transaction",
+    "refund_transaction",
+    "void_transaction",
+    "get_x_report",
+    "run_z_report",
+    "list_z_reports",
+    "get_z_report",
+    "print_report",
+    "list_shifts",
+    "get_dashboard_metrics",
+    "list_audit_log",
 ];
 
 fn main() {

@@ -7,7 +7,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-use chrono::{DateTime, Duration, SubsecRound, TimeZone, Utc};
+use chrono::{DateTime, Duration, Local, NaiveDateTime, Offset, SubsecRound, TimeZone, Utc};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 const FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.3fZ";
@@ -80,6 +80,61 @@ impl<'de> Deserialize<'de> for Timestamp {
     }
 }
 
+/// Which wall clock a printout or a report uses. Storage is always UTC; this
+/// only decides how a moment is shown or which local day/hour it falls in.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum Zone {
+    /// Printed with a `UTC` suffix (previews made away from the shop).
+    #[default]
+    Utc,
+    /// The till's own time zone, daylight saving included.
+    System,
+    /// A fixed offset in minutes east of UTC (tests, reproducible output).
+    Fixed(i32),
+}
+
+impl Zone {
+    /// Minutes east of UTC at that moment.
+    pub fn offset_minutes(self, at: Timestamp) -> i32 {
+        match self {
+            Self::Utc => 0,
+            Self::System => {
+                Local
+                    .offset_from_utc_datetime(&at.0.naive_utc())
+                    .fix()
+                    .local_minus_utc()
+                    / 60
+            }
+            Self::Fixed(minutes) => minutes,
+        }
+    }
+
+    /// The wall-clock date and time at that moment.
+    pub fn local(self, at: Timestamp) -> NaiveDateTime {
+        at.0.naive_utc() + Duration::minutes(i64::from(self.offset_minutes(at)))
+    }
+
+    /// `2026-09-24 14:05`, with ` UTC` appended in the UTC zone.
+    pub fn format_minutes(self, at: Timestamp) -> String {
+        let text = self.local(at).format("%Y-%m-%d %H:%M").to_string();
+        if self == Self::Utc {
+            format!("{text} UTC")
+        } else {
+            text
+        }
+    }
+
+    /// `14:05` (` UTC` in the UTC zone).
+    pub fn format_time(self, at: Timestamp) -> String {
+        let text = self.local(at).format("%H:%M").to_string();
+        if self == Self::Utc {
+            format!("{text} UTC")
+        } else {
+            text
+        }
+    }
+}
+
 /// Source of "now", injectable so time-dependent rules (license expiry,
 /// offline grace) are testable.
 pub trait Clock: Send + Sync {
@@ -105,6 +160,17 @@ mod tests {
         assert_eq!(ts.to_string(), "2026-09-23T10:15:30.123Z");
         let whole = Timestamp::from_unix_seconds(0).expect("epoch");
         assert_eq!(whole.to_string(), "1970-01-01T00:00:00.000Z");
+    }
+
+    #[test]
+    fn zones_shift_the_wall_clock_only() {
+        let ts: Timestamp = "2026-09-23T22:15:30.123Z".parse().expect("valid");
+        assert_eq!(Zone::Utc.format_minutes(ts), "2026-09-23 22:15 UTC");
+        // Kuwait (+03:00) is already the next day.
+        assert_eq!(Zone::Fixed(180).format_minutes(ts), "2026-09-24 01:15");
+        assert_eq!(Zone::Fixed(-300).format_time(ts), "17:15");
+        let offset = Zone::System.offset_minutes(ts);
+        assert!((-14 * 60..=14 * 60).contains(&offset));
     }
 
     #[test]

@@ -131,7 +131,7 @@ pub struct ShiftTotals {
 pub fn totals(conn: &Connection, shift_id: Uuid) -> rusqlite::Result<ShiftTotals> {
     let id = shift_id.to_string();
     let (transaction_count, sales_total) = conn.query_row(
-        "SELECT count(*), COALESCE(SUM(total), 0) FROM transactions WHERE shift_id = ?1",
+        "SELECT COALESCE(SUM(kind = 'sale'), 0), COALESCE(SUM(total), 0) FROM transactions WHERE shift_id = ?1",
         [&id],
         |r| Ok((r.get(0)?, r.get(1)?)),
     )?;
@@ -175,4 +175,59 @@ pub fn close(
     closed.notes = notes;
     persist(conn, &closed, now)?;
     Ok(closed)
+}
+
+/// Shift history, newest first (`from`/`to` bound `opened_at`).
+pub fn list(
+    conn: &Connection,
+    from: Option<Timestamp>,
+    to: Option<Timestamp>,
+    device_id: Option<Uuid>,
+    limit: i64,
+    offset: i64,
+) -> rusqlite::Result<Vec<Shift>> {
+    conn.prepare(&format!(
+        "SELECT {META_COLUMNS}, {COLUMNS} FROM shifts
+         WHERE deleted_at IS NULL AND (?1 IS NULL OR opened_at >= ?1) AND (?2 IS NULL OR opened_at < ?2)
+           AND (?3 IS NULL OR device_id = ?3)
+         ORDER BY opened_at DESC, id DESC LIMIT ?4 OFFSET ?5"
+    ))?
+    .query_map(
+        params![
+            from.map(|t| t.to_string()),
+            to.map(|t| t.to_string()),
+            device_id.map(|d| d.to_string()),
+            limit,
+            offset
+        ],
+        read,
+    )?
+    .collect()
+}
+
+/// This till's shifts that a report period covers: closed within
+/// `[from, to)`, plus the open one when `include_open`.
+pub fn in_period(
+    conn: &Connection,
+    device_id: Uuid,
+    from: Timestamp,
+    to: Timestamp,
+    include_open: bool,
+) -> rusqlite::Result<Vec<Shift>> {
+    conn.prepare(&format!(
+        "SELECT {META_COLUMNS}, {COLUMNS} FROM shifts
+         WHERE deleted_at IS NULL AND device_id = ?1
+           AND ((closed_at >= ?2 AND closed_at < ?3) OR (?4 AND closed_at IS NULL))
+         ORDER BY opened_at, id"
+    ))?
+    .query_map(
+        params![
+            device_id.to_string(),
+            from.to_string(),
+            to.to_string(),
+            include_open
+        ],
+        read,
+    )?
+    .collect()
 }

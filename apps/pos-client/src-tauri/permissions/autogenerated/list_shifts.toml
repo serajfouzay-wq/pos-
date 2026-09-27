@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-list-shifts"
+description = "Enables the list_shifts command without any pre-configured scope."
+commands.allow = ["list_shifts"]
+
+[[permission]]
+identifier = "deny-list-shifts"
+description = "Denies the list_shifts command without any pre-configured scope."
+commands.deny = ["list_shifts"]

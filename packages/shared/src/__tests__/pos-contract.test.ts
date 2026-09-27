@@ -2,7 +2,16 @@ import { describe, expect, it } from 'vitest';
 import fixture from '../../contracts/pos-examples.json';
 import { CategorySchema, ProductSchema } from '../entities/catalog';
 import { UserSchema } from '../entities/people';
-import { PaidOrderSchema, SaleReceiptSchema } from '../ipc/pos-contract';
+import { PaidOrderSchema, SaleReceiptSchema, TransactionDetailSchema } from '../ipc/pos-contract';
+import {
+  AuditPageSchema,
+  DashboardDataSchema,
+  PeriodReportSchema,
+  ReportPrintSchema,
+  ShiftHistoryItemSchema,
+  TransactionSummarySchema,
+  ZReportSummarySchema,
+} from '../ipc/report-types';
 import { FireOutcomeSchema, MenuSchema, OpenOrderViewSchema } from '../ipc/layout-types';
 import {
   DiscoveredPrinterSchema,
@@ -35,6 +44,14 @@ const cases = {
   open_order_view: OpenOrderViewSchema,
   fire_outcome: FireOutcomeSchema,
   paid_order: PaidOrderSchema,
+  transaction_detail: TransactionDetailSchema,
+  transaction_summary: TransactionSummarySchema,
+  period_report: PeriodReportSchema,
+  report_print: ReportPrintSchema,
+  z_report_summary: ZReportSummarySchema,
+  dashboard_data: DashboardDataSchema,
+  audit_page: AuditPageSchema,
+  shift_history_item: ShiftHistoryItemSchema,
 } as const;
 
 describe('POS response contract (Rust → Zod)', () => {
@@ -59,6 +76,23 @@ describe('POS response contract (Rust → Zod)', () => {
     const paid = PaidOrderSchema.parse(fixture.examples.paid_order);
     expect(paid.sale.total).toBe(1_450);
     expect(paid.sale.lines[0]?.modifiers[0]?.name).toBe('Oat');
+  });
+
+  it('pins the Phase 7 behaviour Rust produced', () => {
+    // 2 lattes (2.500), one refunded in cash.
+    const detail = TransactionDetailSchema.parse(fixture.examples.transaction_detail);
+    expect(detail.lines[0]?.refundable_quantity_milli).toBe(1000);
+    expect(detail.reversals[0]?.total).toBe(-1_250);
+    expect(detail.summary.reversed_total).toBe(1_250);
+    const z = PeriodReportSchema.parse(fixture.examples.period_report);
+    expect(z.kind).toBe('z');
+    expect(z.z_number).toBe(1);
+    expect(z.totals.refund_total).toBe(1_250);
+    expect(z.cash.counted).toBe(24_000);
+    const printed = ReportPrintSchema.parse(fixture.examples.report_print);
+    expect(printed.text).toContain('X REPORT');
+    const dashboard = DashboardDataSchema.parse(fixture.examples.dashboard_data);
+    expect(dashboard.by_hour).toHaveLength(24);
   });
 
   it('pins the sale arithmetic Rust produced', () => {

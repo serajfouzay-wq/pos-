@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-run-z-report"
+description = "Enables the run_z_report command without any pre-configured scope."
+commands.allow = ["run_z_report"]
+
+[[permission]]
+identifier = "deny-run-z-report"
+description = "Denies the run_z_report command without any pre-configured scope."
+commands.deny = ["run_z_report"]

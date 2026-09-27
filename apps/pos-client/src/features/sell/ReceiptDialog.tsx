@@ -9,9 +9,11 @@ interface Props {
   receipt: SaleReceipt | null;
   session: Session;
   onNewSale: () => void;
+  /** Label of the closing button (history: "Done"). */
+  doneLabel?: string;
 }
 
-export function ReceiptDialog({ receipt, session, onNewSale }: Props) {
+export function ReceiptDialog({ receipt, session, onNewSale, doneLabel }: Props) {
   const { t } = useTranslation();
   const { format } = useMoney();
   const print = usePrintReceipt();
@@ -23,7 +25,14 @@ export function ReceiptDialog({ receipt, session, onNewSale }: Props) {
   const mayPrint = printedNow ? can(session, 'receipt.reprint') : can(session, 'receipt.print');
 
   return (
-    <Modal open title={t('receipt.title', { number: receipt.receipt_number })}>
+    <Modal
+      open
+      title={
+        receipt.kind === 'sale'
+          ? t('receipt.title', { number: receipt.receipt_number })
+          : t(`receipt.${receipt.kind}Title`, { number: receipt.receipt_number })
+      }
+    >
       <div className="stack receipt-done">
         {receipt.change_due > 0 ? (
           <>
@@ -74,7 +83,7 @@ export function ReceiptDialog({ receipt, session, onNewSale }: Props) {
               onNewSale();
             }}
           >
-            {t('receipt.newSale')}
+            {doneLabel ?? t('receipt.newSale')}
           </button>
         </div>
       </div>

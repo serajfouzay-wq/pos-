@@ -469,7 +469,7 @@ fn pos_response_shapes_match_the_contract_fixture() {
     );
     let created =
         sales::create(&mut w.db.conn(), &cashier(&w), &sale, &config(), now()).expect("sale");
-    let conn = w.db.conn();
+    let mut conn = w.db.conn();
     let quote = sales::quote_view(
         sales::quote(&conn, &sale.items, &[], &config(), now()).expect("quote"),
         CurrencyCode::KWD,
@@ -640,6 +640,107 @@ fn pos_response_shapes_match_the_contract_fixture() {
         )
     };
 
+    // Phase 7: a refund, history, X then Z, the dashboard, audit, shifts.
+    let phase7 = {
+        use crate::commands::reports::{shift_history, ReportPrint, ShiftFilter};
+        use crate::refunds::{self, RefundInput, RefundLine, RefundMethod, ReverseActor};
+        use crate::reports::{self, ReportActor, Window};
+        use crate::{history, repo::audit};
+
+        let at = |s: i64| now().checked_add(Duration::seconds(s)).expect("ts");
+        let line =
+            refunds::original_lines(&conn, created.transaction_id).expect("lines")[0].item_id;
+        refunds::refund(
+            &mut conn,
+            &ReverseActor {
+                user_id: w.manager,
+                role: Role::Manager,
+            },
+            &RefundInput {
+                transaction_id: created.transaction_id,
+                idempotency_key: Uuid::new_v4(),
+                lines: vec![RefundLine {
+                    item_id: line,
+                    quantity_milli: 1000,
+                }],
+                method: RefundMethod::Cash,
+                restock: true,
+                reason: "Spilled".into(),
+            },
+            at(10),
+        )
+        .expect("refund");
+        let by = ReportActor {
+            user_id: w.manager,
+            role: Role::Manager,
+            display_name: "Omar".into(),
+        };
+        let detail = history::detail(&conn, created.transaction_id).expect("detail");
+        let summary = history::list(
+            &conn,
+            &history::TransactionFilter {
+                limit: 5,
+                ..Default::default()
+            },
+        )
+        .expect("list")[0]
+            .clone();
+        let x = reports::x_report(&conn, &by, CurrencyCode::KWD, at(20)).expect("x");
+        let print = ReportPrint {
+            text: pos_hardware::report::render_text(
+                &reports::to_doc(&x, &config(), pos_core::time::Zone::Utc),
+                80,
+            ),
+            report: x,
+            printed: false,
+            print_error: Some("No printer is set up.".into()),
+        };
+        let shift = shifts::current_open(&conn, w.device)
+            .expect("q")
+            .expect("open");
+        shifts::close(&conn, &shift, w.manager, 24_000, 20_000, None, at(30)).expect("close");
+        let z = reports::run_z(&mut conn, &by, CurrencyCode::KWD, at(40)).expect("z");
+        let z_summary = reports::z_list(&conn, None, 5, 0).expect("z list")[0].clone();
+        let dashboard = reports::dashboard(
+            &conn,
+            Window {
+                from: at(-3_600),
+                to: at(3_600),
+                device_id: None,
+            },
+            pos_core::time::Zone::Utc,
+            CurrencyCode::KWD,
+        )
+        .expect("dashboard");
+        let audit_page = audit::list(
+            &conn,
+            &audit::AuditFilter {
+                limit: 5,
+                ..Default::default()
+            },
+        )
+        .expect("audit");
+        let shift_item = shift_history(
+            &conn,
+            &ShiftFilter {
+                limit: 5,
+                ..Default::default()
+            },
+        )
+        .expect("shifts")
+        .remove(0);
+        json!({
+            "transaction_detail": detail,
+            "transaction_summary": summary,
+            "period_report": z,
+            "report_print": print,
+            "z_report_summary": z_summary,
+            "dashboard_data": dashboard,
+            "audit_page": audit_page,
+            "shift_history_item": shift_item,
+        })
+    };
+
     // Map keys are product ids (random per run): pin them for the shape.
     let mut menu_example = serde_json::to_value(&menu_example).expect("menu");
     if let Some(links) = menu_example["product_modifier_groups"].as_object_mut() {
@@ -649,7 +750,7 @@ fn pos_response_shapes_match_the_contract_fixture() {
             links.insert(format!("00000000-0000-4000-8000-{i:012}"), v);
         }
     }
-    let examples = json!({
+    let mut examples = json!({
         "menu": menu_example,
         "fire_outcome": fired_view,
         "paid_order": paid,
@@ -680,6 +781,10 @@ fn pos_response_shapes_match_the_contract_fixture() {
             label: "COM5 (Bluetooth)".into(),
         },
     });
+
+    if let (Some(all), Some(extra)) = (examples.as_object_mut(), phase7.as_object()) {
+        all.extend(extra.clone());
+    }
 
     fn shape(v: &Value) -> Value {
         match v {

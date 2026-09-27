@@ -50,6 +50,19 @@
     "allow-cancel-open-order",
     "allow-pay-open-order",
     "allow-adjust-stock",
-    "allow-print-product-labels"
+    "allow-print-product-labels",
+    "allow-list-transactions",
+    "allow-quote-refund",
+    "allow-get-transaction",
+    "allow-refund-transaction",
+    "allow-void-transaction",
+    "allow-get-x-report",
+    "allow-run-z-report",
+    "allow-list-z-reports",
+    "allow-get-z-report",
+    "allow-print-report",
+    "allow-list-shifts",
+    "allow-get-dashboard-metrics",
+    "allow-list-audit-log"
   ]
 }

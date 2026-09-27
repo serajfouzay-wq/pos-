@@ -40,6 +40,23 @@ import {
 } from './layout-types';
 import { command } from './contract';
 import {
+  AuditFilterSchema,
+  AuditPageSchema,
+  DashboardDataSchema,
+  DashboardRequestSchema,
+  PeriodReportSchema,
+  RefundInputSchema,
+  RefundQuoteSchema,
+  ReportPrintSchema,
+  ShiftFilterSchema,
+  ShiftHistoryItemSchema,
+  TransactionFilterSchema,
+  TransactionLineSchema,
+  TransactionSummarySchema,
+  VoidInputSchema,
+  ZReportSummarySchema,
+} from './report-types';
+import {
   DiscoveredPrinterSchema,
   DisplayNameSchema,
   LoginUserSchema,
@@ -177,36 +194,18 @@ export type ProductFilter = z.input<typeof ProductFilterSchema>;
 
 // ── get_dashboard_metrics ──────────────────────────────────────────────────
 
-export const DateRangeSchema = z
-  .object({ from: TimestampSchema, to: TimestampSchema })
-  .refine((range) => range.from < range.to, { message: '`from` must be before `to`' });
-export type DateRange = z.infer<typeof DateRangeSchema>;
-
-const AmountCountSchema = z.object({ amount: MinorUnitsSchema, count: NonNegativeIntSchema });
-
-export const DashboardDataSchema = z.object({
-  range: DateRangeSchema,
-  currency: CurrencyCodeSchema,
-  gross_sales: MinorUnitsSchema,
-  net_sales: MinorUnitsSchema,
-  tax_total: MinorUnitsSchema,
-  discount_total: MinorUnitsSchema,
-  refund_total: MinorUnitsSchema,
-  transaction_count: NonNegativeIntSchema,
-  average_ticket: MinorUnitsSchema,
-  by_payment_method: z.array(AmountCountSchema.extend({ method: PaymentMethodSchema })),
-  by_hour: z.array(AmountCountSchema.extend({ hour: z.int().min(0).max(23) })),
-  top_products: z.array(
-    z.object({
-      product_id: UuidSchema,
-      name: z.string(),
-      quantity_milli: z.int(),
-      amount: MinorUnitsSchema,
-    }),
-  ),
-  low_stock_count: NonNegativeIntSchema,
+/** `get_transaction`: a stored sale, refund or void with what can still be reversed. */
+export const TransactionDetailSchema = z.object({
+  summary: TransactionSummarySchema,
+  receipt: ReceiptSchema,
+  lines: z.array(TransactionLineSchema),
+  /** Refunds and voids of this sale, oldest first. */
+  reversals: z.array(TransactionSummarySchema),
+  can_refund: z.boolean(),
+  /** Why a void is not possible (null = it is). */
+  void_blocker: z.string().nullable(),
 });
-export type DashboardData = z.infer<typeof DashboardDataSchema>;
+export type TransactionDetail = z.infer<typeof TransactionDetailSchema>;
 
 // ── contract ───────────────────────────────────────────────────────────────
 
@@ -364,7 +363,47 @@ export const POS_IPC = {
     z.null(),
     6,
   ),
-  get_dashboard_metrics: command(z.object({ range: DateRangeSchema }), DashboardDataSchema, 7),
+
+  // Sales history — receipt.reprint; refunds: sale.refund; voids: sale.void.
+  list_transactions: command(
+    z.object({ filter: TransactionFilterSchema }),
+    z.array(TransactionSummarySchema),
+    7,
+  ),
+  get_transaction: command(z.object({ transaction_id: UuidSchema }), TransactionDetailSchema, 7),
+  /** What `refund_transaction` would pay back, without doing it. */
+  quote_refund: command(z.object({ input: RefundInputSchema }), RefundQuoteSchema, 7),
+  /** Takes back chosen quantities of a sale; prints a refund receipt. */
+  refund_transaction: command(z.object({ input: RefundInputSchema }), SaleReceiptSchema, 7),
+  /** Reverses a whole sale of the open shift, tender by tender. */
+  void_transaction: command(z.object({ input: VoidInputSchema }), SaleReceiptSchema, 7),
+
+  // Reports — X / history: report.view; running a Z: report.z_run.
+  /** This till since its last Z, closing nothing. */
+  get_x_report: command(NoArgs, PeriodReportSchema, 7),
+  /** Closes the period (every shift of this till must be closed) and prints it. */
+  run_z_report: command(NoArgs, ReportPrintSchema, 7),
+  list_z_reports: command(
+    z.object({
+      device_id: UuidSchema.nullable(),
+      limit: z.int().min(1).max(500),
+      offset: z.int().nonnegative(),
+    }),
+    z.array(ZReportSummarySchema),
+    7,
+  ),
+  get_z_report: command(z.object({ z_report_id: UuidSchema }), PeriodReportSchema, 7),
+  /** Prints a stored Z again (identical), or the X report now (`null`). */
+  print_report: command(z.object({ z_report_id: UuidSchema.nullable() }), ReportPrintSchema, 7),
+  list_shifts: command(z.object({ filter: ShiftFilterSchema }), z.array(ShiftHistoryItemSchema), 7),
+
+  // Analytics — analytics.view. Audit trail — audit.view.
+  get_dashboard_metrics: command(
+    z.object({ request: DashboardRequestSchema }),
+    DashboardDataSchema,
+    7,
+  ),
+  list_audit_log: command(z.object({ filter: AuditFilterSchema }), AuditPageSchema, 7),
 } as const;
 
 export type PosIpcContract = typeof POS_IPC;

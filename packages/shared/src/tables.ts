@@ -28,6 +28,7 @@ import {
   ProductModifierGroupSchema,
 } from './entities/menu';
 import { OpenOrderSchema } from './entities/orders';
+import { ZReportSchema } from './entities/reports';
 import { CustomerSchema, LoyaltyLedgerEntrySchema, UserRowSchema } from './entities/people';
 import {
   PurchaseOrderItemSchema,
@@ -69,6 +70,7 @@ export const LOCAL_TABLES = {
   combo_items: ComboItemSchema,
   dining_tables: DiningTableSchema,
   open_orders: OpenOrderSchema,
+  z_reports: ZReportSchema,
   sync_queue: SyncQueueRowSchema,
 } as const satisfies Record<string, z.ZodObject>;
 
@@ -82,4 +84,5 @@ export const APPEND_ONLY_TABLES = [
   'stock_movements',
   'loyalty_ledger',
   'audit_log',
+  'z_reports',
 ] as const satisfies readonly LocalTable[];

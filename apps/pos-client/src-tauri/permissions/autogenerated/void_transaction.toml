@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-void-transaction"
+description = "Enables the void_transaction command without any pre-configured scope."
+commands.allow = ["void_transaction"]
+
+[[permission]]
+identifier = "deny-void-transaction"
+description = "Denies the void_transaction command without any pre-configured scope."
+commands.deny = ["void_transaction"]

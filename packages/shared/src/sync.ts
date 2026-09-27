@@ -46,6 +46,7 @@ export const SYNC_ENTITY_STRATEGY = {
   transaction_items: 'append_only',
   transaction_payments: 'append_only',
   audit_log: 'append_only',
+  z_reports: 'append_only',
   stock_movements: 'additive_delta',
   loyalty_ledger: 'additive_delta',
 } as const satisfies Record<string, ConflictStrategy>;

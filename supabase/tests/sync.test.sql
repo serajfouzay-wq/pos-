@@ -332,3 +332,42 @@ begin
   assert (row->>'is_active')::boolean and row->'name_localized'->>'ar' = 'حليب', coalesce(row::text, 'missing');
   raise notice 'ok 11 menu + open orders';
 end $$;
+
+-- 12. Z reports: append-only, snapshot JSON kept, another till sees them ───
+do $$
+declare
+  ids record := (select t from t_ids t);
+  z uuid := '00000000-0000-4000-8000-00000000c001';
+  snapshot jsonb := jsonb_build_object('kind', 'z', 'z_number', 1,
+    'totals', jsonb_build_object('net_sales', 4500, 'by_payment_method', jsonb_build_array(
+      jsonb_build_object('method', 'cash', 'amount', 4500, 'count', 3))));
+  zrow jsonb := jsonb_build_object(
+    'id', z, 'created_at', '2026-09-24T23:00:00.000Z', 'updated_at', '2026-09-24T23:00:00.000Z',
+    'deleted_at', null, 'device_id', ids.dev_a1, 'z_number', 1,
+    'period_start', '2026-09-24T06:00:00.000Z', 'period_end', '2026-09-24T23:00:00.000Z',
+    'run_by', ids.dev_a1, 'currency', 'KWD', 'sale_count', 3, 'refund_count', 1, 'void_count', 0,
+    'gross_sales', 5000, 'discount_total', 0, 'refund_total', 500, 'void_total', 0,
+    'net_sales', 4500, 'tax_total', 0, 'grand_total', 4500, 'report', snapshot);
+  r jsonb;
+  pulled jsonb;
+  row jsonb;
+begin
+  r := public.sync_push(ids.client_a, ids.fp_a1, ids.dev_a1, jsonb_build_array(
+    pg_temp.event('e0000000-0000-4000-8000-00000000c001', 'append', 'z_reports', zrow)));
+  assert jsonb_array_length(r->'acknowledged') = 1, r::text;
+  -- Wrong event type for an append-only table.
+  r := public.sync_push(ids.client_a, ids.fp_a1, ids.dev_a1, jsonb_build_array(
+    pg_temp.event('e0000000-0000-4000-8000-00000000c002', 'upsert', 'z_reports',
+      zrow || jsonb_build_object('id', gen_random_uuid()))));
+  assert jsonb_array_length(r->'rejected') = 1, r::text;
+  pulled := public.sync_pull(ids.client_a, ids.fp_a2, ids.dev_a2, 0, 1000);
+  select c->'row' into row from jsonb_array_elements(pulled->'changes') c where c->>'entity_type' = 'z_reports';
+  assert row->'report' = snapshot and (row->>'grand_total')::bigint = 4500, coalesce(row::text, 'missing');
+  begin
+    update z_reports set net_sales = 0;
+    raise exception 'append-only update allowed';
+  exception when raise_exception then
+    if sqlerrm not like '%append-only%' then raise; end if;
+  end;
+  raise notice 'ok 12 z reports';
+end $$;

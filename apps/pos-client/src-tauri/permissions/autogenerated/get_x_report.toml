@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-x-report"
+description = "Enables the get_x_report command without any pre-configured scope."
+commands.allow = ["get_x_report"]
+
+[[permission]]
+identifier = "deny-get-x-report"
+description = "Denies the get_x_report command without any pre-configured scope."
+commands.deny = ["get_x_report"]
