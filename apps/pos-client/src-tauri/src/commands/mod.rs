@@ -22,6 +22,7 @@ pub mod history;
 pub mod inventory;
 pub mod kitchen;
 pub mod license;
+pub mod memberships;
 pub mod menu;
 pub mod orders;
 pub mod reports;

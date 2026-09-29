@@ -523,3 +523,135 @@ fn points_can_pay_a_whole_bill() {
     payload.loyalty_points_to_redeem = 250;
     assert!(sales::create(&mut shop.db.conn(), &actor, &payload, &shop.config, at(7)).is_err());
 }
+
+#[test]
+fn memberships_are_sold_renewed_priced_and_refunded() {
+    use crate::repo::memberships::{self, MemberFilter, MemberState, PlanInput, Status};
+    let shop = shop();
+    let gold = memberships::save_plan(
+        &shop.db.conn(),
+        PlanInput {
+            id: None,
+            name: "Gold".into(),
+            description: Some("10% off everything, double points".into()),
+            price: 10_000,
+            duration_days: 30,
+            discount_bps: 1_000,
+            points_multiplier_bps: 20_000,
+            color: None,
+            is_active: true,
+        },
+        &shop.config,
+        at(0),
+    )
+    .expect("plan");
+    // The plan is on sale as a product in the Memberships category.
+    let product = catalog::get(&shop.db.conn(), gold.product_id)
+        .expect("q")
+        .expect("product");
+    assert_eq!((product.name.as_str(), product.price), ("Gold", 10_000));
+    assert!(product.category_id.is_some() && !product.track_stock);
+
+    // Selling it needs a customer.
+    let err = shop
+        .sell(vec![item(gold.product_id, 1000)], None, 0, 3)
+        .expect_err("no customer");
+    assert!(err.message.contains("Gold"), "{}", err.message);
+
+    let layla = shop
+        .register("Layla", Some("0912345678"))
+        .expect("layla")
+        .meta
+        .id;
+    let sale = shop
+        .sell(vec![item(gold.product_id, 1000)], Some(layla), 0, 5)
+        .expect("sale");
+    let (membership, _) = memberships::active(&shop.db.conn(), layla, at(6))
+        .expect("q")
+        .expect("member");
+    assert_eq!(membership.transaction_id, Some(sale));
+    assert_eq!(membership.starts_at, at(5));
+    assert_eq!(membership.ends_at, at(5 + 30 * 24 * 60));
+    let card = membership.card_number.clone();
+    assert!(card.len() == 13 && card.starts_with("29"), "{card}");
+    assert_eq!(
+        pos_hardware::label::symbology(&card),
+        Some(pos_hardware::label::Symbology::Ean13),
+        "the card number is a valid barcode"
+    );
+    // The receipt names the membership.
+    let receipt = sales::load_receipt(&shop.db.conn(), sale, true).expect("receipt");
+    assert_eq!(receipt.member.expect("member").plan_name, "Gold");
+
+    // Members pay 10% less and earn double points: 4 teas = 4.000 → 3.600,
+    // 3 points → 6.
+    let quote = price(
+        &shop.db.conn(),
+        &[item(shop.tea, 4000)],
+        &[],
+        Some(LoyaltyRequest {
+            customer_id: layla,
+            redeem_points: 0,
+        }),
+        &shop.config,
+        at(10),
+    )
+    .expect("quote");
+    let member_quote = quote.loyalty.expect("loyalty");
+    assert_eq!(quote.cart.quote.total, 3_600);
+    assert_eq!(member_quote.member.as_ref().expect("member").discount, 400);
+    assert_eq!(member_quote.points_earned, 6);
+
+    // Renewing adds a period after the current one, same card.
+    shop.sell(vec![item(gold.product_id, 1000)], Some(layla), 0, 60)
+        .expect("renew");
+    let periods = memberships::members(
+        &shop.db.conn(),
+        &MemberFilter {
+            query: String::new(),
+            state: None,
+            customer_id: Some(layla),
+            limit: 10,
+        },
+        at(61),
+    )
+    .expect("members");
+    assert_eq!(periods.len(), 2);
+    assert_eq!(periods[0].state, MemberState::Upcoming);
+    assert_eq!(periods[0].membership.starts_at, membership.ends_at);
+    assert_eq!(periods[0].membership.card_number, card);
+
+    // The card finds the customer at the till.
+    let found = customers::search(&shop.db.conn(), &card, 5).expect("search");
+    assert_eq!(found[0].meta.id, layla);
+
+    // Refunding the first sale cancels the period it bought.
+    let line = refunds::original_lines(&shop.db.conn(), sale).expect("lines")[0].item_id;
+    refunds::refund(
+        &mut shop.db.conn(),
+        &shop.reverser(),
+        &RefundInput {
+            transaction_id: sale,
+            idempotency_key: Uuid::now_v7(),
+            lines: vec![RefundLine {
+                item_id: line,
+                quantity_milli: 1000,
+            }],
+            method: RefundMethod::Cash,
+            restock: false,
+            reason: "Changed mind".into(),
+        },
+        at(70),
+    )
+    .expect("refund");
+    let first = memberships::get(&shop.db.conn(), membership.meta.id)
+        .expect("q")
+        .expect("row");
+    assert_eq!(first.status, Status::Cancelled);
+    assert!(
+        memberships::active(&shop.db.conn(), layla, at(71))
+            .expect("q")
+            .is_none(),
+        "the renewal starts later; nothing is active now"
+    );
+}

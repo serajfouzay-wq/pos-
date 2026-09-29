@@ -9,6 +9,8 @@ import {
 } from '../ipc/kitchen-types';
 import { CustomerDetailSchema, LoyaltyProgramSchema } from '../ipc/loyalty-types';
 import { UpdateStatusSchema } from '../ipc/updater-types';
+import { DiscountRuleViewSchema } from '../ipc/discount-types';
+import { MemberRowSchema, MembershipPlanViewSchema } from '../ipc/membership-types';
 import { PaidOrderSchema, SaleReceiptSchema, TransactionDetailSchema } from '../ipc/pos-contract';
 import {
   AuditPageSchema,
@@ -68,6 +70,9 @@ const cases = {
   kitchen_change: KitchenChangeSchema,
   kitchen_display_status: KitchenDisplayStatusSchema,
   update_status: UpdateStatusSchema,
+  discount_rule_view: DiscountRuleViewSchema,
+  membership_plan_view: MembershipPlanViewSchema,
+  member_row: MemberRowSchema,
 } as const;
 
 describe('POS response contract (Rust → Zod)', () => {
@@ -111,19 +116,23 @@ describe('POS response contract (Rust → Zod)', () => {
     expect(dashboard.by_hour).toHaveLength(24);
   });
 
-  it('pins the Phase 8 behaviour Rust produced', () => {
-    // 2 lattes (2.500) for Layla, 100 of her 500 points off (1.000).
+  it('pins the Phase 8 and 9 behaviour Rust produced', () => {
+    // 2 lattes (2.500) for Layla, a Gold member (10% off: 0.250, double
+    // points), 100 of her 500 points off (1.000): pays 1.250, earns 1 × 2.
     const quote = QuoteSchema.parse(fixture.examples.loyalty_quote);
-    expect(quote.total).toBe(1_500);
+    expect(quote.total).toBe(1_250);
+    expect(quote.loyalty?.member?.discount).toBe(250);
+    expect(quote.loyalty?.member?.card_number).toMatch(/^29\d{11}$/);
     expect(quote.loyalty?.redeem_value).toBe(1_000);
-    expect(quote.loyalty?.max_redeem_points).toBe(250);
-    expect(quote.loyalty?.points_earned).toBe(1);
+    expect(quote.loyalty?.max_redeem_points).toBe(225);
+    expect(quote.loyalty?.points_earned).toBe(2);
     const receipt = SaleReceiptSchema.parse(fixture.examples.loyalty_receipt);
     expect(receipt.customer_name).toBe('Layla');
-    expect(receipt.loyalty).toEqual({ earned: 1, redeemed: 100, balance: 401 });
+    expect(receipt.loyalty).toEqual({ earned: 2, redeemed: 100, balance: 402 });
+    expect(receipt.member?.plan_name).toBe('Gold');
     const customer = CustomerSchema.parse(fixture.examples.customer);
     expect(customer.phone).toBe('+96555551234');
-    expect(customer.loyalty_points).toBe(401);
+    expect(customer.loyalty_points).toBe(402);
     const detail = CustomerDetailSchema.parse(fixture.examples.customer_detail);
     expect(detail.ledger.map((l) => l.reason)).toEqual(['earn', 'redeem', 'adjust']);
     const board = KitchenBoardSchema.parse(fixture.examples.kitchen_board);

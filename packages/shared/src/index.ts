@@ -33,6 +33,7 @@ export * from './ipc/loyalty-types';
 export * from './ipc/kitchen-types';
 export * from './ipc/updater-types';
 export * from './ipc/discount-types';
+export * from './ipc/membership-types';
 export * from './ipc/generator-contract';
 export * from './ipc/generator-types';
 export * from './ipc/events';

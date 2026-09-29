@@ -94,7 +94,8 @@ pub fn by_phone(
     .find(|c| Some(c.meta.id) != except))
 }
 
-/// By name, phone digits or email; an empty query lists the latest.
+/// By name, phone digits, email or membership card number; an empty query
+/// lists the latest.
 pub fn search(conn: &Connection, query: &str, limit: i64) -> rusqlite::Result<Vec<Customer>> {
     let limit = limit.clamp(1, 100);
     let query = query.trim();
@@ -121,11 +122,13 @@ pub fn search(conn: &Connection, query: &str, limit: i64) -> rusqlite::Result<Ve
             "SELECT {COLUMNS} FROM customers
              WHERE deleted_at IS NULL
                AND (display_name LIKE ?1 ESCAPE '\\' OR email LIKE ?1 ESCAPE '\\'
-                    OR phone LIKE ?2 ESCAPE '\\')
+                    OR phone LIKE ?2 ESCAPE '\\'
+                    OR id IN (SELECT customer_id FROM memberships
+                              WHERE card_number = ?3 AND deleted_at IS NULL))
              ORDER BY (phone LIKE ?2 ESCAPE '\\') DESC, display_name COLLATE NOCASE
              LIMIT {limit}"
         ),
-        params![like_pattern(query), phone],
+        params![like_pattern(query), phone, query],
     )
 }
 

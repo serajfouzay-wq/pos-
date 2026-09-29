@@ -43,6 +43,14 @@ pub struct LoyaltySummary {
     pub balance: i64,
 }
 
+/// The membership the customer held when the receipt was issued.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct MemberSummary {
+    pub plan_name: String,
+    pub card_number: String,
+    pub ends_at: Timestamp,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Receipt {
     pub transaction_id: Uuid,
@@ -60,6 +68,8 @@ pub struct Receipt {
     pub payments: Vec<ReceiptPayment>,
     pub change_due: MinorUnits,
     pub loyalty: Option<LoyaltySummary>,
+    #[serde(default)]
+    pub member: Option<MemberSummary>,
     /// `false` when the printer was unreachable and the job is queued.
     pub printed: bool,
 }

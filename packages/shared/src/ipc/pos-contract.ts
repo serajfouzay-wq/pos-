@@ -8,6 +8,14 @@ import { z } from 'zod';
 import { CurrencyCodeSchema } from '../currency';
 import { CategorySchema, DiscountRuleSchema, ProductSchema } from '../entities/catalog';
 import { DiscountRuleInputSchema, DiscountRuleViewSchema } from './discount-types';
+import { MembershipPlanSchema, MembershipSchema } from '../entities/membership';
+import {
+  GrantMembershipSchema,
+  MemberFilterSchema,
+  MemberRowSchema,
+  MembershipPlanInputSchema,
+  MembershipPlanViewSchema,
+} from './membership-types';
 import { KitchenTicketSchema } from '../entities/kitchen';
 import { LoyaltySettingsSchema } from '../entities/shop';
 import { CustomerSchema, UserSchema } from '../entities/people';
@@ -175,6 +183,14 @@ export const ReceiptSchema = z.object({
       balance: z.int(),
     })
     .nullable(),
+  /** The membership the customer held (or just bought) when a sale was made. */
+  member: z
+    .object({
+      plan_name: z.string(),
+      card_number: z.string(),
+      ends_at: TimestampSchema,
+    })
+    .nullable(),
   /** `false` when the printer was unreachable and the job sits in the offline print queue. */
   printed: z.boolean(),
 });
@@ -184,6 +200,8 @@ export type Receipt = z.infer<typeof ReceiptSchema>;
 export const SaleReceiptSchema = ReceiptSchema.extend({
   /** Cash sale and the drawer kick reached the printer. */
   drawer_opened: z.boolean(),
+  /** A receipt waits in the print queue (false when receipts print on request). */
+  print_queued: z.boolean(),
 });
 export type SaleReceipt = z.infer<typeof SaleReceiptSchema>;
 
@@ -484,6 +502,21 @@ export const POS_IPC = {
   list_discount_rules: command(NoArgs, z.array(DiscountRuleViewSchema), 9),
   save_discount_rule: command(z.object({ rule: DiscountRuleInputSchema }), DiscountRuleSchema, 9),
   delete_discount_rule: command(z.object({ rule_id: UuidSchema }), z.null(), 9),
+
+  // Memberships — plans and members: customer.lookup (the till shows a
+  // customer's membership); plans, grants and cancellations: customer.manage.
+  // Selling a plan is an ordinary sale of its product.
+  list_membership_plans: command(NoArgs, z.array(MembershipPlanViewSchema), 9),
+  save_membership_plan: command(
+    z.object({ plan: MembershipPlanInputSchema }),
+    MembershipPlanSchema,
+    9,
+  ),
+  delete_membership_plan: command(z.object({ plan_id: UuidSchema }), z.null(), 9),
+  list_members: command(z.object({ filter: MemberFilterSchema }), z.array(MemberRowSchema), 9),
+  customer_memberships: command(z.object({ customer_id: UuidSchema }), z.array(MemberRowSchema), 9),
+  grant_membership: command(z.object({ grant: GrantMembershipSchema }), MembershipSchema, 9),
+  cancel_membership: command(z.object({ membership_id: UuidSchema }), MembershipSchema, 9),
 } as const;
 
 export type PosIpcContract = typeof POS_IPC;

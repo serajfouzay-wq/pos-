@@ -13,13 +13,14 @@ import { Modal } from '../../components/Modal';
 import {
   useAdjustPoints,
   useCustomer,
+  useCustomerMemberships,
   useCustomers,
   useDeleteCustomer,
   useLoyaltyProgram,
   useSaveCustomer,
   useSaveLoyaltyProgram,
 } from '../../ipc/queries';
-import { formatDateTime } from '../../lib/dates';
+import { formatDate, formatDateTime } from '../../lib/dates';
 import { useMoney } from '../../lib/money';
 import { can } from '../../lib/permissions';
 import { useUiStore } from '../../stores/ui';
@@ -328,6 +329,30 @@ function AdjustPoints({ customer, onClose }: { customer: Customer; onClose: () =
   );
 }
 
+/** The customer's current (or latest) membership. */
+function MembershipLine({ customerId }: { customerId: Uuid }) {
+  const { t } = useTranslation();
+  const locale = useUiStore((s) => s.locale);
+  const periods = useCustomerMemberships(customerId);
+  const shown =
+    periods.data?.find((p) => p.state === 'active') ??
+    periods.data?.find((p) => p.state === 'upcoming') ??
+    periods.data?.[0];
+  if (!shown) return null;
+  return (
+    <div className="member-badge">
+      <strong>
+        {t('memberships.member', { plan: shown.plan_name })} ·{' '}
+        {t(`memberships.states.${shown.state}`)}
+      </strong>
+      <span className="muted small">
+        {t('memberships.memberUntil', { date: formatDate(shown.membership.ends_at, locale) })} ·{' '}
+        <span dir="ltr">{shown.membership.card_number}</span>
+      </span>
+    </div>
+  );
+}
+
 function Detail({ id, session, onGone }: { id: Uuid; session: Session; onGone: () => void }) {
   const { t } = useTranslation();
   const { format } = useMoney();
@@ -360,6 +385,7 @@ function Detail({ id, session, onGone }: { id: Uuid; session: Session; onGone: (
           ? t('customers.lastVisit', { when: formatDateTime(d.last_visit_at, locale) })
           : t('customers.never')}
       </p>
+      <MembershipLine customerId={c.id} />
       {manage && (
         <div className="row row--wrap">
           <button

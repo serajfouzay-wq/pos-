@@ -39,7 +39,7 @@ export function ReceiptDialog({ receipt, session, onNewSale, doneLabel }: Props)
   if (!receipt) return null;
 
   const printedNow = print.data?.printed ?? receipt.printed;
-  const queued = print.data?.queued ?? !receipt.printed;
+  const queued = print.data?.queued ?? receipt.print_queued;
   // First print is anyone's; a copy after a successful print is a reprint.
   const mayPrint = printedNow ? can(session, 'receipt.reprint') : can(session, 'receipt.print');
 
@@ -80,6 +80,12 @@ export function ReceiptDialog({ receipt, session, onNewSale, doneLabel }: Props)
           >
             <strong>{receipt.customer_name}</strong>
             {receipt.loyalty && <> · {pointsText(receipt)}</>}
+            {receipt.member && (
+              <>
+                {' · '}
+                {t('memberships.member', { plan: receipt.member.plan_name })}
+              </>
+            )}
           </motion.p>
         )}
         <ul className="status-list">

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-list-members"
+description = "Enables the list_members command without any pre-configured scope."
+commands.allow = ["list_members"]
+
+[[permission]]
+identifier = "deny-list-members"
+description = "Denies the list_members command without any pre-configured scope."
+commands.deny = ["list_members"]

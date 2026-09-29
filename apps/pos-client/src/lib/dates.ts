@@ -51,6 +51,10 @@ export function formatDateTime(at: string, locale: string): string {
   }).format(new Date(at));
 }
 
+export function formatDate(at: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(at));
+}
+
 export function formatTime(at: string, locale: string): string {
   return new Intl.DateTimeFormat(locale, { timeStyle: 'short' }).format(new Date(at));
 }

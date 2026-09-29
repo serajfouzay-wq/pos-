@@ -17,7 +17,7 @@ use uuid::Uuid;
 use crate::repo::audit::{self, Actor};
 use crate::repo::customers::{self, Customer, LedgerReason};
 use crate::repo::sales::{self, PayloadItem, PricedCart};
-use crate::repo::{shop, Meta, SqlResultExt};
+use crate::repo::{memberships, shop, Meta, SqlResultExt};
 
 fn invalid(message: impl Into<String>) -> IpcError {
     IpcError::validation(message)
@@ -42,6 +42,21 @@ pub struct LoyaltyQuote {
     pub redeem_value: i64,
     pub max_redeem_points: i64,
     pub points_earned: i64,
+    /// The membership the customer holds now (its discount is in the bill).
+    pub member: Option<MemberQuote>,
+}
+
+/// Mirrors `MemberQuoteSchema`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct MemberQuote {
+    pub membership_id: Uuid,
+    pub plan_name: String,
+    pub card_number: String,
+    pub ends_at: Timestamp,
+    pub discount_bps: i64,
+    pub points_multiplier_bps: i64,
+    /// What the member discount takes off this bill.
+    pub discount: i64,
 }
 
 /// A priced bill and, when a customer was named, their points on it.
@@ -75,6 +90,37 @@ pub fn price(
         });
     };
     let customer = live_customer(conn, request.customer_id)?;
+    // Members: the plan's discount on the whole bill, before any points.
+    let member = memberships::active(conn, customer.meta.id, now)?;
+    let before_member = cart.quote.discount_total;
+    let cart = match &member {
+        Some((membership, plan)) if plan.discount_bps > 0 => {
+            let mut discounts = cart.discounts.clone();
+            discounts.push(Discount {
+                id: membership.meta.id,
+                value: DiscountValue::Percentage(plan.discount_bps),
+                scope: DiscountScope::Order,
+                min_subtotal: None,
+            });
+            let quote = pricing::price(&cart.lines, &discounts, config.tax.prices_include_tax)
+                .map_err(|e| invalid(e.to_string()))?;
+            PricedCart {
+                quote,
+                discounts,
+                ..cart
+            }
+        }
+        _ => cart,
+    };
+    let member = member.map(|(membership, plan)| MemberQuote {
+        membership_id: membership.meta.id,
+        plan_name: plan.name,
+        card_number: membership.card_number,
+        ends_at: membership.ends_at,
+        discount_bps: plan.discount_bps,
+        points_multiplier_bps: plan.points_multiplier_bps,
+        discount: cart.quote.discount_total - before_member,
+    });
     let rules: LoyaltySettings = shop::effective_loyalty(conn, config).ipc()?;
     let payable = cart.quote.subtotal - cart.quote.discount_total;
     let max = rules.max_redeemable(customer.loyalty_points, payable);
@@ -123,7 +169,12 @@ pub fn price(
     } else {
         cart
     };
-    let points_earned = rules.earned(cart.quote.total, config.currency.base);
+    // Members may earn faster (or slower): the plan's multiplier, floored.
+    let multiplier = member.as_ref().map_or(10_000, |m| m.points_multiplier_bps);
+    let points_earned = rules
+        .earned(cart.quote.total, config.currency.base)
+        .saturating_mul(multiplier)
+        / 10_000;
     Ok(CustomerCart {
         loyalty: Some(LoyaltyQuote {
             customer_id: customer.meta.id,
@@ -134,6 +185,7 @@ pub fn price(
             redeem_value: value,
             max_redeem_points: max,
             points_earned,
+            member,
         }),
         cart,
     })

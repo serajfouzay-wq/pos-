@@ -78,6 +78,9 @@ pub struct SaleReceipt {
     #[serde(flatten)]
     pub(crate) receipt: Receipt,
     pub(crate) drawer_opened: bool,
+    /// A receipt waits in the print queue (false when receipts print only
+    /// on request).
+    pub(crate) print_queued: bool,
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -135,9 +138,11 @@ pub fn complete(
         print_jobs::ever_printed(&db.conn(), created.transaction_id).ipc()?
     };
     let receipt = sales::load_receipt(&db.conn(), created.transaction_id, printed)?;
+    let print_queued = print_jobs::is_queued(&db.conn(), created.transaction_id).ipc()?;
     Ok(SaleReceipt {
         receipt,
         drawer_opened,
+        print_queued,
     })
 }
 

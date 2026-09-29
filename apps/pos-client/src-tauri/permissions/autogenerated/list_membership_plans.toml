@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-list-membership-plans"
+description = "Enables the list_membership_plans command without any pre-configured scope."
+commands.allow = ["list_membership_plans"]
+
+[[permission]]
+identifier = "deny-list-membership-plans"
+description = "Denies the list_membership_plans command without any pre-configured scope."
+commands.deny = ["list_membership_plans"]

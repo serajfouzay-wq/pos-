@@ -213,6 +213,7 @@ pub fn preview_receipt(
         }],
         change_due: tendered - quote.total,
         loyalty: None,
+        member: None,
         printed: true,
     };
 

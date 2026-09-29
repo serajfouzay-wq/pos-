@@ -4,6 +4,7 @@
  * deltas, so tills that sell offline still converge on each balance.
  */
 import { z } from 'zod';
+import { MemberQuoteSchema } from './membership-types';
 import { CustomerSchema, LOYALTY_REASONS } from '../entities/people';
 import { LoyaltySettingsSchema } from '../entities/shop';
 import { MinorUnitsSchema, NonNegativeMinorUnitsSchema } from '../money';
@@ -94,5 +95,7 @@ export const LoyaltyQuoteSchema = z.object({
   /** The most this bill can take (balance, minimum and share rules applied). */
   max_redeem_points: NonNegativeIntSchema,
   points_earned: NonNegativeIntSchema,
+  /** The membership the customer holds now. */
+  member: MemberQuoteSchema.nullable(),
 });
 export type LoyaltyQuote = z.infer<typeof LoyaltyQuoteSchema>;

@@ -73,6 +73,16 @@ pub fn mark_failed(
     Ok(())
 }
 
+/// Is a receipt for this transaction waiting in the queue?
+pub fn is_queued(conn: &Connection, transaction_id: Uuid) -> rusqlite::Result<bool> {
+    conn.query_row(
+        "SELECT EXISTS (SELECT 1 FROM print_jobs
+                        WHERE transaction_id = ?1 AND printed_at IS NULL AND deleted_at IS NULL)",
+        [transaction_id.to_string()],
+        |r| r.get(0),
+    )
+}
+
 /// Has a receipt for this transaction ever come out of a printer?
 pub fn ever_printed(conn: &Connection, transaction_id: Uuid) -> rusqlite::Result<bool> {
     conn.query_row(

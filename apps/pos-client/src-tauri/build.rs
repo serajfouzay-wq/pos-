@@ -96,6 +96,13 @@ const COMMANDS: &[&str] = &[
     "list_discount_rules",
     "save_discount_rule",
     "delete_discount_rule",
+    "list_membership_plans",
+    "save_membership_plan",
+    "delete_membership_plan",
+    "list_members",
+    "customer_memberships",
+    "grant_membership",
+    "cancel_membership",
 ];
 
 fn main() {

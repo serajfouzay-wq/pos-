@@ -124,6 +124,11 @@ impl Zone {
         }
     }
 
+    /// `2026-09-23`, the local date (no zone suffix: a date is a date).
+    pub fn format_date(self, at: Timestamp) -> String {
+        self.local(at).format("%Y-%m-%d").to_string()
+    }
+
     /// `14:05` (` UTC` in the UTC zone).
     pub fn format_time(self, at: Timestamp) -> String {
         let text = self.local(at).format("%H:%M").to_string();

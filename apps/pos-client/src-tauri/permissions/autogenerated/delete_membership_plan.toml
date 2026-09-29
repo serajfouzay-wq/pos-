@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-delete-membership-plan"
+description = "Enables the delete_membership_plan command without any pre-configured scope."
+commands.allow = ["delete_membership_plan"]
+
+[[permission]]
+identifier = "deny-delete-membership-plan"
+description = "Denies the delete_membership_plan command without any pre-configured scope."
+commands.deny = ["delete_membership_plan"]

@@ -30,6 +30,7 @@ import { AuditScreen } from '../audit/AuditScreen';
 import { CustomersScreen } from '../customers/CustomersScreen';
 import { DashboardScreen } from '../dashboard/DashboardScreen';
 import { DiscountsScreen } from '../discounts/DiscountsScreen';
+import { MembershipsScreen } from '../memberships/MembershipsScreen';
 import { HistoryScreen } from '../history/HistoryScreen';
 import { ReportsScreen } from '../reports/ReportsScreen';
 import { SellScreen } from '../sell/SellScreen';
@@ -44,6 +45,7 @@ type View =
   | 'reports'
   | 'dashboard'
   | 'customers'
+  | 'memberships'
   | 'discounts'
   | 'products'
   | 'menu'
@@ -92,6 +94,7 @@ export function Workspace({ session }: { session: Session }) {
   ];
   const backOffice: { id: View; allowed: boolean }[] = [
     { id: 'customers', allowed: can(session, 'customer.lookup') },
+    { id: 'memberships', allowed: can(session, 'customer.lookup') },
     { id: 'products', allowed: can(session, 'catalog.manage') },
     { id: 'discounts', allowed: can(session, 'catalog.manage') },
     { id: 'menu', allowed: business !== 'retail' && can(session, 'catalog.manage') },
@@ -127,6 +130,8 @@ export function Workspace({ session }: { session: Session }) {
         return <ProductsAdmin />;
       case 'discounts':
         return <DiscountsScreen />;
+      case 'memberships':
+        return <MembershipsScreen session={session} />;
       case 'menu':
         return <MenuAdmin />;
       case 'floor':

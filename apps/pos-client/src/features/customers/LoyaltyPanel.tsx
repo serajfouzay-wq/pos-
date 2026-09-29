@@ -1,6 +1,8 @@
 import type { Customer, LoyaltyQuote } from '@pos/shared';
 import { useTranslation } from 'react-i18next';
+import { formatDate } from '../../lib/dates';
 import { useMoney } from '../../lib/money';
+import { useUiStore } from '../../stores/ui';
 
 interface Props {
   customer: Customer | null;
@@ -26,6 +28,7 @@ export function LoyaltyPanel({
 }: Props) {
   const { t } = useTranslation();
   const { format } = useMoney();
+  const locale = useUiStore((s) => s.locale);
 
   if (!customer) {
     return (
@@ -56,6 +59,21 @@ export function LoyaltyPanel({
           ✕
         </button>
       </div>
+      {quote?.member && (
+        <div className="member-badge">
+          <strong>{t('memberships.member', { plan: quote.member.plan_name })}</strong>
+          <span className="muted small">
+            {t('memberships.memberUntil', { date: formatDate(quote.member.ends_at, locale) })}
+            {' · '}
+            <span dir="ltr">{quote.member.card_number}</span>
+          </span>
+          {quote.member.discount > 0 && (
+            <span className="tone--good small">
+              {t('memberships.memberOff', { amount: format(quote.member.discount) })}
+            </span>
+          )}
+        </div>
+      )}
       {quote?.enabled && (
         <>
           <p className="muted small">

@@ -10,7 +10,9 @@ use pos_core::currency::CurrencyCode;
 use pos_core::money;
 use pos_core::pricing::{self, Discount, DiscountScope, DiscountValue, PriceLine, Quote, TaxLine};
 use pos_core::rbac::Role;
-use pos_core::receipt::{LoyaltySummary, ModifierLine, Receipt, ReceiptLine, ReceiptPayment};
+use pos_core::receipt::{
+    LoyaltySummary, MemberSummary, ModifierLine, Receipt, ReceiptLine, ReceiptPayment,
+};
 use pos_core::sales::{OrderType, PaymentMethod, TransactionKind};
 use pos_core::tender::{self, Tender};
 use pos_core::time::Timestamp;
@@ -23,6 +25,7 @@ use super::audit::{self, Actor};
 use super::catalog::{self, StockReason};
 use super::customers;
 use super::discounts::{self, DiscountRule};
+use super::memberships;
 use super::menu;
 pub use super::orders::ComboRef;
 use super::outbox::{self, EventType};
@@ -659,6 +662,17 @@ pub fn create_in(
     if let Some(points) = &points {
         loyalty::record_sale_points(tx, points, row.meta.id, &audit_actor, now)?;
     }
+    // Membership plans sold on this bill start or extend the customer's.
+    let sold: Vec<memberships::SoldPlan> = quote
+        .lines
+        .iter()
+        .map(|l| memberships::SoldPlan {
+            product_id: l.product_id,
+            quantity_milli: l.quantity_milli,
+            line_total: l.line_total,
+        })
+        .collect();
+    memberships::on_sale(tx, row.meta.id, row.customer_id, &sold, &audit_actor, now)?;
 
     audit::record(
         tx,
@@ -860,6 +874,21 @@ pub fn load_receipt(conn: &Connection, transaction_id: Uuid, printed: bool) -> I
         _ => None,
     };
 
+    // A sale shows the membership held (or just bought) when it was issued.
+    let member = match (kind, customer_id) {
+        (TransactionKind::Sale, Some(customer)) => {
+            let at = issued_at
+                .checked_add(chrono::Duration::milliseconds(1))
+                .unwrap_or(issued_at);
+            memberships::active(conn, customer, at)?.map(|(m, plan)| MemberSummary {
+                plan_name: plan.name,
+                card_number: m.card_number,
+                ends_at: m.ends_at,
+            })
+        }
+        _ => None,
+    };
+
     let items: Vec<(ReceiptLine, i64, i64)> = conn
         .prepare(
             "SELECT product_name, quantity_milli, unit_price, discount_amount, line_total, tax_rate_bps, tax_amount,
@@ -938,6 +967,7 @@ pub fn load_receipt(conn: &Connection, transaction_id: Uuid, printed: bool) -> I
         change_due: payments.iter().map(|(_, change)| change).sum(),
         payments: payments.into_iter().map(|(p, _)| p).collect(),
         loyalty,
+        member,
         printed,
     })
 }

@@ -181,6 +181,13 @@ pub fn run() {
             commands::discounts::list_discount_rules,
             commands::discounts::save_discount_rule,
             commands::discounts::delete_discount_rule,
+            commands::memberships::list_membership_plans,
+            commands::memberships::save_membership_plan,
+            commands::memberships::delete_membership_plan,
+            commands::memberships::list_members,
+            commands::memberships::customer_memberships,
+            commands::memberships::grant_membership,
+            commands::memberships::cancel_membership,
         ])
         .build(tauri::generate_context!())
         .expect("failed to start the POS client");

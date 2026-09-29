@@ -35,6 +35,9 @@ import type {
   Locale,
   PrintMode,
   DiscountRuleInput,
+  GrantMembership,
+  MemberFilter,
+  MembershipPlanInput,
 } from '@pos/shared';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
@@ -73,6 +76,9 @@ export const queryKeys = {
   kitchenBoard: ['kitchen_board'] as const,
   updates: ['update_status'] as const,
   discountRules: ['discount_rules'] as const,
+  membershipPlans: ['membership_plans'] as const,
+  members: (filter: MemberFilter) => ['members', filter] as const,
+  customerMemberships: (id: string) => ['customer_memberships', id] as const,
 };
 
 /** Raised when the UI is loaded in a plain browser instead of the Tauri shell. */
@@ -379,6 +385,9 @@ export function useTestPrinter() {
 const SYNCED_QUERIES = [
   ['products'],
   ['discount_rules'],
+  ['membership_plans'],
+  ['members'],
+  ['customer_memberships'],
   ['transactions'],
   ['z_reports'],
   ['dashboard'],
@@ -994,4 +1003,76 @@ export function useDeleteDiscountRule() {
       void queryClient.invalidateQueries({ queryKey: ['quote'] });
     },
   });
+}
+
+// ── Memberships (Phase 9) ──────────────────────────────────────────────────
+
+export function useMembershipPlans(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.membershipPlans,
+    queryFn: () => ipc.call('list_membership_plans'),
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
+export function useMembers(filter: MemberFilter, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.members(filter),
+    queryFn: () => ipc.call('list_members', { filter }),
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useCustomerMemberships(customerId: Uuid | null) {
+  return useQuery({
+    queryKey: queryKeys.customerMemberships(customerId ?? ''),
+    queryFn: () => {
+      if (customerId === null) throw new Error('no customer');
+      return ipc.call('customer_memberships', { customer_id: customerId });
+    },
+    enabled: customerId !== null,
+  });
+}
+
+function useMembershipMutation<A, R>(fn: (args: A) => Promise<R>) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => {
+      for (const key of [
+        queryKeys.membershipPlans,
+        ['members'],
+        ['customer_memberships'],
+        ['products'],
+        ['categories'],
+        ['quote'],
+      ]) {
+        void queryClient.invalidateQueries({ queryKey: key });
+      }
+    },
+  });
+}
+
+export function useSaveMembershipPlan() {
+  return useMembershipMutation((plan: MembershipPlanInput) =>
+    ipc.call('save_membership_plan', { plan }),
+  );
+}
+
+export function useDeleteMembershipPlan() {
+  return useMembershipMutation((planId: Uuid) =>
+    ipc.call('delete_membership_plan', { plan_id: planId }),
+  );
+}
+
+export function useGrantMembership() {
+  return useMembershipMutation((grant: GrantMembership) => ipc.call('grant_membership', { grant }));
+}
+
+export function useCancelMembership() {
+  return useMembershipMutation((membershipId: Uuid) =>
+    ipc.call('cancel_membership', { membership_id: membershipId }),
+  );
 }

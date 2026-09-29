@@ -384,6 +384,9 @@ fn reverse(
             .ipc()?;
         }
     }
+    // Membership periods this sale bought end with the plan line reversed.
+    let reversed: Vec<Uuid> = items.iter().map(|i| i.product_id).collect();
+    crate::repo::memberships::on_reversal(tx, sale.id, &reversed, now)?;
     if let Some(customer) = sale.customer_id {
         for delta in [points_returned, -points_back] {
             customers::add_points(

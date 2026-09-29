@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-customer-memberships"
+description = "Enables the customer_memberships command without any pre-configured scope."
+commands.allow = ["customer_memberships"]
+
+[[permission]]
+identifier = "deny-customer-memberships"
+description = "Denies the customer_memberships command without any pre-configured scope."
+commands.deny = ["customer_memberships"]

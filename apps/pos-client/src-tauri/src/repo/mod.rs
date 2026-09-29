@@ -11,6 +11,7 @@ pub mod catalog;
 pub mod customers;
 pub mod device;
 pub mod discounts;
+pub mod memberships;
 pub mod menu;
 pub mod orders;
 pub mod outbox;

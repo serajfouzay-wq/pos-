@@ -694,6 +694,7 @@ fn pos_response_shapes_match_the_contract_fixture() {
             sale: SaleReceipt {
                 receipt: paid_receipt,
                 drawer_opened: false,
+                print_queued: true,
             },
             order: Some(fired_order),
         };
@@ -852,6 +853,57 @@ fn pos_response_shapes_match_the_contract_fixture() {
             at(52),
         )
         .expect("adjust");
+        // Phase 9: Layla is a Gold member (10% off, double points).
+        let gold = crate::repo::memberships::save_plan(
+            &conn,
+            crate::repo::memberships::PlanInput {
+                id: None,
+                name: "Gold".into(),
+                description: Some("10% off, double points".into()),
+                price: 10_000,
+                duration_days: 365,
+                discount_bps: 1_000,
+                points_multiplier_bps: 20_000,
+                color: Some("#f59e0b".into()),
+                is_active: true,
+            },
+            &config(),
+            at(52),
+        )
+        .expect("plan");
+        crate::repo::memberships::grant(
+            &conn,
+            layla.meta.id,
+            &gold,
+            1,
+            None,
+            0,
+            Some("Opening".into()),
+            &owner,
+            at(52),
+        )
+        .expect("grant");
+        let rule = crate::repo::discounts::save(
+            &conn,
+            crate::repo::discounts::DiscountRuleInput {
+                id: None,
+                name: "Happy hour".into(),
+                kind: crate::repo::discounts::DiscountKind::Percentage,
+                value: 1_500,
+                scope: crate::repo::discounts::RuleScope::Order,
+                target_id: None,
+                min_subtotal: Some(5_000),
+                starts_at: None,
+                ends_at: None,
+                is_active: true,
+                apply_mode: crate::repo::discounts::ApplyMode::Automatic,
+                days_mask: Some(31),
+                time_from: Some(16 * 60),
+                time_to: Some(18 * 60),
+            },
+            at(52),
+        )
+        .expect("rule");
         let request = LoyaltyRequest {
             customer_id: layla.meta.id,
             redeem_points: 100,
@@ -871,6 +923,7 @@ fn pos_response_shapes_match_the_contract_fixture() {
         let loyalty_receipt = SaleReceipt {
             receipt: sales::load_receipt(&conn, paid.transaction_id, true).expect("receipt"),
             drawer_opened: false,
+            print_queued: true,
         };
         let customer = customers::get(&conn, layla.meta.id).expect("q").expect("c");
         let detail = customers::detail(&conn, customer.clone()).expect("detail");
@@ -931,6 +984,27 @@ fn pos_response_shapes_match_the_contract_fixture() {
             "kitchen_board": board,
             "kitchen_change": kitchen::Change::from(&ticket),
             "kitchen_display_status": KitchenDisplayStatus { available: true, enabled: true, open: false },
+            "discount_rule_view": crate::commands::discounts::DiscountRuleView {
+                target_name: None,
+                live: false,
+                rule,
+            },
+            "membership_plan_view": crate::commands::memberships::PlanView {
+                plan: gold,
+                active_members: 1,
+            },
+            "member_row": crate::repo::memberships::members(
+                &conn,
+                &crate::repo::memberships::MemberFilter {
+                    query: "layla".into(),
+                    state: None,
+                    customer_id: None,
+                    limit: 5,
+                },
+                at(60),
+            )
+            .expect("members")
+            .remove(0),
             "update_status": UpdateStatus {
                 state: UpdateState::Ready,
                 current_version: "0.1.3".into(),
@@ -967,7 +1041,7 @@ fn pos_response_shapes_match_the_contract_fixture() {
         "category": category,
         "shift_summary": ShiftSummary { expected_cash: open.opening_float + totals.cash_total, shift: open, totals },
         "quote": quote,
-        "sale_receipt": SaleReceipt { receipt, drawer_opened: true },
+        "sale_receipt": SaleReceipt { receipt, drawer_opened: true, print_queued: false },
         "print_outcome": PrintOutcome { printed: false, queued: true },
         "printer_settings": PrinterSettings {
             chain: vec![

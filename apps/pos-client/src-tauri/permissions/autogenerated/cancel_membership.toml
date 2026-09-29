@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-cancel-membership"
+description = "Enables the cancel_membership command without any pre-configured scope."
+commands.allow = ["cancel_membership"]
+
+[[permission]]
+identifier = "deny-cancel-membership"
+description = "Denies the cancel_membership command without any pre-configured scope."
+commands.deny = ["cancel_membership"]

@@ -2,9 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
   "description": "Main till window. Grants only the commands the till UI needs.",
-  "windows": [
-    "main"
-  ],
+  "windows": ["main"],
   "permissions": [
     "core:default",
     "allow-app-info",
@@ -84,6 +82,13 @@
     "allow-dismiss-update-notice",
     "allow-list-discount-rules",
     "allow-save-discount-rule",
-    "allow-delete-discount-rule"
+    "allow-delete-discount-rule",
+    "allow-list-membership-plans",
+    "allow-save-membership-plan",
+    "allow-delete-membership-plan",
+    "allow-list-members",
+    "allow-customer-memberships",
+    "allow-grant-membership",
+    "allow-cancel-membership"
   ]
 }

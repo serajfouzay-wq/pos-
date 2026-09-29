@@ -207,6 +207,17 @@ pub fn document(
         }
         doc.push(Line::row(w.points_balance, loyalty.balance.to_string()));
     }
+    if let Some(member) = &receipt.member {
+        doc.push(Line::row(w.member, member.plan_name.as_str()));
+        doc.push(Line::row(
+            format!("  {}", member.card_number),
+            format!(
+                "{} {}",
+                w.member_until,
+                template.zone.format_date(member.ends_at)
+            ),
+        ));
+    }
     if !template.footer_text.trim().is_empty() {
         doc.push(Line::Rule);
         doc.push(Line::text(template.footer_text.as_str(), Align::Center));
@@ -272,6 +283,7 @@ mod tests {
             }],
             change_due: 1_600,
             loyalty: None,
+            member: None,
             printed: false,
         }
     }
