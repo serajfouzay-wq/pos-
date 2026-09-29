@@ -17,6 +17,7 @@ import {
   UuidSchema,
 } from '../primitives';
 import { PermissionSchema, PinSchema, RoleSchema } from '../rbac';
+import { LocaleSchema } from '../i18n';
 import { LoyaltyQuoteSchema, LoyaltyRequestSchema } from './loyalty-types';
 
 // ── Sessions ───────────────────────────────────────────────────────────────
@@ -163,6 +164,20 @@ export const PrinterTargetSchema = z.discriminatedUnion('kind', [
     baud_rate: z.int().positive(),
   }),
   z.object({ kind: z.literal('windows_printer'), name: z.string().min(1).max(256) }),
+  /** Linux: a USB printer device file such as `/dev/usb/lp0`. */
+  z.object({
+    kind: z.literal('device'),
+    path: z.string().regex(/^\/dev\/(usb\/)?lp\d{1,3}$/),
+  }),
+  /** Linux: a CUPS print queue (sent raw). */
+  z.object({
+    kind: z.literal('cups'),
+    name: z
+      .string()
+      .min(1)
+      .max(127)
+      .regex(/^[A-Za-z0-9_.@][A-Za-z0-9_.@-]*$/),
+  }),
 ]);
 export type PrinterTarget = z.infer<typeof PrinterTargetSchema>;
 
@@ -173,12 +188,31 @@ export const DiscoveredPrinterSchema = z.object({
 });
 export type DiscoveredPrinter = z.infer<typeof DiscoveredPrinterSchema>;
 
+/**
+ * How printouts reach the paper: `text` uses the printer's own font (fast,
+ * Latin only), `image` draws them with the bundled Arabic/Latin font, `auto`
+ * picks text when it can show everything and an image otherwise.
+ */
+export const PRINT_MODES = ['auto', 'text', 'image'] as const;
+export const PrintModeSchema = z.enum(PRINT_MODES);
+export type PrintMode = z.infer<typeof PrintModeSchema>;
+
+export const PaperWidthSchema = z.union([z.literal(58), z.literal(80)]);
+
 export const PrinterSettingsSchema = z.object({
   /** Tried in order: primary, then fallbacks. */
   chain: z.array(PrinterTargetSchema).max(3),
   open_drawer_on_cash: z.boolean(),
-  /** Kitchen tickets for fired courses; null = no kitchen printer. */
+  /** Kitchen tickets whenever food is sent; null = no kitchen printer. */
   kitchen: PrinterTargetSchema.nullable().default(null),
+  /** Printout language; null = the client's default language. */
+  language: LocaleSchema.nullable().default(null),
+  mode: PrintModeSchema.default('auto'),
+  /** The receipt printer's paper when it differs from the build's. */
+  paper_width_mm: PaperWidthSchema.nullable().default(null),
+  kitchen_paper_width_mm: PaperWidthSchema.nullable().default(null),
+  /** Print a receipt for every sale; off = only when asked. */
+  auto_print_receipt: z.boolean().default(true),
 });
 export type PrinterSettings = z.infer<typeof PrinterSettingsSchema>;
 
@@ -188,5 +222,8 @@ export const PrinterStatusSchema = z.object({
   online: z.boolean().nullable(),
   pending_jobs: NonNegativeIntSchema,
   last_error: z.string().nullable(),
+  /** Kitchen tickets waiting for this till's kitchen printer. */
+  kitchen_pending: NonNegativeIntSchema,
+  kitchen_error: z.string().nullable(),
 });
 export type PrinterStatus = z.infer<typeof PrinterStatusSchema>;

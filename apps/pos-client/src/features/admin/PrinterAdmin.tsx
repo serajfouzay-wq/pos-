@@ -19,7 +19,10 @@ function label(target: PrinterTarget): string {
     case 'serial':
       return `${target.port} @ ${String(target.baud_rate)}`;
     case 'windows_printer':
+    case 'cups':
       return target.name;
+    case 'device':
+      return target.path;
   }
 }
 
@@ -37,6 +40,7 @@ export function PrinterAdmin() {
   const drawer = useKickDrawer();
   const info = useAppInfo();
   const kitchenEnabled = info.data?.client.business_type !== 'retail';
+  const buildPaper = info.data?.client.receipt.paper_width_mm ?? 80;
   // Unsaved edits; until the first edit the saved settings are shown.
   const [edited, setDraft] = useState<PrinterSettings | null>(null);
   const [host, setHost] = useState('');
@@ -45,6 +49,17 @@ export function PrinterAdmin() {
   const draft = edited ?? settings.data ?? null;
 
   if (!draft) return <p className="muted center">…</p>;
+  // A test page tries the settings on screen, saved or not.
+  const testPage = (target: PrinterTarget, paper: 58 | 80 | null) => {
+    test.mutate({
+      target,
+      language: draft.language,
+      mode: draft.mode,
+      paper_width_mm: paper,
+    });
+  };
+  const paperValue = (w: 58 | 80 | null) => (w === null ? '' : String(w));
+  const parsePaper = (v: string): 58 | 80 | null => (v === '58' ? 58 : v === '80' ? 80 : null);
   const chain = draft.chain;
   const update = (next: PrinterTarget[]) => {
     setDraft({ ...draft, chain: next });
@@ -123,7 +138,7 @@ export function PrinterAdmin() {
                 className="link-button"
                 disabled={test.isPending}
                 onClick={() => {
-                  test.mutate(target);
+                  testPage(target, draft.paper_width_mm);
                 }}
               >
                 {t('admin.printer.test')}
@@ -195,6 +210,12 @@ export function PrinterAdmin() {
         <section className="card">
           <h2>{t('admin.printer.kitchen')}</h2>
           <p className="muted">{t('admin.printer.kitchenHelp')}</p>
+          {status.data && status.data.kitchen_pending > 0 && (
+            <p role="status" className="error-text">
+              {t('admin.printer.kitchenWaiting', { count: status.data.kitchen_pending })}
+              {status.data.kitchen_error && ` · ${status.data.kitchen_error}`}
+            </p>
+          )}
           <ol className="chain">
             {draft.kitchen ? (
               <li>
@@ -207,7 +228,8 @@ export function PrinterAdmin() {
                   className="link-button"
                   disabled={test.isPending}
                   onClick={() => {
-                    if (draft.kitchen) test.mutate(draft.kitchen);
+                    if (draft.kitchen)
+                      testPage(draft.kitchen, draft.kitchen_paper_width_mm ?? draft.paper_width_mm);
                   }}
                 >
                   {t('admin.printer.test')}
@@ -239,6 +261,89 @@ export function PrinterAdmin() {
           </button>
         </section>
       )}
+
+      <section className="card">
+        <h2>{t('admin.printer.printouts')}</h2>
+        <p className="muted">{t('admin.printer.printoutsHelp')}</p>
+        <div className="form-grid">
+          <label className="field">
+            <span>{t('admin.printer.language')}</span>
+            <select
+              value={draft.language ?? ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                setDraft({ ...draft, language: v === 'en' || v === 'ar' ? v : null });
+              }}
+            >
+              <option value="">{t('admin.printer.languageDefault')}</option>
+              <option value="en">English</option>
+              <option value="ar">العربية</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>{t('admin.printer.mode')}</span>
+            <select
+              value={draft.mode}
+              onChange={(e) => {
+                const v = e.target.value;
+                setDraft({ ...draft, mode: v === 'text' || v === 'image' ? v : 'auto' });
+              }}
+            >
+              <option value="auto">{t('admin.printer.modes.auto')}</option>
+              <option value="image">{t('admin.printer.modes.image')}</option>
+              <option value="text">{t('admin.printer.modes.text')}</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>{t('admin.printer.paper')}</span>
+            <select
+              value={paperValue(draft.paper_width_mm)}
+              onChange={(e) => {
+                setDraft({ ...draft, paper_width_mm: parsePaper(e.target.value) });
+              }}
+            >
+              <option value="">{t('admin.printer.paperDefault', { mm: buildPaper })}</option>
+              <option value="58">58 mm</option>
+              <option value="80">80 mm</option>
+            </select>
+          </label>
+          {kitchenEnabled && (
+            <label className="field">
+              <span>{t('admin.printer.kitchenPaper')}</span>
+              <select
+                value={paperValue(draft.kitchen_paper_width_mm)}
+                onChange={(e) => {
+                  setDraft({ ...draft, kitchen_paper_width_mm: parsePaper(e.target.value) });
+                }}
+              >
+                <option value="">{t('admin.printer.kitchenPaperSame')}</option>
+                <option value="58">58 mm</option>
+                <option value="80">80 mm</option>
+              </select>
+            </label>
+          )}
+        </div>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={draft.auto_print_receipt}
+            onChange={(e) => {
+              setDraft({ ...draft, auto_print_receipt: e.target.checked });
+            }}
+          />
+          {t('admin.printer.autoPrint')}
+        </label>
+        <button
+          type="button"
+          className="button button--primary"
+          disabled={save.isPending}
+          onClick={() => {
+            save.mutate(draft);
+          }}
+        >
+          {t('common.save')}
+        </button>
+      </section>
 
       <section className="card">
         <h2>{t('admin.printer.detected')}</h2>

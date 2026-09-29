@@ -1,25 +1,36 @@
-//! Receipt printing, the offline print queue and the cash drawer.
+//! Receipt printing, the offline print queues and the cash drawer.
 //!
 //! Every receipt is a queued job (`print_jobs`) rendered from the stored
-//! transaction. The queue is drained right after a sale and every 30 s by a
-//! background worker, so receipts taken while the printer was off come out, in
-//! order, once it is back. The database lock is never held during printer I/O.
+//! transaction, and every kitchen ticket a queued job (`kitchen_print_jobs`)
+//! for this till's kitchen printer. The queues are drained right after a
+//! sale or a course is sent and every 30 s by a background worker, so what
+//! was sent while a printer was off comes out, in order, once it is back.
+//! The database lock is never held during printer I/O.
+//!
+//! Language and mode: receipts, tickets and reports print in the till's
+//! printer language (the client's default until set) and, in `auto` mode,
+//! as text when the printer's own font can show everything, otherwise as an
+//! image with the bundled Arabic/Latin font (`pos_hardware::raster`).
 //!
 //! Drawer kicks are deliberately NOT queued: a drawer popping open minutes
 //! later, unattended, is worse than reporting that it could not open.
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
-use pos_core::config::ClientConfig;
+use chrono::Duration;
+use pos_core::config::{ClientConfig, Locale};
 use pos_core::time::{Clock, SystemClock, Zone};
 use pos_core::{IpcError, IpcErrorCode, IpcResult};
-use pos_hardware::escpos::{Align, EscPos, DRAWER_KICK};
-use pos_hardware::image::MonoImage;
+use pos_hardware::doc::{Doc, Line, PrintMode};
+use pos_hardware::escpos::{Align, DRAWER_KICK};
+use pos_hardware::image::{dots_for_paper, logo_from_png, MonoImage};
 use pos_hardware::kitchen::KitchenTicket;
 use pos_hardware::label::ProductLabel;
-use pos_hardware::receipt::{render_escpos, ReceiptTemplate};
+use pos_hardware::receipt::ReceiptTemplate;
 use pos_hardware::report::ReportDoc;
 use pos_hardware::transport::{self, DiscoveredPrinter, PrinterTarget, TransportError};
+use pos_hardware::words::{is_rtl, words};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
@@ -55,10 +66,23 @@ pub struct PrinterSettings {
     pub chain: Vec<PrinterTarget>,
     #[serde(default = "yes")]
     pub open_drawer_on_cash: bool,
-    /// Kitchen tickets for fired courses (restaurants/cafes). `None` = no
-    /// kitchen printer (the kitchen display arrives in Phase 8).
+    /// Kitchen tickets whenever food is sent (restaurants/cafes). `None` =
+    /// no kitchen printer.
     #[serde(default)]
     pub kitchen: Option<PrinterTarget>,
+    /// The language printouts use; `None` = the client's default.
+    #[serde(default)]
+    pub language: Option<Locale>,
+    #[serde(default)]
+    pub mode: PrintMode,
+    /// The receipt printer's paper when it differs from the build's (58/80).
+    #[serde(default)]
+    pub paper_width_mm: Option<u16>,
+    #[serde(default)]
+    pub kitchen_paper_width_mm: Option<u16>,
+    /// Print a receipt for every sale; off = only when asked for.
+    #[serde(default = "yes")]
+    pub auto_print_receipt: bool,
 }
 
 impl Default for PrinterSettings {
@@ -67,7 +91,49 @@ impl Default for PrinterSettings {
             chain: Vec::new(),
             open_drawer_on_cash: true,
             kitchen: None,
+            language: None,
+            mode: PrintMode::Auto,
+            paper_width_mm: None,
+            kitchen_paper_width_mm: None,
+            auto_print_receipt: true,
         }
+    }
+}
+
+impl PrinterSettings {
+    pub fn validate(&self) -> IpcResult<()> {
+        if self.chain.len() > 3 {
+            return Err(IpcError::validation(
+                "Configure at most three printers (primary + two fallbacks).",
+            ));
+        }
+        for target in self.chain.iter().chain(&self.kitchen) {
+            match target {
+                PrinterTarget::Tcp { host, port } if host.trim().is_empty() || *port == 0 => {
+                    return Err(IpcError::validation(
+                        "Network printers need a host and port.",
+                    ));
+                }
+                PrinterTarget::Device { path } if !transport::is_printer_device(path) => {
+                    return Err(IpcError::validation(
+                        "A USB printer on Linux is a device such as /dev/usb/lp0.",
+                    ));
+                }
+                PrinterTarget::Cups { name } if !transport::is_queue_name(name) => {
+                    return Err(IpcError::validation("That is not a printer name."));
+                }
+                _ => {}
+            }
+        }
+        for width in [self.paper_width_mm, self.kitchen_paper_width_mm]
+            .into_iter()
+            .flatten()
+        {
+            if width != 58 && width != 80 {
+                return Err(IpcError::validation("Paper is 58 mm or 80 mm wide."));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -79,6 +145,9 @@ pub struct PrinterStatus {
     pub online: Option<bool>,
     pub pending_jobs: i64,
     pub last_error: Option<String>,
+    /// Kitchen tickets waiting for the kitchen printer.
+    pub kitchen_pending: i64,
+    pub kitchen_error: Option<String>,
 }
 
 type Listener = Box<dyn Fn(&PrinterStatus) + Send + Sync>;
@@ -86,28 +155,72 @@ type Listener = Box<dyn Fn(&PrinterStatus) + Send + Sync>;
 pub struct PrintService {
     io: Arc<dyn PrinterIo>,
     template: ReceiptTemplate,
+    default_language: Locale,
+    /// The receipt logo as supplied (PNG), rasterised per paper width.
+    logo_png: Option<Vec<u8>>,
+    logos: Mutex<HashMap<u16, Option<MonoImage>>>,
     health: Mutex<(Option<bool>, Option<String>)>,
+    kitchen_error: Mutex<Option<String>>,
     last_published: Mutex<Option<PrinterStatus>>,
     listener: OnceLock<Listener>,
 }
 
 /// The till prints its own local time.
-pub fn template_for(client: &ClientConfig, logo: Option<MonoImage>) -> ReceiptTemplate {
+pub fn template_for(client: &ClientConfig) -> ReceiptTemplate {
     ReceiptTemplate {
         zone: Zone::System,
-        ..ReceiptTemplate::for_client(client, logo)
+        ..ReceiptTemplate::for_client(client, None)
     }
 }
 
+/// Kitchen tickets not printed within a day are not worth printing.
+const KITCHEN_STALE_HOURS: i64 = 24;
+
 impl PrintService {
-    pub fn new(io: Arc<dyn PrinterIo>, template: ReceiptTemplate) -> Self {
+    pub fn new(io: Arc<dyn PrinterIo>, client: &ClientConfig, logo_png: Option<Vec<u8>>) -> Self {
         Self {
             io,
-            template,
+            template: template_for(client),
+            default_language: client.locale.default,
+            logo_png,
+            logos: Mutex::new(HashMap::new()),
             health: Mutex::new((None, None)),
+            kitchen_error: Mutex::new(None),
             last_published: Mutex::new(None),
             listener: OnceLock::new(),
         }
+    }
+
+    fn logo(&self, paper_width_mm: u16) -> Option<MonoImage> {
+        let png = self.logo_png.as_ref()?;
+        let mut logos = self.logos.lock().unwrap_or_else(|p| p.into_inner());
+        logos
+            .entry(paper_width_mm)
+            .or_insert_with(|| logo_from_png(png, dots_for_paper(paper_width_mm)).ok())
+            .clone()
+    }
+
+    pub fn language(&self, settings: &PrinterSettings) -> Locale {
+        settings.language.unwrap_or(self.default_language)
+    }
+
+    /// The receipt layout for this till's printer (its paper and logo).
+    pub fn receipt_template(&self, settings: &PrinterSettings) -> ReceiptTemplate {
+        let paper = settings
+            .paper_width_mm
+            .unwrap_or(self.template.paper_width_mm);
+        ReceiptTemplate {
+            paper_width_mm: paper,
+            logo: self.logo(paper),
+            ..self.template.clone()
+        }
+    }
+
+    fn kitchen_paper(&self, settings: &PrinterSettings) -> u16 {
+        settings
+            .kitchen_paper_width_mm
+            .or(settings.paper_width_mm)
+            .unwrap_or(self.template.paper_width_mm)
     }
 
     pub fn set_listener(&self, listener: impl Fn(&PrinterStatus) + Send + Sync + 'static) {
@@ -144,6 +257,7 @@ impl PrintService {
         let conn = db.conn();
         let configured = !Self::settings(&conn)?.chain.is_empty();
         let pending_jobs = print_jobs::pending_count(&conn).ipc()?;
+        let kitchen_pending = print_jobs::kitchen_pending_count(&conn).ipc()?;
         let (online, last_error) = self
             .health
             .lock()
@@ -154,6 +268,12 @@ impl PrintService {
             online,
             pending_jobs,
             last_error,
+            kitchen_pending,
+            kitchen_error: self
+                .kitchen_error
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .clone(),
         })
     }
 
@@ -179,17 +299,18 @@ impl PrintService {
             // Render under the lock…
             let (chain, batch) = {
                 let conn = db.conn();
-                let chain = Self::settings(&conn)?.chain;
+                let settings = Self::settings(&conn)?;
+                let template = self.receipt_template(&settings);
+                let language = self.language(&settings);
                 let jobs = print_jobs::pending(&conn, QUEUE_BATCH).ipc()?;
                 let mut rendered = Vec::with_capacity(jobs.len());
                 for job in jobs {
                     let receipt = sales::load_receipt(&conn, job.transaction_id, true)?;
-                    rendered.push((
-                        job.clone(),
-                        render_escpos(&receipt, &self.template, job.copy),
-                    ));
+                    let doc =
+                        pos_hardware::receipt::document(&receipt, &template, job.copy, language);
+                    rendered.push((job.clone(), doc.to_escpos(settings.mode)));
                 }
-                (chain, rendered)
+                (settings.chain, rendered)
             };
             if batch.is_empty() {
                 break;
@@ -233,56 +354,159 @@ impl PrintService {
 
     /// Product labels on the receipt printer chain.
     pub fn print_labels(&self, db: &Database, label: &ProductLabel, copies: u8) -> IpcResult<()> {
-        let chain = Self::settings(&db.conn())?.chain;
-        let bytes = pos_hardware::label::render_escpos(label, self.template.paper_width_mm, copies);
-        let result = self.send_chain(&chain, &bytes);
+        let settings = Self::settings(&db.conn())?;
+        let paper = self.receipt_template(&settings).paper_width_mm;
+        let bytes = pos_hardware::label::render_escpos(label, paper, copies, settings.mode);
+        let result = self.send_chain(&settings.chain, &bytes);
         self.publish(db);
         result.map_err(hardware_error)
     }
 
     /// An X/Z report on the receipt printer chain (not queued: it can be
-    /// printed again from the report history).
+    /// printed again from the report history). `doc` is already worded in
+    /// [`Self::language`].
     pub fn print_report(&self, db: &Database, doc: &ReportDoc) -> IpcResult<()> {
-        let chain = Self::settings(&db.conn())?.chain;
-        if chain.is_empty() {
+        let settings = Self::settings(&db.conn())?;
+        if settings.chain.is_empty() {
             return Err(IpcError::new(
                 IpcErrorCode::Hardware,
                 "No printer is set up.",
             ));
         }
-        let bytes = pos_hardware::report::render_escpos(doc, self.template.paper_width_mm);
-        let result = self.send_chain(&chain, &bytes);
+        let paper = self.receipt_template(&settings).paper_width_mm;
+        let rtl = is_rtl(self.language(&settings));
+        let bytes = pos_hardware::report::document(doc, paper, rtl).to_escpos(settings.mode);
+        let result = self.send_chain(&settings.chain, &bytes);
         self.publish(db);
         result.map_err(hardware_error)
     }
 
-    pub fn paper_width_mm(&self) -> u16 {
-        self.template.paper_width_mm
+    pub fn paper_width_mm(&self, db: &Database) -> u16 {
+        Self::settings(&db.conn())
+            .map(|s| self.receipt_template(&s).paper_width_mm)
+            .unwrap_or(self.template.paper_width_mm)
     }
 
-    /// Sends a kitchen ticket to the kitchen printer. `Ok(false)` when none
-    /// is configured.
-    pub fn print_kitchen(&self, db: &Database, ticket: &KitchenTicket) -> IpcResult<bool> {
-        let Some(target) = Self::settings(&db.conn())?.kitchen else {
+    /// The printer language (for callers that word documents themselves).
+    pub fn current_language(&self, db: &Database) -> Locale {
+        Self::settings(&db.conn())
+            .map(|s| self.language(&s))
+            .unwrap_or(self.default_language)
+    }
+
+    /// Queues a kitchen ticket when this till has a kitchen printer. Called
+    /// inside the transaction that sends the food, so a sent course and its
+    /// ticket are one change. Returns whether a job was queued.
+    pub fn queue_kitchen(
+        conn: &Connection,
+        ticket: &KitchenTicket,
+        now: pos_core::time::Timestamp,
+    ) -> IpcResult<bool> {
+        if Self::settings(conn)?.kitchen.is_none() || ticket.lines.is_empty() {
             return Ok(false);
-        };
-        let bytes = pos_hardware::kitchen::render_escpos(ticket, self.template.paper_width_mm);
-        self.io.send(&target, &bytes).map_err(hardware_error)?;
+        }
+        print_jobs::enqueue_kitchen(conn, ticket, now).ipc()?;
         Ok(true)
     }
 
-    pub fn test_print(&self, target: &PrinterTarget) -> IpcResult<()> {
-        let mut page = EscPos::new();
-        page.align(Align::Center)
-            .bold(true)
-            .line(&self.template.business_name)
-            .bold(false)
-            .line("Printer test OK")
-            .line(&target.label())
-            .feed(3)
-            .cut();
+    /// Prints queued kitchen tickets oldest-first on the kitchen printer,
+    /// stopping at the first failure. Returns how many are still waiting.
+    pub fn drain_kitchen(&self, db: &Database) -> IpcResult<i64> {
+        self.drain_kitchen_at(db, SystemClock.now())
+    }
+
+    /// [`Self::drain_kitchen`] as of `now` (tickets older than a day are
+    /// dropped rather than printed).
+    pub fn drain_kitchen_at(
+        &self,
+        db: &Database,
+        now: pos_core::time::Timestamp,
+    ) -> IpcResult<i64> {
+        loop {
+            let (target, batch) = {
+                let conn = db.conn();
+                let settings = Self::settings(&conn)?;
+                let stale = now
+                    .checked_add(Duration::hours(-KITCHEN_STALE_HOURS))
+                    .unwrap_or(now);
+                print_jobs::expire_kitchen(&conn, stale, now).ipc()?;
+                let Some(target) = settings.kitchen.clone() else {
+                    return print_jobs::kitchen_pending_count(&conn).ipc();
+                };
+                let paper = self.kitchen_paper(&settings);
+                let language = self.language(&settings);
+                let jobs = print_jobs::pending_kitchen(&conn, QUEUE_BATCH).ipc()?;
+                let rendered: Vec<(uuid::Uuid, Vec<u8>)> = jobs
+                    .into_iter()
+                    .map(|job| {
+                        let ticket = KitchenTicket {
+                            zone: Zone::System,
+                            ..job.ticket
+                        };
+                        let doc = pos_hardware::kitchen::document(&ticket, paper, language);
+                        (job.id, doc.to_escpos(settings.mode))
+                    })
+                    .collect();
+                (target, rendered)
+            };
+            if batch.is_empty() {
+                break;
+            }
+            let full = batch.len() >= usize::try_from(QUEUE_BATCH).unwrap_or(usize::MAX);
+            for (id, bytes) in &batch {
+                let result = self.io.send(&target, bytes);
+                let error = result.as_ref().err().map(ToString::to_string);
+                print_jobs::mark_kitchen(&db.conn(), *id, error.as_deref(), now).ipc()?;
+                *self.kitchen_error.lock().unwrap_or_else(|p| p.into_inner()) = error.clone();
+                if error.is_some() {
+                    self.publish(db);
+                    return print_jobs::kitchen_pending_count(&db.conn()).ipc();
+                }
+            }
+            if !full {
+                break;
+            }
+        }
+        self.publish(db);
+        print_jobs::kitchen_pending_count(&db.conn()).ipc()
+    }
+
+    /// The kitchen printer's last error (`None` once it printed again).
+    pub fn kitchen_error(&self) -> Option<String> {
+        self.kitchen_error
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone()
+    }
+
+    /// A test page in the given (or saved) language and mode: the shop name,
+    /// a line in each language and the printer's address.
+    pub fn test_print(
+        &self,
+        db: &Database,
+        target: &PrinterTarget,
+        language: Option<Locale>,
+        mode: Option<PrintMode>,
+        paper_width_mm: Option<u16>,
+    ) -> IpcResult<()> {
+        let settings = Self::settings(&db.conn())?;
+        let language = language.unwrap_or_else(|| self.language(&settings));
+        let mode = mode.unwrap_or(settings.mode);
+        let paper =
+            paper_width_mm.unwrap_or_else(|| self.receipt_template(&settings).paper_width_mm);
+        let mut doc = Doc::new(paper, is_rtl(language));
+        doc.push(Line::large(
+            self.template.business_name.as_str(),
+            Align::Center,
+        ))
+        .push(Line::bold(words(language).printer_test, Align::Center))
+        .push(Line::Rule)
+        .push(Line::row("English", "1.250"))
+        .push(Line::row("العربية", "1.250"))
+        .push(Line::Rule)
+        .push(Line::text(target.label(), Align::Center));
         self.io
-            .send(target, &page.into_bytes())
+            .send(target, &doc.to_escpos(mode))
             .map_err(hardware_error)
     }
 }

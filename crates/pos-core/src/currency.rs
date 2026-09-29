@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 pub enum CurrencyCode {
     AED,
     BHD,
+    DZD,
     EGP,
     EUR,
     GBP,
@@ -15,6 +16,8 @@ pub enum CurrencyCode {
     JOD,
     JPY,
     KWD,
+    LYD,
+    MAD,
     MYR,
     OMR,
     QAR,
@@ -24,9 +27,10 @@ pub enum CurrencyCode {
 }
 
 impl CurrencyCode {
-    pub const ALL: [CurrencyCode; 15] = [
+    pub const ALL: [CurrencyCode; 18] = [
         CurrencyCode::AED,
         CurrencyCode::BHD,
+        CurrencyCode::DZD,
         CurrencyCode::EGP,
         CurrencyCode::EUR,
         CurrencyCode::GBP,
@@ -34,6 +38,8 @@ impl CurrencyCode {
         CurrencyCode::JOD,
         CurrencyCode::JPY,
         CurrencyCode::KWD,
+        CurrencyCode::LYD,
+        CurrencyCode::MAD,
         CurrencyCode::MYR,
         CurrencyCode::OMR,
         CurrencyCode::QAR,
@@ -47,8 +53,8 @@ impl CurrencyCode {
         use CurrencyCode::*;
         match self {
             JPY => 0,
-            AED | EGP | EUR | GBP | MYR | QAR | SAR | USD => 2,
-            BHD | IQD | JOD | KWD | OMR | TND => 3,
+            AED | DZD | EGP | EUR | GBP | MAD | MYR | QAR | SAR | USD => 2,
+            BHD | IQD | JOD | KWD | LYD | OMR | TND => 3,
         }
     }
 
@@ -57,6 +63,7 @@ impl CurrencyCode {
         match self {
             AED => "AED",
             BHD => "BHD",
+            DZD => "DZD",
             EGP => "EGP",
             EUR => "EUR",
             GBP => "GBP",
@@ -64,6 +71,8 @@ impl CurrencyCode {
             JOD => "JOD",
             JPY => "JPY",
             KWD => "KWD",
+            LYD => "LYD",
+            MAD => "MAD",
             MYR => "MYR",
             OMR => "OMR",
             QAR => "QAR",

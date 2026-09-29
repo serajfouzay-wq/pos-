@@ -1,8 +1,10 @@
-//! Kitchen tickets: what the kitchen display shows (and the kitchen
-//! printer prints). Written when a course is sent, when items already sent
-//! are changed or removed (a `void` ticket), when an order is paid with
-//! lines never sent, and for pay-now sales — only in builds with the
-//! kitchen display (`features.kitchen_display`, cafe or restaurant).
+//! Kitchen tickets: what the kitchen display shows and the kitchen printer
+//! prints. Written when a course is sent, when items already sent are
+//! changed or removed (a `void` ticket), when an order is paid with lines
+//! never sent, and for pay-now sales. [`send`] queues each one for this
+//! till's kitchen printer (any cafe or restaurant with one) and, in builds
+//! with the kitchen display (`features.kitchen_display`), writes the
+//! display's row.
 //!
 //! Tickets sync last-write-wins: the till creates one, the kitchen (this
 //! machine or another) strikes items and bumps it.
@@ -17,6 +19,7 @@ use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::printing::PrintService;
 use crate::repo::{rows, uuid_at, Meta, SqlResultExt};
 
 /// Tickets older than this drop off the board even if never bumped.
@@ -24,7 +27,12 @@ const BOARD_HOURS: i64 = 12;
 
 /// The build has a kitchen display.
 pub fn enabled(config: &ClientConfig) -> bool {
-    config.features.kitchen_display && config.business_type != BusinessType::Retail
+    config.features.kitchen_display && records(config)
+}
+
+/// The business has a kitchen: food sent to it goes to the kitchen printer.
+pub fn records(config: &ClientConfig) -> bool {
+    config.business_type != BusinessType::Retail
 }
 
 /// Mirrors `KitchenTicketKindSchema`.
@@ -153,6 +161,54 @@ pub fn create(
     Ok(ticket)
 }
 
+/// Sends food to the kitchen: queues the ticket for this till's kitchen
+/// printer (if it has one) and writes the display's row (builds with the
+/// display). Returns the row.
+pub fn send(
+    conn: &Connection,
+    config: &ClientConfig,
+    device_id: Uuid,
+    draft: Draft,
+    now: Timestamp,
+) -> IpcResult<Option<KitchenTicket>> {
+    if !records(config) || draft.items.is_empty() {
+        return Ok(None);
+    }
+    PrintService::queue_kitchen(conn, &draft.printed(now), now)?;
+    if !enabled(config) {
+        return Ok(None);
+    }
+    create(conn, device_id, draft, now).map(Some)
+}
+
+impl Draft {
+    /// The ticket as the kitchen printer prints it.
+    pub fn printed(&self, at: Timestamp) -> pos_hardware::kitchen::KitchenTicket {
+        pos_hardware::kitchen::KitchenTicket {
+            title: self.title.clone(),
+            course: self.course,
+            server: self.server_name.clone(),
+            guests: self.guests,
+            at,
+            zone: pos_core::time::Zone::System,
+            lines: self.items.iter().map(TicketItem::line).collect(),
+            void: self.kind == TicketKind::Void,
+        }
+    }
+}
+
+impl TicketItem {
+    fn line(&self) -> KitchenLine {
+        KitchenLine {
+            quantity_milli: self.quantity_milli,
+            name: self.name.clone(),
+            modifiers: self.modifiers.clone(),
+            note: self.note.clone(),
+            course: self.course,
+        }
+    }
+}
+
 pub fn get(conn: &Connection, id: Uuid) -> IpcResult<KitchenTicket> {
     rows::select(
         conn,
@@ -276,12 +332,13 @@ fn order_type_label(order_type: OrderType) -> &'static str {
     }
 }
 
-/// A ticket for a pay-now sale, from the stored transaction.
+/// A ticket for a pay-now sale, from the stored transaction (see [`send`]).
 pub fn for_sale(
     conn: &Connection,
+    config: &ClientConfig,
     transaction_id: Uuid,
     now: Timestamp,
-) -> IpcResult<KitchenTicket> {
+) -> IpcResult<Option<KitchenTicket>> {
     let id = transaction_id.to_string();
     let (device_id, receipt_number, order_type, server): (Uuid, String, OrderType, String) = conn
         .query_row(
@@ -321,8 +378,9 @@ pub fn for_sale(
         .ipc()?
         .collect::<Result<_, _>>()
         .ipc()?;
-    create(
+    send(
         conn,
+        config,
         device_id,
         Draft {
             kind: TicketKind::Order,
@@ -340,7 +398,8 @@ pub fn for_sale(
 }
 
 /// A void ticket for every kitchen ticket of a sale that was voided (a
-/// pay-now sale goes to the kitchen when it is paid).
+/// pay-now sale goes to the kitchen when it is paid). Only builds with the
+/// display keep the rows this reads; the void ticket is also printed.
 pub fn void_sale(
     conn: &Connection,
     transaction_id: Uuid,
@@ -379,6 +438,22 @@ pub fn void_sale(
                 },
                 now,
             )
+            .and_then(|void| {
+                let printed = Draft {
+                    kind: void.kind,
+                    order_id: void.order_id,
+                    transaction_id: void.transaction_id,
+                    title: void.title.clone(),
+                    order_type: void.order_type,
+                    course: void.course,
+                    server_name: void.server_name.clone(),
+                    guests: void.guests,
+                    items: void.items.clone(),
+                }
+                .printed(now);
+                PrintService::queue_kitchen(conn, &printed, now)?;
+                Ok(void)
+            })
         })
         .collect()
 }

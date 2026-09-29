@@ -116,23 +116,32 @@ function Preview({ detail, config }: { detail: ClientDetail; config: ClientConfi
       <span className="muted">
         {t('clients.receipt.previewHelp', { width: config.receipt.paper_width_mm })}
       </span>
-      <div
-        className="receipt-paper"
-        style={{ inlineSize: `${String((data?.columns ?? 48) + 4)}ch` }}
-        dir="ltr"
-      >
-        {data?.logo_png_base64 && (
+      {data?.image_png_base64 ? (
+        <div className="receipt-paper receipt-paper--image">
           <img
-            className="receipt-paper__logo"
-            src={`data:image/png;base64,${data.logo_png_base64}`}
-            alt=""
-            style={{
-              inlineSize: `${String(((data.logo_width ?? 0) / (data.columns === 48 ? 576 : 384)) * 100)}%`,
-            }}
+            src={`data:image/png;base64,${data.image_png_base64}`}
+            alt={t('clients.receipt.preview')}
           />
-        )}
-        <pre>{data?.text.replace(/^\[logo\]\n/, '') ?? ''}</pre>
-      </div>
+        </div>
+      ) : (
+        <div
+          className="receipt-paper"
+          style={{ inlineSize: `${String((data?.columns ?? 48) + 4)}ch` }}
+          dir="ltr"
+        >
+          {data?.logo_png_base64 && (
+            <img
+              className="receipt-paper__logo"
+              src={`data:image/png;base64,${data.logo_png_base64}`}
+              alt=""
+              style={{
+                inlineSize: `${String(((data.logo_width ?? 0) / (data.columns === 48 ? 576 : 384)) * 100)}%`,
+              }}
+            />
+          )}
+          <pre>{data?.text.replace(/^\[logo\]\n/, '') ?? ''}</pre>
+        </div>
+      )}
       {preview.error && valid && <ErrorText error={preview.error} />}
     </aside>
   );

@@ -806,3 +806,142 @@ fn menu_rows_round_trip_and_reach_the_outbox() {
         .expect("count");
     assert_eq!(live, 0);
 }
+
+/// A kitchen printer that can be switched off.
+#[derive(Default)]
+struct KitchenPrinter {
+    online: std::sync::atomic::AtomicBool,
+    received: std::sync::Mutex<Vec<Vec<u8>>>,
+}
+
+impl crate::printing::PrinterIo for KitchenPrinter {
+    fn send(
+        &self,
+        target: &pos_hardware::transport::PrinterTarget,
+        bytes: &[u8],
+    ) -> Result<(), pos_hardware::transport::TransportError> {
+        if self.online.load(std::sync::atomic::Ordering::SeqCst) {
+            self.received.lock().expect("lock").push(bytes.to_vec());
+            Ok(())
+        } else {
+            Err(pos_hardware::transport::TransportError::Unreachable {
+                target: target.label(),
+                reason: "off".into(),
+            })
+        }
+    }
+    fn discover(&self) -> Vec<pos_hardware::transport::DiscoveredPrinter> {
+        Vec::new()
+    }
+}
+
+#[test]
+fn kitchen_tickets_wait_for_the_kitchen_printer_and_voids_are_printed() {
+    use crate::printing::{PrintService, PrinterSettings, SETTINGS_KEY};
+    let w = world();
+    let io = Arc::new(KitchenPrinter::default());
+    let printer = PrintService::new(io.clone(), &config(), None);
+    crate::repo::settings::put(
+        &w.db.conn(),
+        SETTINGS_KEY,
+        &PrinterSettings {
+            kitchen: Some(pos_hardware::transport::PrinterTarget::Tcp {
+                host: "kitchen".into(),
+                port: 9100,
+            }),
+            ..PrinterSettings::default()
+        },
+        at(0),
+    )
+    .expect("settings");
+
+    let order = open_table(&w);
+    let order = set_items(
+        &w,
+        &order,
+        vec![
+            line(w.juice, 2000, &[], Some(1)),
+            line(w.croissant, 1000, &[], Some(1)),
+        ],
+        &w.cashier,
+        at(20),
+    )
+    .expect("items");
+    let fired = fire(
+        &w.db.conn(),
+        &w.cashier,
+        order.meta.id,
+        Some(1),
+        order.meta.updated_at,
+        &config(),
+        at(30),
+    )
+    .expect("fire");
+    // The kitchen printer is off: the ticket waits.
+    assert_eq!(printer.drain_kitchen_at(&w.db, at(31)).expect("drain"), 1);
+    assert!(printer.kitchen_error().is_some());
+
+    // A manager removes the croissant after it was sent: a void ticket.
+    let order = fired.order;
+    set_items(&w, &order, vec![keep(&order.items[0])], &w.manager, at(40)).expect("void");
+    assert_eq!(printer.drain_kitchen_at(&w.db, at(41)).expect("drain"), 2);
+
+    io.online.store(true, std::sync::atomic::Ordering::SeqCst);
+    assert_eq!(printer.drain_kitchen_at(&w.db, at(50)).expect("drain"), 0);
+    assert!(printer.kitchen_error().is_none());
+    let received = io.received.lock().expect("lock");
+    assert_eq!(received.len(), 2, "both tickets, in order");
+    let first = String::from_utf8_lossy(&received[0]);
+    assert!(first.contains("Table T4") && first.contains("Croissant"));
+    assert!(!first.contains("VOID"));
+    let second = String::from_utf8_lossy(&received[1]);
+    assert!(second.contains("VOID") && second.contains("Croissant"));
+    assert!(!second.contains("Juice"), "only what was called off");
+}
+
+#[test]
+fn stale_kitchen_tickets_are_dropped_not_printed() {
+    use crate::printing::{PrintService, PrinterSettings, SETTINGS_KEY};
+    let w = world();
+    let io = Arc::new(KitchenPrinter::default());
+    let printer = PrintService::new(io.clone(), &config(), None);
+    crate::repo::settings::put(
+        &w.db.conn(),
+        SETTINGS_KEY,
+        &PrinterSettings {
+            kitchen: Some(pos_hardware::transport::PrinterTarget::Tcp {
+                host: "kitchen".into(),
+                port: 9100,
+            }),
+            ..PrinterSettings::default()
+        },
+        at(0),
+    )
+    .expect("settings");
+    let order = open_table(&w);
+    let order = set_items(
+        &w,
+        &order,
+        vec![line(w.juice, 1000, &[], None)],
+        &w.cashier,
+        at(20),
+    )
+    .expect("items");
+    fire(
+        &w.db.conn(),
+        &w.cashier,
+        order.meta.id,
+        None,
+        order.meta.updated_at,
+        &config(),
+        at(30),
+    )
+    .expect("fire");
+    io.online.store(true, std::sync::atomic::Ordering::SeqCst);
+    let next_day = at(30 + 25 * 3600);
+    assert_eq!(printer.drain_kitchen_at(&w.db, next_day).expect("drain"), 0);
+    assert!(
+        io.received.lock().expect("lock").is_empty(),
+        "yesterday's ticket is not cooked"
+    );
+}

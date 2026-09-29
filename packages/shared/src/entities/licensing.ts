@@ -69,3 +69,13 @@ export const PrintJobRowSchema = EntityBaseSchema.extend({
   last_error: z.string().nullable(),
 });
 export type PrintJobRow = z.infer<typeof PrintJobRowSchema>;
+
+/** A kitchen ticket waiting for this till's kitchen printer (never synced). */
+export const KitchenPrintJobRowSchema = EntityBaseSchema.extend({
+  /** The ticket as printed (JSON). */
+  ticket: z.string(),
+  attempt_count: z.int().nonnegative(),
+  printed_at: TimestampSchema.nullable(),
+  last_error: z.string().nullable(),
+});
+export type KitchenPrintJobRow = z.infer<typeof KitchenPrintJobRowSchema>;

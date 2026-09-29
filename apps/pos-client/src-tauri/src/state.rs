@@ -8,7 +8,7 @@ use tauri::{AppHandle, Manager};
 use crate::kitchen::KitchenHub;
 use crate::license::cloud::{CloudValidator, SupabaseValidator};
 use crate::license::{LicenseEnv, LicenseService};
-use crate::printing::{template_for, PrintService, SystemPrinters};
+use crate::printing::{PrintService, SystemPrinters};
 use crate::session::SessionStore;
 use crate::sync::{HttpTransport, SyncEngine, SyncTransport};
 use crate::updater::UpdateService;
@@ -48,8 +48,9 @@ pub struct AppState {
     pub updates: Arc<UpdateService>,
 }
 
-/// Receipt logo from the client's bundled assets (`<resources>/client-assets/`).
-fn load_logo(app: &AppHandle, client: &ClientConfig) -> Option<pos_hardware::image::MonoImage> {
+/// Receipt logo (PNG) from the client's bundled assets
+/// (`<resources>/client-assets/`); rasterised for whichever paper prints it.
+fn load_logo(app: &AppHandle, client: &ClientConfig) -> Option<Vec<u8>> {
     let file = client.receipt.logo_asset.as_ref()?;
     let path = app
         .path()
@@ -57,9 +58,7 @@ fn load_logo(app: &AppHandle, client: &ClientConfig) -> Option<pos_hardware::ima
         .ok()?
         .join("client-assets")
         .join(file);
-    let bytes = std::fs::read(path).ok()?;
-    let dots = pos_hardware::image::dots_for_paper(client.receipt.paper_width_mm);
-    pos_hardware::image::logo_from_png(&bytes, dots).ok()
+    std::fs::read(path).ok()
 }
 
 impl AppState {
@@ -93,10 +92,7 @@ impl AppState {
             app_version: app.package_info().version.to_string(),
             device_name: gethostname::gethostname().to_string_lossy().into_owned(),
         });
-        let printer = PrintService::new(
-            Arc::new(SystemPrinters),
-            template_for(&client, load_logo(app, &client)),
-        );
+        let printer = PrintService::new(Arc::new(SystemPrinters), &client, load_logo(app, &client));
         Ok(Self {
             license: Arc::new(license),
             session: SessionStore::default(),

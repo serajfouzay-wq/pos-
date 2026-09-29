@@ -450,6 +450,17 @@ button {
   margin-block-end: 8px;
 }
 
+/* The printed image (Arabic receipts): 1 dot per pixel, shown at half size
+   so 80 mm paper (576 dots) is 288 px wide, like the text preview. */
+.receipt-paper--image {
+  padding: 12px;
+}
+
+.receipt-paper--image img {
+  inline-size: min(100%, 288px);
+  image-rendering: auto;
+}
+
 .asset {
   display: grid;
   grid-template-columns: 120px 1fr;

@@ -1,5 +1,8 @@
 //! Receipt printer and cash drawer support.
 //!
+//! * [`doc`] — the printable document every layout builds; prints as
+//!   printer text or, through [`raster`], as an image drawn with the bundled
+//!   Arabic/Latin font (right-to-left, any language in [`words`]).
 //! * [`escpos`] — command encoder (text, alignment, emphasis, raster, cut).
 //! * [`receipt`] — lays a [`pos_core::receipt::Receipt`] out for 58/80 mm paper.
 //! * [`label`] — product labels with EAN-13/EAN-8/UPC-A or Code 128 barcodes.
@@ -12,10 +15,13 @@
 //! Cash drawers hang off the printer's RJ11 port, so a drawer kick is just
 //! [`escpos::DRAWER_KICK`] sent to the printer.
 
+pub mod doc;
 pub mod escpos;
 pub mod image;
 pub mod kitchen;
 pub mod label;
+pub mod raster;
 pub mod receipt;
 pub mod report;
 pub mod transport;
+pub mod words;

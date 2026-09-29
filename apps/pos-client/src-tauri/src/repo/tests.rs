@@ -20,7 +20,7 @@ use super::sales::{self, PayloadItem, PayloadPayment, SaleActor, TransactionPayl
 use super::users::{self, LoginOutcome};
 use super::{print_jobs, settings, shifts, Meta};
 use crate::db::Database;
-use crate::printing::{template_for, PrintService, PrinterIo, PrinterSettings, SETTINGS_KEY};
+use crate::printing::{PrintService, PrinterIo, PrinterSettings, SETTINGS_KEY};
 
 const CONFIG: &str =
     include_str!("../../../../../packages/shared/contracts/client-config.example.json");
@@ -337,7 +337,7 @@ impl PrinterIo for FakePrinter {
 fn receipts_queue_while_offline_and_print_in_order_later() {
     let w = world();
     let printer = Arc::new(FakePrinter::default());
-    let service = PrintService::new(printer.clone(), template_for(&config(), None));
+    let service = PrintService::new(printer.clone(), &config(), None);
     let latte = {
         let conn = w.db.conn();
         shifts::open(&conn, w.device, w.manager, 0, now()).expect("shift");
@@ -346,8 +346,7 @@ fn receipts_queue_while_offline_and_print_in_order_later() {
                 host: "printer".into(),
                 port: 9100,
             }],
-            open_drawer_on_cash: true,
-            kitchen: None,
+            ..PrinterSettings::default()
         };
         settings::put(&conn, SETTINGS_KEY, &chain, now()).expect("settings");
         product(&conn, "Latte", 1_250, Unit::Each, false)
@@ -387,6 +386,63 @@ fn receipts_queue_while_offline_and_print_in_order_later() {
             i + 1
         );
     }
+    assert_eq!(service.status(&w.db).expect("status").pending_jobs, 0);
+}
+
+#[test]
+fn receipts_print_in_the_printer_language_and_can_wait_to_be_asked_for() {
+    let w = world();
+    let printer = Arc::new(FakePrinter::default());
+    printer.online.store(true, Ordering::SeqCst);
+    let service = PrintService::new(printer.clone(), &config(), None);
+    let latte = {
+        let conn = w.db.conn();
+        shifts::open(&conn, w.device, w.manager, 0, now()).expect("shift");
+        let settings = PrinterSettings {
+            chain: vec![PrinterTarget::Tcp {
+                host: "printer".into(),
+                port: 9100,
+            }],
+            language: Some(pos_core::config::Locale::Ar),
+            ..PrinterSettings::default()
+        };
+        settings::put(&conn, SETTINGS_KEY, &settings, now()).expect("settings");
+        product(&conn, "Latte", 1_250, Unit::Each, false)
+    };
+    let sale = payload(
+        vec![item(latte, 1000)],
+        vec![pay(PaymentMethod::Card, 1_250)],
+    );
+    let id = sales::create(&mut w.db.conn(), &cashier(&w), &sale, &config(), now())
+        .expect("sale")
+        .transaction_id;
+    assert!(service.drain(&w.db, Some(id)).expect("drain"));
+    let bytes = printer.received.lock().expect("lock").remove(0);
+    assert!(
+        bytes.windows(4).any(|w| w == [0x1D, b'v', b'0', 0]),
+        "Arabic receipts print as an image"
+    );
+
+    // Receipts only on request: nothing is queued for the next sale.
+    {
+        let conn = w.db.conn();
+        let settings = PrinterSettings {
+            auto_print_receipt: false,
+            ..PrintService::settings(&conn).expect("settings")
+        };
+        settings::put(&conn, SETTINGS_KEY, &settings, now()).expect("settings");
+    }
+    sales::create(
+        &mut w.db.conn(),
+        &cashier(&w),
+        &payload(
+            vec![item(latte, 1000)],
+            vec![pay(PaymentMethod::Card, 1_250)],
+        ),
+        &config(),
+        now(),
+    )
+    .expect("sale");
     assert_eq!(service.status(&w.db).expect("status").pending_jobs, 0);
 }
 
@@ -692,7 +748,12 @@ fn pos_response_shapes_match_the_contract_fixture() {
         let x = reports::x_report(&conn, &by, CurrencyCode::KWD, at(20)).expect("x");
         let print = ReportPrint {
             text: pos_hardware::report::render_text(
-                &reports::to_doc(&x, &config(), pos_core::time::Zone::Utc),
+                &reports::to_doc(
+                    &x,
+                    &config(),
+                    pos_core::time::Zone::Utc,
+                    pos_core::config::Locale::En,
+                ),
                 80,
             ),
             report: x,
@@ -910,8 +971,20 @@ fn pos_response_shapes_match_the_contract_fixture() {
             ],
             open_drawer_on_cash: true,
             kitchen: Some(PrinterTarget::Tcp { host: "192.168.1.60".into(), port: 9100 }),
+            language: Some(pos_core::config::Locale::Ar),
+            mode: pos_hardware::doc::PrintMode::Auto,
+            paper_width_mm: None,
+            kitchen_paper_width_mm: Some(58),
+            auto_print_receipt: true,
         },
-        "printer_status": PrinterStatus { configured: true, online: Some(false), pending_jobs: 2, last_error: Some("offline".into()) },
+        "printer_status": PrinterStatus {
+            configured: true,
+            online: Some(false),
+            pending_jobs: 2,
+            last_error: Some("offline".into()),
+            kitchen_pending: 1,
+            kitchen_error: Some("printer 192.168.1.60:9100 is unreachable: timed out".into()),
+        },
         "discovered_printer": DiscoveredPrinter {
             target: PrinterTarget::Serial { port: "COM5".into(), baud_rate: 9600 },
             connection: pos_hardware::transport::Connection::Bluetooth,

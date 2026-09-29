@@ -13,7 +13,7 @@ use pos_core::sales::{PaymentMethod, TransactionKind};
 use pos_core::time::Timestamp;
 use pos_core::{IpcError, IpcResult};
 use pos_hardware::image::{dots_for_paper, logo_from_png, png_dimensions};
-use pos_hardware::receipt::{columns_for_paper, render_text, ReceiptTemplate};
+use pos_hardware::receipt::{columns_for_paper, document, render_text, ReceiptTemplate};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -135,6 +135,9 @@ pub struct ReceiptPreview {
     pub logo_png_base64: Option<String>,
     pub logo_width: Option<usize>,
     pub logo_height: Option<usize>,
+    /// The receipt in the client's default language as the till prints it
+    /// in automatic mode when that needs an image (Arabic): a PNG.
+    pub image_png_base64: Option<String>,
 }
 
 fn scaled(amount_in_thousandths: i64, currency: CurrencyCode) -> i64 {
@@ -226,12 +229,20 @@ pub fn preview_receipt(
         .as_ref()
         .map_or((None, None), |l| (Some(l.width), Some(l.height)));
     let template = ReceiptTemplate::for_client(config, logo);
+    let doc = document(&receipt, &template, false, config.locale.default);
+    let image_png_base64 = doc
+        .needs_image()
+        .then(|| pos_hardware::raster::render(&doc).to_png())
+        .transpose()
+        .map_err(|e| IpcError::internal(e.to_string()))?
+        .map(|png| encode_base64(&png));
     Ok(ReceiptPreview {
         columns: columns_for_paper(config.receipt.paper_width_mm),
         text: render_text(&receipt, &template, false),
         logo_png_base64,
         logo_width,
         logo_height,
+        image_png_base64,
     })
 }
 

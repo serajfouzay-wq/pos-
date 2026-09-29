@@ -6,12 +6,15 @@
 //! | USB-serial / RS-232   | COM port                                |
 //! | Bluetooth SPP         | COM port (Windows pairs SPP as COMn)    |
 //! | Ethernet / Wi-Fi      | TCP, port 9100                          |
+//! | USB on Linux          | `/dev/usb/lpN`, or a CUPS queue (raw)   |
 //!
 //! `hidapi` was considered for USB: thermal printers enumerate as the USB
 //! *printer* class, not HID, so it cannot reach them without replacing the
 //! driver (Zadig) — unacceptable for a zero-terminal install. The spooler
 //! works with the vendor or "Generic / Text Only" driver Windows installs.
 
+#[cfg(unix)]
+mod device;
 mod serial;
 #[cfg(windows)]
 mod spooler;
@@ -24,9 +27,25 @@ pub const DEFAULT_TCP_PORT: u16 = 9100;
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum PrinterTarget {
-    Tcp { host: String, port: u16 },
-    Serial { port: String, baud_rate: u32 },
-    WindowsPrinter { name: String },
+    Tcp {
+        host: String,
+        port: u16,
+    },
+    Serial {
+        port: String,
+        baud_rate: u32,
+    },
+    WindowsPrinter {
+        name: String,
+    },
+    /// Linux USB printer device file (`/dev/usb/lp0`).
+    Device {
+        path: String,
+    },
+    /// A CUPS print queue (Linux), sent as raw bytes.
+    Cups {
+        name: String,
+    },
 }
 
 impl PrinterTarget {
@@ -34,7 +53,8 @@ impl PrinterTarget {
         match self {
             PrinterTarget::Tcp { host, port } => format!("{host}:{port}"),
             PrinterTarget::Serial { port, baud_rate } => format!("{port} @ {baud_rate}"),
-            PrinterTarget::WindowsPrinter { name } => name.clone(),
+            PrinterTarget::WindowsPrinter { name } | PrinterTarget::Cups { name } => name.clone(),
+            PrinterTarget::Device { path } => path.clone(),
         }
     }
 }
@@ -74,6 +94,24 @@ impl TransportError {
     }
 }
 
+/// Only printer device files: never an arbitrary path on the machine.
+pub fn is_printer_device(path: &str) -> bool {
+    let name = path
+        .strip_prefix("/dev/usb/lp")
+        .or_else(|| path.strip_prefix("/dev/lp"));
+    name.is_some_and(|n| !n.is_empty() && n.len() <= 3 && n.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// A CUPS queue name as `lpstat` prints it.
+pub fn is_queue_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 127
+        && !name.starts_with('-')
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"-_.@".contains(&b))
+}
+
 /// Sends raw ESC/POS bytes to one printer.
 pub fn send(target: &PrinterTarget, bytes: &[u8]) -> Result<(), TransportError> {
     match target {
@@ -83,6 +121,14 @@ pub fn send(target: &PrinterTarget, bytes: &[u8]) -> Result<(), TransportError> 
         PrinterTarget::WindowsPrinter { name } => spooler::send(target, name, bytes),
         #[cfg(not(windows))]
         PrinterTarget::WindowsPrinter { .. } => Err(TransportError::Unsupported("Windows spooler")),
+        #[cfg(unix)]
+        PrinterTarget::Device { path } => device::send_device(target, path, bytes),
+        #[cfg(unix)]
+        PrinterTarget::Cups { name } => device::send_cups(target, name, bytes),
+        #[cfg(not(unix))]
+        PrinterTarget::Device { .. } | PrinterTarget::Cups { .. } => {
+            Err(TransportError::Unsupported("Linux"))
+        }
     }
 }
 
@@ -104,12 +150,14 @@ pub fn send_with_fallback<'a>(
 }
 
 /// Printers this machine can see, ordered as the default fallback chain:
-/// USB (spooler, USB-serial) → Bluetooth. Network printers cannot be
+/// USB (spooler, Linux device or CUPS, USB-serial) → Bluetooth. Network printers cannot be
 /// discovered reliably and are added by address.
 pub fn discover() -> Vec<DiscoveredPrinter> {
     let mut found = Vec::new();
     #[cfg(windows)]
     found.extend(spooler::discover());
+    #[cfg(unix)]
+    found.extend(device::discover());
     found.extend(serial::discover());
     found.sort_by_key(|p| match p.connection {
         Connection::Usb => 0,
@@ -143,6 +191,25 @@ mod tests {
         .expect("second works");
         assert_eq!(used, &chain[1]);
         assert!(send_with_fallback(&[], b"x", |_, _| Ok(())).is_err());
+    }
+
+    #[test]
+    fn only_printer_devices_and_plain_queue_names_are_accepted() {
+        assert!(is_printer_device("/dev/usb/lp0"));
+        assert!(is_printer_device("/dev/lp1"));
+        for bad in [
+            "/dev/sda",
+            "/etc/passwd",
+            "/dev/usb/lp",
+            "/dev/usb/lp0/../x",
+            "lp0",
+        ] {
+            assert!(!is_printer_device(bad), "{bad}");
+        }
+        assert!(is_queue_name("EPSON_TM-T20III"));
+        for bad in ["", "-d", "a b", "a;rm", "x/y"] {
+            assert!(!is_queue_name(bad), "{bad}");
+        }
     }
 
     #[test]

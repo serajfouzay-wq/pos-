@@ -14,6 +14,7 @@ use uuid::Uuid;
 use super::sales::{complete, SaleReceipt};
 use super::{authorize, blocking, Authorized};
 use crate::open_orders::{self, OpenInput, OpenOrderView, OrderActor, PayInput, UpdateInput};
+use crate::printing::PrintService;
 use crate::repo::sales::SaleActor;
 use crate::repo::{device, SqlResultExt};
 use crate::state::AppState;
@@ -59,14 +60,20 @@ pub async fn update_open_order(
 ) -> IpcResult<OpenOrderView> {
     let auth = authorize(&state, Permission::SaleCreate)?;
     let client = Arc::clone(&state.client);
+    let printer = Arc::clone(&state.printer);
     blocking(move || {
         let actor = actor(&auth)?;
         let now = SystemClock.now();
-        let mut conn = auth.db.conn();
-        let tx = conn.transaction().ipc()?;
-        let order = open_orders::update(&tx, &actor, input, &client, now)?;
-        let view = open_orders::view(&tx, order, &client, now)?;
-        tx.commit().ipc()?;
+        let view = {
+            let mut conn = auth.db.conn();
+            let tx = conn.transaction().ipc()?;
+            let order = open_orders::update(&tx, &actor, input, &client, now)?;
+            let view = open_orders::view(&tx, order, &client, now)?;
+            tx.commit().ipc()?;
+            view
+        };
+        // Changing sent items writes a void ticket for the kitchen.
+        let _ = printer.drain_kitchen(&auth.db);
         Ok(view)
     })
     .await
@@ -99,7 +106,8 @@ pub async fn split_order_line(
 #[derive(Debug, Serialize)]
 pub struct FireOutcome {
     pub(crate) order: OpenOrderView,
-    /// A kitchen printer is configured and took the ticket.
+    /// This till's kitchen printer took the ticket (when it has none, or it
+    /// is down, the ticket waits in the kitchen print queue).
     pub(crate) printed: bool,
     pub(crate) print_error: Option<String>,
     /// The ticket as text (shown when there is no kitchen printer).
@@ -140,10 +148,17 @@ pub async fn fire_course(
             hub.changed(ticket);
         }
         // The order is marked as sent even if the printer is down: the
-        // ticket text is returned so the till can show or reprint it.
-        let (printed, print_error) = match printer.print_kitchen(&auth.db, &fired.ticket) {
-            Ok(printed) => (printed, None),
-            Err(e) => (false, Some(e.message)),
+        // ticket waits in the queue, and its text is returned so the till
+        // can show it.
+        let has_printer = PrintService::settings(&auth.db.conn())?.kitchen.is_some();
+        let (printed, print_error) = if has_printer {
+            match printer.drain_kitchen(&auth.db) {
+                Ok(0) => (true, None),
+                Ok(_) => (false, printer.kitchen_error()),
+                Err(e) => (false, Some(e.message)),
+            }
+        } else {
+            (false, None)
         };
         Ok(FireOutcome {
             order: view,
@@ -151,7 +166,7 @@ pub async fn fire_course(
             print_error,
             ticket_text: pos_hardware::kitchen::render_text(
                 &fired.ticket,
-                client.receipt.paper_width_mm,
+                printer.paper_width_mm(&auth.db),
             ),
         })
     })
@@ -167,19 +182,24 @@ pub async fn cancel_open_order(
 ) -> IpcResult<()> {
     let auth = authorize(&state, Permission::SaleCreate)?;
     let client = Arc::clone(&state.client);
+    let printer = Arc::clone(&state.printer);
     blocking(move || {
         let actor = actor(&auth)?;
-        let mut conn = auth.db.conn();
-        let tx = conn.transaction().ipc()?;
-        open_orders::cancel(
-            &tx,
-            &actor,
-            order_id,
-            expected_updated_at,
-            &client,
-            SystemClock.now(),
-        )?;
-        tx.commit().ipc()?;
+        {
+            let mut conn = auth.db.conn();
+            let tx = conn.transaction().ipc()?;
+            open_orders::cancel(
+                &tx,
+                &actor,
+                order_id,
+                expected_updated_at,
+                &client,
+                SystemClock.now(),
+            )?;
+            tx.commit().ipc()?;
+        }
+        // Items already sent are called off with a void ticket.
+        let _ = printer.drain_kitchen(&auth.db);
         Ok(())
     })
     .await

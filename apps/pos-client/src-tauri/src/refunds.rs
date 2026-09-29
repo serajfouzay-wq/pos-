@@ -438,7 +438,9 @@ fn reverse(
         now,
     )
     .ipc()?;
-    print_jobs::enqueue(tx, row.meta.id, false, now).ipc()?;
+    if crate::printing::PrintService::settings(tx)?.auto_print_receipt {
+        print_jobs::enqueue(tx, row.meta.id, false, now).ipc()?;
+    }
 
     Ok(CreatedSale {
         transaction_id: row.meta.id,

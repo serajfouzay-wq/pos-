@@ -40,8 +40,9 @@ fn print(
     client: &pos_core::config::ClientConfig,
     report: PeriodReport,
 ) -> ReportPrint {
-    let doc = reports::to_doc(&report, client, Zone::System);
-    let text = pos_hardware::report::render_text(&doc, printer.paper_width_mm());
+    let language = printer.current_language(&auth.db);
+    let doc = reports::to_doc(&report, client, Zone::System, language);
+    let text = pos_hardware::report::render_text(&doc, printer.paper_width_mm(&auth.db));
     let (printed, print_error) = match printer.print_report(&auth.db, &doc) {
         Ok(()) => (true, None),
         Err(e) => (false, Some(e.message)),

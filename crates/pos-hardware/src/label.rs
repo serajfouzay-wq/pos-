@@ -4,8 +4,9 @@
 //! check digit (retail scanners read them fastest); anything else printable
 //! goes out as Code 128 (set B).
 
+use crate::doc::{columns_for_paper, Doc, Line, PrintMode};
 use crate::escpos::{Align, EscPos};
-use crate::receipt::columns_for_paper;
+use crate::raster;
 
 const GS: u8 = 0x1D;
 
@@ -71,18 +72,33 @@ fn fit(text: &str, width: usize) -> String {
     text.chars().take(width).collect()
 }
 
-/// `copies` labels, each cut.
-pub fn render_escpos(label: &ProductLabel, paper_width_mm: u16, copies: u8) -> Vec<u8> {
+/// `copies` labels, each cut. The name and price print as an image when
+/// `mode` asks for it or they hold characters the printer's font lacks
+/// (Arabic names); the barcode is always the printer's own.
+pub fn render_escpos(
+    label: &ProductLabel,
+    paper_width_mm: u16,
+    copies: u8,
+    mode: PrintMode,
+) -> Vec<u8> {
     let width = columns_for_paper(paper_width_mm);
+    let mut doc = Doc::new(paper_width_mm, false);
+    doc.push(Line::bold(fit(&label.name, width * 2), Align::Center))
+        .push(Line::large(label.price.as_str(), Align::Center));
+    let image = doc.prints_as_image(mode).then(|| raster::render(&doc));
     let mut p = EscPos::new();
     for _ in 0..copies.max(1) {
-        p.align(Align::Center)
-            .bold(true)
-            .line(&fit(&label.name, width))
-            .bold(false);
-        p.double(true)
-            .line(&fit(&label.price, width / 2))
-            .double(false);
+        if let Some(image) = &image {
+            p.align(Align::Center).raster_bands(image);
+        } else {
+            p.align(Align::Center)
+                .bold(true)
+                .line(&fit(&label.name, width))
+                .bold(false);
+            p.double(true)
+                .line(&fit(&label.price, width / 2))
+                .double(false);
+        }
         if let Some(bytes) = label.barcode.as_deref().and_then(barcode_bytes) {
             p.raw(&bytes).feed(1);
         }
@@ -138,7 +154,7 @@ mod tests {
             price: "2.500 KWD".into(),
             barcode: Some("6281000000014".into()),
         };
-        let bytes = render_escpos(&label, 58, 2);
+        let bytes = render_escpos(&label, 58, 2, PrintMode::Auto);
         let ean = [GS, b'k', 67, 13];
         let hits = bytes.windows(ean.len()).filter(|w| *w == ean).count();
         assert_eq!(hits, 2, "one barcode per copy");
@@ -150,8 +166,24 @@ mod tests {
             },
             80,
             1,
+            PrintMode::Auto,
         );
         assert!(code128.windows(5).any(|w| w == [GS, b'k', 73, 8, b'{']));
         assert!(render_text(&label, 58).contains("[Ean13 6281000000014]"));
+        assert!(
+            !bytes.windows(3).any(|w| w == [GS, b'v', b'0']),
+            "Latin labels print as text"
+        );
+        let arabic = render_escpos(
+            &ProductLabel {
+                name: "تمر 500 غ".into(),
+                ..label
+            },
+            58,
+            1,
+            PrintMode::Auto,
+        );
+        assert!(arabic.windows(3).any(|w| w == [GS, b'v', b'0']), "image");
+        assert!(arabic.windows(4).any(|w| w == ean), "barcode still printed");
     }
 }

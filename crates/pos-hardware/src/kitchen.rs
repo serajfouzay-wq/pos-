@@ -1,12 +1,17 @@
-//! Kitchen tickets: what to cook, for which table, which course. Printed on
-//! the kitchen printer when a course is fired (the KDS screen is Phase 8).
+//! Kitchen tickets: what to cook, for which table, which course, and void
+//! tickets for sent items that must not be made. Printed on the kitchen
+//! printer whenever food is sent (the kitchen display shows the same).
 
+use pos_core::config::Locale;
 use pos_core::time::{Timestamp, Zone};
+use serde::{Deserialize, Serialize};
 
-use crate::escpos::{Align, EscPos};
-use crate::receipt::{columns_for_paper, format_quantity};
+use crate::doc::{Doc, Line};
+use crate::escpos::Align;
+use crate::receipt::format_quantity;
+use crate::words::{is_rtl, words};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KitchenLine {
     pub quantity_milli: i64,
     pub name: String,
@@ -15,7 +20,7 @@ pub struct KitchenLine {
     pub course: Option<i64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KitchenTicket {
     /// "Table T4" or "Tab Sara".
     pub title: String,
@@ -24,69 +29,60 @@ pub struct KitchenTicket {
     pub server: String,
     pub guests: i64,
     pub at: Timestamp,
-    /// The wall clock the time prints in.
+    /// The wall clock the time prints in (not stored: the printing till's).
+    #[serde(skip)]
     pub zone: Zone,
     pub lines: Vec<KitchenLine>,
+    /// Items already sent that must NOT be made (changed or removed).
+    #[serde(default)]
+    pub void: bool,
 }
 
-fn layout(ticket: &KitchenTicket, width: usize) -> Vec<(String, bool, bool)> {
-    // (text, bold, double)
-    let mut out = vec![(ticket.title.clone(), true, true)];
+/// The ticket as a printable document, in `language`.
+pub fn document(ticket: &KitchenTicket, paper_width_mm: u16, language: Locale) -> Doc {
+    let w = words(language);
+    let mut doc = Doc::new(paper_width_mm, is_rtl(language));
+    if ticket.void {
+        doc.push(Line::large(
+            format!("*** {} ***", w.void_ticket),
+            Align::Center,
+        ));
+    }
+    doc.push(Line::large(ticket.title.as_str(), Align::Center));
     if let Some(course) = ticket.course {
-        out.push((format!("COURSE {course}"), true, false));
+        doc.push(Line::bold(format!("{} {course}", w.course), Align::Center));
     }
     let mut meta = format!("{} · {}", ticket.server, ticket.zone.format_time(ticket.at));
     if ticket.guests > 0 {
-        meta.push_str(&format!(" · {} guests", ticket.guests));
+        meta.push_str(&format!(" · {} {}", ticket.guests, w.guests));
     }
-    out.push((meta, false, false));
-    out.push(("-".repeat(width), false, false));
+    doc.push(Line::text(meta, Align::Center));
+    doc.push(Line::Rule);
     let mut last_course = None;
     for line in &ticket.lines {
         if ticket.course.is_none() && line.course.is_some() && line.course != last_course {
-            out.push((
-                format!("-- course {} --", line.course.unwrap_or(0)),
-                true,
-                false,
+            doc.push(Line::bold(
+                format!("-- {} {} --", w.course, line.course.unwrap_or(0)),
+                Align::Left,
             ));
             last_course = line.course;
         }
-        out.push((
-            format!("{} x {}", format_quantity(line.quantity_milli), line.name),
-            true,
-            false,
-        ));
+        let item = format!("{} x {}", format_quantity(line.quantity_milli), line.name);
+        doc.push(Line::large(item, Align::Left));
         for modifier in &line.modifiers {
-            out.push((format!("   + {modifier}"), false, false));
+            doc.push(Line::text(format!("   + {modifier}"), Align::Left));
         }
         if let Some(note) = line.note.as_deref().filter(|n| !n.trim().is_empty()) {
-            out.push((format!("   ! {note}"), true, false));
+            doc.push(Line::bold(format!("   ! {note}"), Align::Left));
         }
     }
-    out.push(("-".repeat(width), false, false));
-    out
+    doc.push(Line::Rule);
+    doc
 }
 
-pub fn render_escpos(ticket: &KitchenTicket, paper_width_mm: u16) -> Vec<u8> {
-    let width = columns_for_paper(paper_width_mm);
-    let mut p = EscPos::new();
-    for (i, (text, bold, double)) in layout(ticket, width).into_iter().enumerate() {
-        p.align(if i < 3 { Align::Center } else { Align::Left })
-            .bold(bold)
-            .double(double);
-        p.line(&text).bold(false).double(false);
-    }
-    p.feed(3).cut();
-    p.into_bytes()
-}
-
+/// The English ticket as plain text (tests, the till's on-screen copy).
 pub fn render_text(ticket: &KitchenTicket, paper_width_mm: u16) -> String {
-    let width = columns_for_paper(paper_width_mm);
-    layout(ticket, width)
-        .into_iter()
-        .map(|(text, _, _)| text)
-        .collect::<Vec<_>>()
-        .join("\n")
+    document(ticket, paper_width_mm, Locale::En).to_text()
 }
 
 #[cfg(test)]
@@ -118,19 +114,29 @@ mod tests {
                     course: Some(2),
                 },
             ],
+            void: false,
         };
         let text = render_text(&ticket, 80);
-        assert!(
-            text.starts_with("Table T4\nCOURSE 2\nOmar · 19:05 UTC · 3 guests"),
+        let lines: Vec<&str> = text.lines().map(str::trim).collect();
+        assert_eq!(
+            lines[..3],
+            ["Table T4", "COURSE 2", "Omar · 19:05 UTC · 3 guests"],
             "{text}"
         );
         assert!(text.contains(
             "2 x Ribeye\n   + Medium rare\n   + Fries\n   ! sauce on the side\n1 x Salad"
         ));
-        let bytes = render_escpos(&ticket, 80);
-        assert!(
-            bytes.ends_with(&[0x1D, b'V', 0x42, 0x00])
-                || bytes.windows(2).any(|w| w == [0x1D, b'V'])
-        );
+        let bytes = document(&ticket, 80, Locale::En).to_escpos(crate::doc::PrintMode::Auto);
+        assert!(bytes.ends_with(&[0x1D, b'V', 66, 3]));
+
+        let void = KitchenTicket {
+            void: true,
+            ..ticket
+        };
+        assert!(render_text(&void, 80)
+            .trim_start()
+            .starts_with("*** VOID ***"));
+        let arabic = document(&void, 80, Locale::Ar);
+        assert!(arabic.rtl && arabic.needs_image());
     }
 }

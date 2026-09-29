@@ -1,8 +1,10 @@
 use std::sync::Arc;
 
+use pos_core::config::Locale;
 use pos_core::rbac::Permission;
 use pos_core::time::{Clock, SystemClock};
 use pos_core::{IpcError, IpcResult};
+use pos_hardware::doc::PrintMode;
 use pos_hardware::transport::{DiscoveredPrinter, PrinterTarget};
 use tauri::State;
 
@@ -38,20 +40,7 @@ pub async fn save_printer_settings(
     settings: PrinterSettings,
 ) -> IpcResult<PrinterSettings> {
     let auth = authorize(&state, Permission::SettingsManage)?;
-    if settings.chain.len() > 3 {
-        return Err(IpcError::validation(
-            "Configure at most three printers (primary + two fallbacks).",
-        ));
-    }
-    for target in &settings.chain {
-        if let PrinterTarget::Tcp { host, port } = target {
-            if host.trim().is_empty() || *port == 0 {
-                return Err(IpcError::validation(
-                    "Network printers need a host and port.",
-                ));
-            }
-        }
-    }
+    settings.validate()?;
     let printer = Arc::clone(&state.printer);
     blocking(move || {
         let now = SystemClock.now();
@@ -74,14 +63,26 @@ pub async fn save_printer_settings(
         }
         // A newly reachable printer may have queued receipts waiting.
         let _ = printer.drain(&auth.db, None);
+        let _ = printer.drain_kitchen(&auth.db);
         Ok(settings)
     })
     .await
 }
 
+/// A test page; `language`, `mode` and `paper_width_mm` try settings before
+/// they are saved (the saved ones otherwise).
 #[tauri::command(rename_all = "snake_case")]
-pub async fn test_printer(state: State<'_, AppState>, target: PrinterTarget) -> IpcResult<()> {
-    authorize(&state, Permission::SettingsManage)?;
+pub async fn test_printer(
+    state: State<'_, AppState>,
+    target: PrinterTarget,
+    language: Option<Locale>,
+    mode: Option<PrintMode>,
+    paper_width_mm: Option<u16>,
+) -> IpcResult<()> {
+    let auth = authorize(&state, Permission::SettingsManage)?;
+    if paper_width_mm.is_some_and(|w| w != 58 && w != 80) {
+        return Err(IpcError::validation("Paper is 58 mm or 80 mm wide."));
+    }
     let printer = Arc::clone(&state.printer);
-    blocking(move || printer.test_print(&target)).await
+    blocking(move || printer.test_print(&auth.db, &target, language, mode, paper_width_mm)).await
 }

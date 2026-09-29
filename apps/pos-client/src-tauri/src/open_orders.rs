@@ -371,7 +371,7 @@ pub fn split_line(
 pub struct Fired {
     pub order: OpenOrder,
     pub ticket: KitchenTicket,
-    /// The kitchen display's copy (builds with the kitchen display).
+    /// The kitchen ticket written (cafes and restaurants).
     pub kitchen: Option<kitchen::KitchenTicket>,
 }
 
@@ -417,7 +417,8 @@ fn order_title(conn: &Connection, order: &OpenOrder) -> IpcResult<String> {
     })
 }
 
-/// Writes the kitchen display's ticket for these order lines.
+/// Writes the kitchen ticket for these order lines (the display's copy and
+/// the kitchen printer's job).
 #[allow(clippy::too_many_arguments)]
 fn kitchen_ticket(
     conn: &Connection,
@@ -430,11 +431,12 @@ fn kitchen_ticket(
     transaction_id: Option<Uuid>,
     now: Timestamp,
 ) -> IpcResult<Option<kitchen::KitchenTicket>> {
-    if !kitchen::enabled(config) || lines.is_empty() {
+    if !kitchen::records(config) || lines.is_empty() {
         return Ok(None);
     }
-    kitchen::create(
+    kitchen::send(
         conn,
+        config,
         actor.device_id,
         Draft {
             kind,
@@ -452,7 +454,6 @@ fn kitchen_ticket(
         },
         now,
     )
-    .map(Some)
 }
 
 /// Sends the unsent lines of `course` (or all unsent lines) to the kitchen.
@@ -518,6 +519,7 @@ pub fn fire(
             at: now,
             zone: Zone::System,
             lines: lines.into_iter().map(|(_, l)| l).collect(),
+            void: false,
         },
         kitchen,
         order,

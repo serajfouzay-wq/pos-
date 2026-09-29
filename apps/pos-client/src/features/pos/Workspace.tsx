@@ -147,11 +147,14 @@ export function Workspace({ session }: { session: Session }) {
     printerState && printerState.pending_jobs > 0
       ? t('status.pending', { count: printerState.pending_jobs })
       : null,
+    printerState && printerState.kitchen_pending > 0
+      ? t('admin.printer.kitchenWaiting', { count: printerState.kitchen_pending })
+      : null,
   ]
     .filter(Boolean)
     .join(' · ');
   const printerClass =
-    !printerState?.configured || printerState.online === false
+    !printerState?.configured || printerState.online === false || printerState.kitchen_pending > 0
       ? 'status-dot status-dot--warn'
       : 'status-dot status-dot--ok';
 

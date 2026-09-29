@@ -1,15 +1,16 @@
 //! Receipt layout. One layout, two outputs: ESC/POS bytes for the printer and
 //! plain text (tests, on-screen preview) — so what is tested is what prints.
 
-use pos_core::config::ClientConfig;
-use pos_core::currency::CurrencyCode;
+use pos_core::config::{ClientConfig, Locale};
 use pos_core::money::{to_decimal_string, MinorUnits};
 use pos_core::receipt::Receipt;
 use pos_core::sales::{PaymentMethod, TransactionKind};
 use pos_core::time::Zone;
 
-use crate::escpos::{Align, EscPos};
+use crate::doc::{Doc, Line};
+use crate::escpos::Align;
 use crate::image::MonoImage;
+use crate::words::{is_rtl, words};
 
 /// Per-client presentation, from the embedded `ClientConfig`.
 #[derive(Debug, Clone)]
@@ -23,18 +24,6 @@ pub struct ReceiptTemplate {
     pub logo: Option<MonoImage>,
     /// How the date prints (the till: its own zone; previews: UTC).
     pub zone: Zone,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum Block {
-    Logo,
-    Text {
-        text: String,
-        align: Align,
-        bold: bool,
-        double: bool,
-    },
-    Rule,
 }
 
 impl ReceiptTemplate {
@@ -57,66 +46,7 @@ impl ReceiptTemplate {
     }
 }
 
-/// Characters per line in font A.
-pub fn columns_for_paper(paper_width_mm: u16) -> usize {
-    if paper_width_mm >= 80 {
-        48
-    } else {
-        32
-    }
-}
-
-fn text(text: impl Into<String>, align: Align) -> Block {
-    Block::Text {
-        text: text.into(),
-        align,
-        bold: false,
-        double: false,
-    }
-}
-
-fn bold(text: impl Into<String>, align: Align) -> Block {
-    Block::Text {
-        text: text.into(),
-        align,
-        bold: true,
-        double: false,
-    }
-}
-
-/// `left ....... right` in exactly `width` characters (left side truncated).
-pub(crate) fn two_columns(left: &str, right: &str, width: usize) -> String {
-    let right_len = right.chars().count();
-    let room = width.saturating_sub(right_len + 1);
-    let left: String = left.chars().take(room).collect();
-    let pad = width.saturating_sub(left.chars().count() + right_len);
-    format!("{left}{}{right}", " ".repeat(pad))
-}
-
-pub(crate) fn wrap(text: &str, width: usize) -> Vec<String> {
-    let mut lines = Vec::new();
-    let mut current = String::new();
-    for word in text.split_whitespace() {
-        let needed =
-            current.chars().count() + usize::from(!current.is_empty()) + word.chars().count();
-        if needed > width && !current.is_empty() {
-            lines.push(std::mem::take(&mut current));
-        }
-        if !current.is_empty() {
-            current.push(' ');
-        }
-        current.push_str(word);
-        while current.chars().count() > width {
-            let head: String = current.chars().take(width).collect();
-            current = current.chars().skip(width).collect();
-            lines.push(head);
-        }
-    }
-    if !current.is_empty() {
-        lines.push(current);
-    }
-    lines
-}
+pub use crate::doc::{columns_for_paper, two_columns, wrap};
 
 /// `2000` → `"2"`, `250` → `"0.25"`, `1500` → `"1.5"`.
 pub fn format_quantity(quantity_milli: i64) -> String {
@@ -129,125 +59,109 @@ pub fn format_quantity(quantity_milli: i64) -> String {
     format!("{whole}.{}", digits.trim_end_matches('0'))
 }
 
-fn method_label(method: PaymentMethod) -> &'static str {
-    match method {
-        PaymentMethod::Cash => "Cash",
-        PaymentMethod::Card => "Card",
-        PaymentMethod::Wallet => "Wallet",
-        PaymentMethod::Loyalty => "Loyalty points",
-        PaymentMethod::Voucher => "Voucher",
-    }
-}
-
-fn layout(receipt: &Receipt, template: &ReceiptTemplate, copy: bool) -> Vec<Block> {
-    let width = columns_for_paper(template.paper_width_mm);
+/// The receipt as a printable document, in `language`.
+pub fn document(
+    receipt: &Receipt,
+    template: &ReceiptTemplate,
+    copy: bool,
+    language: Locale,
+) -> Doc {
+    let w = words(language);
     let money = |amount: MinorUnits| to_decimal_string(amount, receipt.currency);
     let code = receipt.currency.as_str();
-    let mut out = Vec::new();
+    let mut doc = Doc::new(template.paper_width_mm, is_rtl(language));
+    doc.logo = template.logo.clone();
 
     if template.logo.is_some() {
-        out.push(Block::Logo);
+        doc.push(Line::Logo);
     }
-    out.push(Block::Text {
-        text: template.business_name.clone(),
-        align: Align::Center,
-        bold: true,
-        double: true,
-    });
+    doc.push(Line::large(template.business_name.as_str(), Align::Center));
     for line in &template.header_lines {
-        out.push(text(line.as_str(), Align::Center));
+        doc.push(Line::text(line.as_str(), Align::Center));
     }
     if let Some(tax_number) = &template.tax_number {
-        out.push(text(format!("Tax No: {tax_number}"), Align::Center));
+        doc.push(Line::text(
+            format!("{}: {tax_number}", w.tax_no),
+            Align::Center,
+        ));
     }
     match receipt.kind {
         TransactionKind::Sale => {}
-        TransactionKind::Refund => out.push(bold("*** REFUND ***", Align::Center)),
-        TransactionKind::Void => out.push(bold("*** VOID ***", Align::Center)),
+        TransactionKind::Refund => {
+            doc.push(Line::bold(w.refund_banner, Align::Center));
+        }
+        TransactionKind::Void => {
+            doc.push(Line::bold(w.void_banner, Align::Center));
+        }
     }
     if copy {
-        out.push(bold("*** COPY ***", Align::Center));
+        doc.push(Line::bold(w.copy_banner, Align::Center));
     }
-    out.push(Block::Rule);
-    out.push(text(
-        two_columns("Receipt", &receipt.receipt_number, width),
-        Align::Left,
-    ));
+    doc.push(Line::Rule);
+    doc.push(Line::row(w.receipt, receipt.receipt_number.as_str()));
     // 2026-09-23T10:15:30.123Z → 2026-09-23 13:15 (till time) / … 10:15 UTC
-    let issued = template.zone.format_minutes(receipt.issued_at);
-    out.push(text(two_columns("Date", &issued, width), Align::Left));
-    out.push(text(
-        two_columns("Cashier", &receipt.cashier_name, width),
-        Align::Left,
+    doc.push(Line::row(
+        w.date,
+        template.zone.format_minutes(receipt.issued_at),
     ));
+    doc.push(Line::row(w.cashier, receipt.cashier_name.as_str()));
     if let Some(customer) = &receipt.customer_name {
-        out.push(text(two_columns("Customer", customer, width), Align::Left));
+        doc.push(Line::row(w.customer, customer.as_str()));
     }
-    out.push(Block::Rule);
+    doc.push(Line::Rule);
 
     for line in &receipt.lines {
-        for name_line in wrap(&line.name, width) {
-            out.push(text(name_line, Align::Left));
-        }
+        doc.push(Line::text(line.name.as_str(), Align::Left));
         for modifier in &line.modifiers {
             let delta = if modifier.price_delta == 0 {
                 String::new()
             } else {
                 money(modifier.price_delta)
             };
-            out.push(text(
-                two_columns(&format!("  + {}", modifier.name), &delta, width),
-                Align::Left,
-            ));
+            doc.push(Line::row(format!("  + {}", modifier.name), delta));
         }
         let qty = format!(
             "  {} x {}",
             format_quantity(line.quantity_milli),
             money(line.unit_price)
         );
-        out.push(text(
-            two_columns(&qty, &money(line.line_total + line.discount_amount), width),
-            Align::Left,
+        doc.push(Line::row(
+            qty,
+            money(line.line_total + line.discount_amount),
         ));
         if line.discount_amount > 0 {
-            out.push(text(
-                two_columns(
-                    "  Discount",
-                    &format!("-{}", money(line.discount_amount)),
-                    width,
-                ),
-                Align::Left,
+            doc.push(Line::row(
+                format!("  {}", w.discount),
+                format!("-{}", money(line.discount_amount)),
             ));
         }
     }
-    out.push(Block::Rule);
+    doc.push(Line::Rule);
 
-    out.push(text(
-        two_columns("Subtotal", &money(receipt.subtotal), width),
-        Align::Left,
-    ));
+    doc.push(Line::row(w.subtotal, money(receipt.subtotal)));
     if receipt.discount_total > 0 {
-        out.push(text(
-            two_columns(
-                "Discount",
-                &format!("-{}", money(receipt.discount_total)),
-                width,
-            ),
-            Align::Left,
+        doc.push(Line::row(
+            w.discount,
+            format!("-{}", money(receipt.discount_total)),
         ));
     }
-    for tax in &receipt.tax_lines {
+    // A 0% line (no VAT, as in Libya) says nothing.
+    for tax in receipt
+        .tax_lines
+        .iter()
+        .filter(|t| t.rate_bps != 0 || t.tax_amount != 0)
+    {
         let rate = format_quantity(tax.rate_bps * 10); // bps → percent with ≤2 decimals
-        out.push(text(
-            two_columns(&format!("Tax {rate}%"), &money(tax.tax_amount), width),
-            Align::Left,
+        doc.push(Line::row(
+            format!("{} {rate}%", w.tax),
+            money(tax.tax_amount),
         ));
     }
-    out.push(bold(
-        two_columns(&format!("TOTAL {code}"), &money(receipt.total), width),
-        Align::Left,
+    doc.push(Line::total(
+        format!("{} {code}", w.total),
+        money(receipt.total),
     ));
-    out.push(Block::Rule);
+    doc.push(Line::Rule);
 
     for payment in &receipt.payments {
         let shown = if payment.method == PaymentMethod::Cash {
@@ -256,152 +170,53 @@ fn layout(receipt: &Receipt, template: &ReceiptTemplate, copy: bool) -> Vec<Bloc
             payment.amount
         };
         let label = if payment.tendered_currency == receipt.currency {
-            method_label(payment.method).to_owned()
+            w.method(payment.method).to_owned()
         } else {
             format!(
                 "{} ({})",
-                method_label(payment.method),
+                w.method(payment.method),
                 payment.tendered_currency.as_str()
             )
         };
-        out.push(text(
-            two_columns(&label, &money_in(shown, payment.tendered_currency), width),
-            Align::Left,
+        doc.push(Line::row(
+            label,
+            to_decimal_string(shown, payment.tendered_currency),
         ));
     }
     if receipt.change_due > 0 {
-        out.push(bold(
-            two_columns("Change", &money(receipt.change_due), width),
-            Align::Left,
-        ));
+        doc.push(Line::total(w.change, money(receipt.change_due)));
     }
     if let Some(loyalty) = &receipt.loyalty {
         // On a refund or void the figures are what was reversed.
         let sale = receipt.kind == TransactionKind::Sale;
         if loyalty.redeemed > 0 {
             let label = if sale {
-                "Points redeemed"
+                w.points_redeemed
             } else {
-                "Points returned"
+                w.points_returned
             };
-            out.push(text(
-                two_columns(label, &loyalty.redeemed.to_string(), width),
-                Align::Left,
-            ));
+            doc.push(Line::row(label, loyalty.redeemed.to_string()));
         }
         if sale || loyalty.earned > 0 {
             let label = if sale {
-                "Points earned"
+                w.points_earned
             } else {
-                "Points taken back"
+                w.points_taken_back
             };
-            out.push(text(
-                two_columns(label, &loyalty.earned.to_string(), width),
-                Align::Left,
-            ));
+            doc.push(Line::row(label, loyalty.earned.to_string()));
         }
-        out.push(text(
-            two_columns("Points balance", &loyalty.balance.to_string(), width),
-            Align::Left,
-        ));
+        doc.push(Line::row(w.points_balance, loyalty.balance.to_string()));
     }
     if !template.footer_text.trim().is_empty() {
-        out.push(Block::Rule);
-        for line in wrap(&template.footer_text, width) {
-            out.push(text(line, Align::Center));
-        }
+        doc.push(Line::Rule);
+        doc.push(Line::text(template.footer_text.as_str(), Align::Center));
     }
-    out
+    doc
 }
 
-fn money_in(amount: MinorUnits, currency: CurrencyCode) -> String {
-    to_decimal_string(amount, currency)
-}
-
-/// ESC/POS bytes for the printer: initialise, content, feed, cut.
-pub fn render_escpos(receipt: &Receipt, template: &ReceiptTemplate, copy: bool) -> Vec<u8> {
-    let width = columns_for_paper(template.paper_width_mm);
-    let mut p = EscPos::new();
-    for block in layout(receipt, template, copy) {
-        match block {
-            Block::Logo => {
-                if let Some(logo) = &template.logo {
-                    p.align(Align::Center).raster(logo);
-                }
-            }
-            Block::Text {
-                text,
-                align,
-                bold,
-                double,
-            } => {
-                p.align(align).bold(bold).double(double);
-                if double {
-                    for line in wrap(&text, width / 2) {
-                        p.line(&line);
-                    }
-                } else {
-                    p.line(&text);
-                }
-                p.bold(false).double(false);
-            }
-            Block::Rule => {
-                p.align(Align::Left).line(&"-".repeat(width));
-            }
-        }
-    }
-    p.feed(3).cut();
-    p.into_bytes()
-}
-
-/// Plain-text rendering of exactly the same layout.
+/// The English receipt as plain text (tests, previews).
 pub fn render_text(receipt: &Receipt, template: &ReceiptTemplate, copy: bool) -> String {
-    let width = columns_for_paper(template.paper_width_mm);
-    let pad = |line: &str, align: Align, width_used: usize| {
-        let len = line.chars().count();
-        let free = width_used.saturating_sub(len);
-        match align {
-            Align::Left => line.to_owned(),
-            Align::Center => format!("{}{line}", " ".repeat(free / 2)),
-            Align::Right => format!("{}{line}", " ".repeat(free)),
-        }
-    };
-    let mut out = String::new();
-    for block in layout(receipt, template, copy) {
-        match block {
-            Block::Logo => out.push_str("[logo]\n"),
-            Block::Text {
-                text,
-                align,
-                double,
-                ..
-            } => {
-                if double {
-                    // Double-width glyphs occupy two columns each.
-                    for line in wrap(&text, width / 2) {
-                        let used = line.chars().count() * 2;
-                        let free = width.saturating_sub(used);
-                        let lead = match align {
-                            Align::Left => 0,
-                            Align::Center => free / 2,
-                            Align::Right => free,
-                        };
-                        out.push_str(&" ".repeat(lead));
-                        out.push_str(&line);
-                        out.push('\n');
-                    }
-                } else {
-                    out.push_str(pad(&text, align, width).trim_end());
-                    out.push('\n');
-                }
-            }
-            Block::Rule => {
-                out.push_str(&"-".repeat(width));
-                out.push('\n');
-            }
-        }
-    }
-    out
+    document(receipt, template, copy, Locale::En).to_text()
 }
 
 #[cfg(test)]
@@ -411,6 +226,8 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
+    use crate::doc::PrintMode;
+    use pos_core::currency::CurrencyCode;
 
     fn sample() -> Receipt {
         Receipt {
@@ -523,7 +340,7 @@ mod tests {
     #[test]
     fn copies_are_marked_and_bytes_end_with_a_cut() {
         assert!(render_text(&sample(), &template(), true).contains("*** COPY ***"));
-        let bytes = render_escpos(&sample(), &template(), false);
+        let bytes = document(&sample(), &template(), false, Locale::En).to_escpos(PrintMode::Auto);
         assert!(bytes.ends_with(&[0x1D, b'V', 66, 3]));
         assert!(
             !bytes.windows(5).any(|w| w == crate::escpos::DRAWER_KICK),

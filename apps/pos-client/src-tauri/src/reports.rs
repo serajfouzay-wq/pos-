@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 
 use chrono::{Duration, NaiveDate, Timelike};
-use pos_core::config::ClientConfig;
+use pos_core::config::{ClientConfig, Locale};
 use pos_core::currency::CurrencyCode;
 use pos_core::money::to_decimal_string;
 use pos_core::rbac::Role;
@@ -17,6 +17,7 @@ use pos_core::sales::{OrderType, PaymentMethod, TransactionKind};
 use pos_core::time::{Timestamp, Zone};
 use pos_core::{IpcError, IpcErrorCode, IpcResult};
 use pos_hardware::report::{ReportDoc, ReportRow, ReportSection};
+use pos_hardware::words::words;
 use rusqlite::{params, Connection, OptionalExtension, Params};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -612,64 +613,71 @@ fn percent(bps: i64) -> String {
     }
 }
 
-fn method_label(method: PaymentMethod) -> &'static str {
-    match method {
-        PaymentMethod::Cash => "Cash",
-        PaymentMethod::Card => "Card",
-        PaymentMethod::Wallet => "Wallet",
-        PaymentMethod::Loyalty => "Loyalty points",
-        PaymentMethod::Voucher => "Voucher",
-    }
-}
-
-/// The printed layout of an X or Z report.
-pub fn to_doc(report: &PeriodReport, client: &ClientConfig, zone: Zone) -> ReportDoc {
+/// The printed layout of an X or Z report, worded in `language`.
+pub fn to_doc(
+    report: &PeriodReport,
+    client: &ClientConfig,
+    zone: Zone,
+    language: Locale,
+) -> ReportDoc {
+    let w = words(language);
     let c = report.currency;
     let t = &report.totals;
     let title = match (report.kind, report.z_number) {
-        (ReportKind::Z, Some(n)) => format!("Z REPORT #{n}"),
-        (ReportKind::Z, None) => "Z REPORT".into(),
-        (ReportKind::X, _) => "X REPORT".into(),
+        (ReportKind::Z, Some(n)) => format!("{} #{n}", w.z_report),
+        (ReportKind::Z, None) => w.z_report.into(),
+        (ReportKind::X, _) => w.x_report.into(),
     };
     let mut lines = vec![
         client.display_name.clone(),
-        format!("Till {}", report.device_label),
-        format!("From {}", zone.format_minutes(report.period_start)),
-        format!("To   {}", zone.format_minutes(report.period_end)),
+        format!("{} {}", w.till, report.device_label),
+        format!("{} {}", w.from, zone.format_minutes(report.period_start)),
+        format!("{} {}", w.to, zone.format_minutes(report.period_end)),
     ];
     if report.kind == ReportKind::X {
-        lines.push("Nothing closed (not a Z)".into());
+        lines.push(w.not_closed.into());
     }
     let mut sales = vec![
-        ReportRow::pair(format!("Sales ({})", t.sale_count), money(t.gross_sales, c)),
-        ReportRow::pair("Discounts", money(-t.discount_total, c)),
         ReportRow::pair(
-            format!("Refunds ({})", t.refund_count),
+            format!("{} ({})", w.sales, t.sale_count),
+            money(t.gross_sales, c),
+        ),
+        ReportRow::pair(w.discounts, money(-t.discount_total, c)),
+        ReportRow::pair(
+            format!("{} ({})", w.refunds, t.refund_count),
             money(-t.refund_total, c),
         ),
-        ReportRow::pair(format!("Voids ({})", t.void_count), money(-t.void_total, c)),
+        ReportRow::pair(
+            format!("{} ({})", w.voids, t.void_count),
+            money(-t.void_total, c),
+        ),
     ];
-    sales.push(ReportRow::total("Net sales", money(t.net_sales, c)));
+    sales.push(ReportRow::total(w.net_sales, money(t.net_sales, c)));
     let mut tax: Vec<ReportRow> = t
         .by_tax_rate
         .iter()
         .filter(|r| r.rate_bps > 0)
         .map(|r| {
             ReportRow::pair(
-                format!("{} on {}", percent(r.rate_bps), money(r.taxable_amount, c)),
+                format!(
+                    "{} {} {}",
+                    percent(r.rate_bps),
+                    w.on,
+                    money(r.taxable_amount, c)
+                ),
                 money(r.tax_amount, c),
             )
         })
         .collect();
-    tax.push(ReportRow::total("Tax", money(t.tax_total, c)));
+    tax.push(ReportRow::total(w.tax, money(t.tax_total, c)));
     let payments: Vec<ReportRow> = if t.by_payment_method.is_empty() {
-        vec![ReportRow::Text("No payments".into())]
+        vec![ReportRow::Text(w.no_payments.into())]
     } else {
         t.by_payment_method
             .iter()
             .map(|m| {
                 ReportRow::pair(
-                    format!("{} ({})", method_label(m.method), m.count),
+                    format!("{} ({})", w.method(m.method), m.count),
                     money(m.amount, c),
                 )
             })
@@ -677,19 +685,17 @@ pub fn to_doc(report: &PeriodReport, client: &ClientConfig, zone: Zone) -> Repor
     };
     let cash = &report.cash;
     let mut drawer = vec![
-        ReportRow::pair("Opening floats", money(cash.opening_floats, c)),
-        ReportRow::pair("Cash sales", money(cash.cash_sales, c)),
-        ReportRow::pair("Cash refunds", money(-cash.cash_refunds, c)),
-        ReportRow::total("Expected", money(cash.expected, c)),
+        ReportRow::pair(w.opening_floats, money(cash.opening_floats, c)),
+        ReportRow::pair(w.cash_sales, money(cash.cash_sales, c)),
+        ReportRow::pair(w.cash_refunds, money(-cash.cash_refunds, c)),
+        ReportRow::total(w.expected, money(cash.expected, c)),
     ];
     match (cash.counted, cash.variance) {
         (Some(counted), Some(variance)) => {
-            drawer.push(ReportRow::pair("Counted", money(counted, c)));
-            drawer.push(ReportRow::total("Variance", money(variance, c)));
+            drawer.push(ReportRow::pair(w.counted, money(counted, c)));
+            drawer.push(ReportRow::total(w.variance, money(variance, c)));
         }
-        _ => drawer.push(ReportRow::Text(
-            "A shift is still open: not counted yet.".into(),
-        )),
+        _ => drawer.push(ReportRow::Text(w.shift_open.into())),
     }
     let shift_rows: Vec<ReportRow> = report
         .shifts
@@ -699,7 +705,7 @@ pub fn to_doc(report: &PeriodReport, client: &ClientConfig, zone: Zone) -> Repor
                 "{}-{} {}",
                 zone.format_time(s.opened_at).trim_end_matches(" UTC"),
                 s.closed_at
-                    .map_or_else(|| "open".into(), |at| zone.format_time(at)),
+                    .map_or_else(|| w.open.into(), |at| zone.format_time(at)),
                 s.opened_by_name
             );
             ReportRow::pair(span, s.variance.map_or_else(|| "-".into(), |v| money(v, c)))
@@ -707,25 +713,25 @@ pub fn to_doc(report: &PeriodReport, client: &ClientConfig, zone: Zone) -> Repor
         .collect();
     let mut sections = vec![
         ReportSection {
-            heading: Some("Sales".into()),
+            heading: Some(w.sales.into()),
             rows: sales,
         },
         ReportSection {
-            heading: Some("Tax".into()),
+            heading: Some(w.tax.into()),
             rows: tax,
         },
         ReportSection {
-            heading: Some("Payments (net)".into()),
+            heading: Some(w.payments_net.into()),
             rows: payments,
         },
         ReportSection {
-            heading: Some("Cash drawer".into()),
+            heading: Some(w.cash_drawer.into()),
             rows: drawer,
         },
     ];
     if !shift_rows.is_empty() {
         sections.push(ReportSection {
-            heading: Some(format!("Shifts ({})", shift_rows.len())),
+            heading: Some(format!("{} ({})", w.shifts, shift_rows.len())),
             rows: shift_rows,
         });
     }
@@ -733,14 +739,14 @@ pub fn to_doc(report: &PeriodReport, client: &ClientConfig, zone: Zone) -> Repor
         heading: None,
         rows: vec![
             ReportRow::pair(
-                "First receipt",
+                w.first_receipt,
                 t.first_receipt.clone().unwrap_or_else(|| "-".into()),
             ),
             ReportRow::pair(
-                "Last receipt",
+                w.last_receipt,
                 t.last_receipt.clone().unwrap_or_else(|| "-".into()),
             ),
-            ReportRow::total("Grand total", money(report.grand_total, c)),
+            ReportRow::total(w.grand_total, money(report.grand_total, c)),
             ReportRow::Text(format!(
                 "{} {}",
                 report.generated_by_name,

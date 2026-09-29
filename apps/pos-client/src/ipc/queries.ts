@@ -32,6 +32,8 @@ import type {
   SessionStatus,
   SyncStatus,
   TransactionPayloadInput,
+  Locale,
+  PrintMode,
 } from '@pos/shared';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
@@ -360,7 +362,12 @@ export function useSavePrinterSettings() {
 
 export function useTestPrinter() {
   return useMutation({
-    mutationFn: (target: PrinterTarget) => ipc.call('test_printer', { target }),
+    mutationFn: (args: {
+      target: PrinterTarget;
+      language?: Locale | null;
+      mode?: PrintMode | null;
+      paper_width_mm?: 58 | 80 | null;
+    }) => ipc.call('test_printer', args),
   });
 }
 

@@ -27,6 +27,7 @@ import {
   UuidSchema,
 } from '../primitives';
 import { SyncReportSchema, SyncStatusSchema } from '../sync';
+import { LocaleSchema } from '../i18n';
 import { DiningTableSchema } from '../entities/menu';
 import { PosAppInfoSchema } from './app-info';
 import {
@@ -62,9 +63,11 @@ import {
   DiscoveredPrinterSchema,
   DisplayNameSchema,
   LoginUserSchema,
+  PaperWidthSchema,
   PrinterSettingsSchema,
   PrinterStatusSchema,
   PrinterTargetSchema,
+  PrintModeSchema,
   PrintOutcomeSchema,
   ProductInputSchema,
   QuoteRequestSchema,
@@ -306,7 +309,17 @@ export const POS_IPC = {
     PrinterSettingsSchema,
     3,
   ),
-  test_printer: command(z.object({ target: PrinterTargetSchema }), z.null(), 3),
+  /** A test page; the optional settings are tried before they are saved. */
+  test_printer: command(
+    z.object({
+      target: PrinterTargetSchema,
+      language: LocaleSchema.nullable().optional(),
+      mode: PrintModeSchema.nullable().optional(),
+      paper_width_mm: PaperWidthSchema.nullable().optional(),
+    }),
+    z.null(),
+    3,
+  ),
 
   // Sync — any signed-in user may trigger a round or read the status.
   /** Runs a push + pull round now (the worker also runs every 60 s). */

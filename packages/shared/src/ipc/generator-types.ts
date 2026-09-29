@@ -169,5 +169,10 @@ export const ReceiptPreviewSchema = z.object({
   logo_png_base64: z.string().nullable(),
   logo_width: PositiveIntSchema.nullable(),
   logo_height: PositiveIntSchema.nullable(),
+  /**
+   * The receipt in the client's default language as the till prints it when
+   * that needs an image (Arabic), as a PNG; null when it prints as text.
+   */
+  image_png_base64: z.string().nullable(),
 });
 export type ReceiptPreview = z.infer<typeof ReceiptPreviewSchema>;

@@ -123,9 +123,12 @@ pub fn complete(
         if created.includes_cash && settings.open_drawer_on_cash {
             drawer_opened = printer.kick_drawer(db).is_ok();
         }
-        printer
+        let printed = printer
             .drain(db, Some(created.transaction_id))
-            .unwrap_or(false)
+            .unwrap_or(false);
+        // A pay-now sale (or an order paid with unsent lines) has a ticket.
+        let _ = printer.drain_kitchen(db);
+        printed
     } else {
         print_jobs::ever_printed(&db.conn(), created.transaction_id).ipc()?
     };

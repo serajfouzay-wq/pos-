@@ -2,8 +2,8 @@
 //! `label ...... value` rows. The till decides the content; this module only
 //! lays it out for the paper width, as ESC/POS bytes or the same text.
 
-use crate::escpos::{Align, EscPos};
-use crate::receipt::{columns_for_paper, two_columns, wrap};
+use crate::doc::{Doc, Line};
+use crate::escpos::Align;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReportRow {
@@ -50,88 +50,38 @@ pub struct ReportDoc {
     pub sections: Vec<ReportSection>,
 }
 
-enum Line {
-    Title(String),
-    Centered(String),
-    Plain(String, bool),
-    Rule,
-}
-
-fn layout(doc: &ReportDoc, width: usize) -> Vec<Line> {
-    let mut out = vec![Line::Title(doc.title.clone())];
-    for line in &doc.lines {
-        out.extend(wrap(line, width).into_iter().map(Line::Centered));
+/// The report as a printable document (`rtl` for right-to-left languages;
+/// the words themselves come with the rows).
+pub fn document(report: &ReportDoc, paper_width_mm: u16, rtl: bool) -> Doc {
+    let mut doc = Doc::new(paper_width_mm, rtl);
+    doc.push(Line::large(report.title.as_str(), Align::Center));
+    for line in &report.lines {
+        doc.push(Line::text(line.as_str(), Align::Center));
     }
-    for section in &doc.sections {
-        out.push(Line::Rule);
+    for section in &report.sections {
+        doc.push(Line::Rule);
         if let Some(heading) = &section.heading {
-            out.push(Line::Plain(heading.to_uppercase(), true));
+            doc.push(Line::bold(heading.to_uppercase(), Align::Left));
         }
         for row in &section.rows {
-            match row {
-                ReportRow::Pair { label, value, bold } => {
-                    out.push(Line::Plain(two_columns(label, value, width), *bold));
-                }
-                ReportRow::Text(text) => {
-                    out.extend(wrap(text, width).into_iter().map(|l| Line::Plain(l, false)));
-                }
-            }
+            doc.push(match row {
+                ReportRow::Pair {
+                    label,
+                    value,
+                    bold: false,
+                } => Line::row(label.as_str(), value.as_str()),
+                ReportRow::Pair { label, value, .. } => Line::total(label.as_str(), value.as_str()),
+                ReportRow::Text(text) => Line::text(text.as_str(), Align::Left),
+            });
         }
     }
-    out.push(Line::Rule);
-    out
-}
-
-pub fn render_escpos(doc: &ReportDoc, paper_width_mm: u16) -> Vec<u8> {
-    let width = columns_for_paper(paper_width_mm);
-    let mut p = EscPos::new();
-    for line in layout(doc, width) {
-        match line {
-            Line::Title(title) => {
-                p.align(Align::Center).bold(true).double(true);
-                for part in wrap(&title, width / 2) {
-                    p.line(&part);
-                }
-                p.bold(false).double(false);
-            }
-            Line::Centered(text) => {
-                p.align(Align::Center).line(&text);
-            }
-            Line::Plain(text, bold) => {
-                p.align(Align::Left).bold(bold).line(&text).bold(false);
-            }
-            Line::Rule => {
-                p.align(Align::Left).line(&"-".repeat(width));
-            }
-        }
-    }
-    p.feed(3).cut();
-    p.into_bytes()
+    doc.push(Line::Rule);
+    doc
 }
 
 /// The same layout as plain text (on-screen preview, tests).
-pub fn render_text(doc: &ReportDoc, paper_width_mm: u16) -> String {
-    let width = columns_for_paper(paper_width_mm);
-    let center = |text: &str, used: usize| {
-        let free = width.saturating_sub(used);
-        format!("{}{text}", " ".repeat(free / 2))
-    };
-    let mut out = String::new();
-    for line in layout(doc, width) {
-        let text = match line {
-            Line::Title(title) => wrap(&title, width / 2)
-                .iter()
-                .map(|part| center(part, part.chars().count() * 2))
-                .collect::<Vec<_>>()
-                .join("\n"),
-            Line::Centered(text) => center(&text, text.chars().count()),
-            Line::Plain(text, _) => text.trim_end().to_owned(),
-            Line::Rule => "-".repeat(width),
-        };
-        out.push_str(&text);
-        out.push('\n');
-    }
-    out
+pub fn render_text(report: &ReportDoc, paper_width_mm: u16) -> String {
+    document(report, paper_width_mm, false).to_text()
 }
 
 #[cfg(test)]
@@ -181,7 +131,7 @@ mod tests {
 
     #[test]
     fn escpos_ends_with_a_cut_and_bolds_totals() {
-        let bytes = render_escpos(&doc(), 80);
+        let bytes = document(&doc(), 80, false).to_escpos(crate::doc::PrintMode::Text);
         assert!(bytes.windows(2).any(|w| w == [0x1d, 0x56]), "cut");
         // ESC E 1 … "Net sales" … ESC E 0
         let net = bytes

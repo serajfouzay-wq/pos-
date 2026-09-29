@@ -506,9 +506,9 @@ pub fn create(
 ) -> IpcResult<CreatedSale> {
     let tx = conn.transaction().ipc()?;
     let created = create_in(&tx, actor, payload, config, now)?;
-    // A pay-now sale goes straight to the kitchen display.
-    if created.is_new && crate::kitchen::enabled(config) {
-        crate::kitchen::for_sale(&tx, created.transaction_id, now)?;
+    // A pay-now sale goes straight to the kitchen.
+    if created.is_new && crate::kitchen::records(config) {
+        crate::kitchen::for_sale(&tx, config, created.transaction_id, now)?;
     }
     tx.commit().ipc()?;
     Ok(created)
@@ -679,7 +679,9 @@ pub fn create_in(
         now,
     )
     .ipc()?;
-    print_jobs::enqueue(tx, row.meta.id, false, now).ipc()?;
+    if crate::printing::PrintService::settings(tx)?.auto_print_receipt {
+        print_jobs::enqueue(tx, row.meta.id, false, now).ipc()?;
+    }
 
     Ok(CreatedSale {
         transaction_id: row.meta.id,

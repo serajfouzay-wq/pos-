@@ -216,8 +216,9 @@ fn spawn_license_worker(license: Arc<LicenseService>) {
     });
 }
 
-/// Offline receipt queue: retries pending receipts every 30 s while licensed,
-/// so tickets printed during an outage come out once the printer is back.
+/// Offline print queues: retries pending receipts and kitchen tickets every
+/// 30 s while licensed, so what was sent during an outage comes out once the
+/// printer is back.
 fn spawn_print_queue_worker(license: Arc<LicenseService>, printer: Arc<PrintService>) {
     tauri::async_runtime::spawn(async move {
         loop {
@@ -226,6 +227,7 @@ fn spawn_print_queue_worker(license: Arc<LicenseService>, printer: Arc<PrintServ
             let _ = tauri::async_runtime::spawn_blocking(move || {
                 if let Ok(db) = license.database() {
                     let _ = printer.drain(&db, None);
+                    let _ = printer.drain_kitchen(&db);
                 }
             })
             .await;

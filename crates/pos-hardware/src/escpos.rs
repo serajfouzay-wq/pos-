@@ -9,6 +9,8 @@ pub const DRAWER_KICK: [u8; 5] = [0x1B, 0x70, 0x00, 0x19, 0x19];
 const ESC: u8 = 0x1B;
 const GS: u8 = 0x1D;
 const LF: u8 = 0x0A;
+/// Rows per raster command (a conservative size every printer accepts).
+const RASTER_BAND_ROWS: usize = 128;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Align {
@@ -97,6 +99,24 @@ impl EscPos {
         self.buf
             .extend_from_slice(&[GS, b'v', b'0', 0, xl, xh, yl, yh]);
         self.buf.extend_from_slice(&image.data);
+        self
+    }
+
+    /// A tall image as several `GS v 0` bands: many printers only buffer a
+    /// limited number of raster rows per command.
+    pub fn raster_bands(&mut self, image: &MonoImage) -> &mut Self {
+        let row = image.bytes_per_row();
+        let mut top = 0;
+        while top < image.height {
+            let height = RASTER_BAND_ROWS.min(image.height - top);
+            let band = MonoImage {
+                width: image.width,
+                height,
+                data: image.data[top * row..(top + height) * row].to_vec(),
+            };
+            self.raster(&band);
+            top += height;
+        }
         self
     }
 

@@ -1,6 +1,7 @@
 {
   "AED": { "exponent": 2 },
   "BHD": { "exponent": 3 },
+  "DZD": { "exponent": 2 },
   "EGP": { "exponent": 2 },
   "EUR": { "exponent": 2 },
   "GBP": { "exponent": 2 },
@@ -8,6 +9,8 @@
   "JOD": { "exponent": 3 },
   "JPY": { "exponent": 0 },
   "KWD": { "exponent": 3 },
+  "LYD": { "exponent": 3 },
+  "MAD": { "exponent": 2 },
   "MYR": { "exponent": 2 },
   "OMR": { "exponent": 3 },
   "QAR": { "exponent": 2 },

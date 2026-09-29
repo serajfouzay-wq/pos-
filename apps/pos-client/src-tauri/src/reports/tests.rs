@@ -421,7 +421,10 @@ fn x_and_z_reports_close_the_day() {
     .expect("audit");
     assert_eq!(audited.total, 2);
 
-    let text = pos_hardware::report::render_text(&to_doc(&z, &shop.config, KUWAIT), 80);
+    let text = pos_hardware::report::render_text(
+        &to_doc(&z, &shop.config, KUWAIT, pos_core::config::Locale::En),
+        80,
+    );
     for expected in [
         "Z REPORT #1",
         "From 2026-09-24 08:00",

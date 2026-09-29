@@ -10,6 +10,7 @@ import { z } from 'zod';
 export const CURRENCIES = {
   AED: { exponent: 2, symbol: 'د.إ' },
   BHD: { exponent: 3, symbol: '.د.ب' },
+  DZD: { exponent: 2, symbol: 'د.ج' },
   EGP: { exponent: 2, symbol: 'E£' },
   EUR: { exponent: 2, symbol: '€' },
   GBP: { exponent: 2, symbol: '£' },
@@ -17,6 +18,8 @@ export const CURRENCIES = {
   JOD: { exponent: 3, symbol: 'د.ا' },
   JPY: { exponent: 0, symbol: '¥' },
   KWD: { exponent: 3, symbol: 'د.ك' },
+  LYD: { exponent: 3, symbol: 'ل.د' },
+  MAD: { exponent: 2, symbol: 'د.م.' },
   MYR: { exponent: 2, symbol: 'RM' },
   OMR: { exponent: 3, symbol: 'ر.ع.' },
   QAR: { exponent: 2, symbol: 'ر.ق' },
