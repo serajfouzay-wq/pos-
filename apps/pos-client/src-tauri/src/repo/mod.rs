@@ -10,6 +10,7 @@ pub mod audit;
 pub mod catalog;
 pub mod customers;
 pub mod device;
+pub mod discounts;
 pub mod menu;
 pub mod orders;
 pub mod outbox;

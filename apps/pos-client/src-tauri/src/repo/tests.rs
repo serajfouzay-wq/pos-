@@ -530,6 +530,11 @@ fn pos_response_shapes_match_the_contract_fixture() {
         sales::quote(&conn, &sale.items, &[], &config(), now()).expect("quote"),
         CurrencyCode::KWD,
         None,
+        vec![sales::AppliedDiscount {
+            id: Uuid::from_u128(0x0199_a000_0000_7000_8000_0000_0000_00d1),
+            name: "Happy hour".into(),
+            automatic: true,
+        }],
     );
     let receipt = sales::load_receipt(&conn, created.transaction_id, true).expect("receipt");
     let open = shifts::current_open(&conn, w.device)
@@ -853,7 +858,8 @@ fn pos_response_shapes_match_the_contract_fixture() {
         };
         let priced = loyalty::price(&conn, &sale.items, &[], Some(request), &config(), at(53))
             .expect("quote");
-        let loyalty_quote = sales::quote_view(priced.cart.quote, CurrencyCode::KWD, priced.loyalty);
+        let loyalty_quote =
+            sales::quote_view(priced.cart.quote, CurrencyCode::KWD, priced.loyalty, vec![]);
         let with_points = TransactionPayload {
             idempotency_key: Uuid::new_v4(),
             customer_id: Some(layla.meta.id),
@@ -1035,4 +1041,164 @@ fn pos_response_shapes_match_the_contract_fixture() {
         shape(&document),
         "regenerate with POS_REGENERATE_FIXTURES=1"
     );
+}
+
+fn rule(name: &str, mode: super::discounts::ApplyMode) -> super::discounts::DiscountRuleInput {
+    super::discounts::DiscountRuleInput {
+        id: None,
+        name: name.into(),
+        kind: super::discounts::DiscountKind::Percentage,
+        value: 1_000,
+        scope: super::discounts::RuleScope::Order,
+        target_id: None,
+        min_subtotal: None,
+        starts_at: None,
+        ends_at: None,
+        is_active: true,
+        apply_mode: mode,
+        days_mask: None,
+        time_from: None,
+        time_to: None,
+    }
+}
+
+#[test]
+fn automatic_discounts_price_themselves_on_schedule_and_manual_ones_are_asked_for() {
+    use super::discounts::{self, ApplyMode, DiscountKind, RuleScope};
+    let w = world();
+    let conn = w.db.conn();
+    let latte = product(&conn, "Latte", 2_000, Unit::Each, false);
+    let cake = product(&conn, "Cake", 1_000, Unit::Each, false);
+    let items = [item(latte, 1000), item(cake, 1000)];
+
+    // Wednesday 13:00 in the test zone (UTC+3). A weekday lunch deal on the
+    // latte, and a weekend-only offer that must not apply.
+    discounts::save(
+        &conn,
+        discounts::DiscountRuleInput {
+            kind: DiscountKind::FixedAmount,
+            value: 500,
+            scope: RuleScope::Product,
+            target_id: Some(latte),
+            days_mask: Some(0b001_1111),
+            time_from: Some(12 * 60),
+            time_to: Some(14 * 60),
+            ..rule("Lunch latte", ApplyMode::Automatic)
+        },
+        now(),
+    )
+    .expect("lunch");
+    discounts::save(
+        &conn,
+        discounts::DiscountRuleInput {
+            days_mask: Some(0b110_0000),
+            ..rule("Weekend 10%", ApplyMode::Automatic)
+        },
+        now(),
+    )
+    .expect("weekend");
+    let staff = discounts::save(&conn, rule("Staff 10%", ApplyMode::Manual), now()).expect("staff");
+
+    let priced = sales::price_cart(&conn, &items, &[], &config(), now()).expect("quote");
+    assert_eq!(
+        priced.quote.discount_total, 500,
+        "only the lunch deal runs now"
+    );
+    let applied = priced.applied_rules(&priced.quote);
+    assert_eq!(applied.len(), 1);
+    assert_eq!(applied[0].name, "Lunch latte");
+    assert!(applied[0].automatic);
+
+    // After lunch the deal is over.
+    let later = now().checked_add(Duration::hours(2)).expect("later");
+    let priced = sales::price_cart(&conn, &items, &[], &config(), later).expect("quote");
+    assert_eq!(priced.quote.discount_total, 0);
+
+    // A manual rule applies only when asked for: 10% of what is left.
+    let priced =
+        sales::price_cart(&conn, &items, &[staff.meta.id], &config(), now()).expect("quote");
+    assert_eq!(priced.quote.discount_total, 500 + 250);
+    assert_eq!(priced.applied_rules(&priced.quote).len(), 2);
+
+    // A sale records the same amounts.
+    shifts::open(&conn, w.device, w.manager, 0, now()).expect("shift");
+    drop(conn);
+    let mut sale = payload(items.to_vec(), vec![pay(PaymentMethod::Card, 2_250)]);
+    sale.discount_rule_ids = vec![staff.meta.id];
+    let created =
+        sales::create(&mut w.db.conn(), &cashier(&w), &sale, &config(), now()).expect("sale");
+    let receipt = sales::load_receipt(&w.db.conn(), created.transaction_id, false).expect("r");
+    assert_eq!((receipt.discount_total, receipt.total), (750, 2_250));
+
+    // A rule switched off or outside its dates is refused when asked for.
+    let conn = w.db.conn();
+    discounts::save(
+        &conn,
+        discounts::DiscountRuleInput {
+            id: Some(staff.meta.id),
+            is_active: false,
+            ..rule("Staff 10%", ApplyMode::Manual)
+        },
+        now(),
+    )
+    .expect("off");
+    let err =
+        sales::price_cart(&conn, &items, &[staff.meta.id], &config(), now()).expect_err("inactive");
+    assert!(err.message.contains("not running"), "{}", err.message);
+}
+
+#[test]
+fn discount_rules_are_validated() {
+    use super::discounts::{self, ApplyMode, DiscountKind, RuleScope};
+    let w = world();
+    let conn = w.db.conn();
+    let bad = [
+        discounts::DiscountRuleInput {
+            value: 10_001,
+            ..rule("Too much", ApplyMode::Manual)
+        },
+        discounts::DiscountRuleInput {
+            kind: DiscountKind::FixedAmount,
+            value: 0,
+            ..rule("Nothing", ApplyMode::Manual)
+        },
+        discounts::DiscountRuleInput {
+            scope: RuleScope::Product,
+            ..rule("No product", ApplyMode::Manual)
+        },
+        discounts::DiscountRuleInput {
+            scope: RuleScope::Category,
+            target_id: Some(Uuid::now_v7()),
+            ..rule("Gone", ApplyMode::Manual)
+        },
+        discounts::DiscountRuleInput {
+            time_from: Some(600),
+            time_to: Some(600),
+            ..rule("Empty window", ApplyMode::Manual)
+        },
+        discounts::DiscountRuleInput {
+            starts_at: Some(now()),
+            ends_at: Some(now()),
+            ..rule("Backwards", ApplyMode::Manual)
+        },
+        rule("   ", ApplyMode::Manual),
+    ];
+    for input in bad {
+        let name = input.name.clone();
+        assert!(discounts::save(&conn, input, now()).is_err(), "{name}");
+    }
+    // Every day is stored as "no day filter"; deleting keeps the row.
+    let saved = discounts::save(
+        &conn,
+        discounts::DiscountRuleInput {
+            days_mask: Some(127),
+            ..rule("Always", ApplyMode::Automatic)
+        },
+        now(),
+    )
+    .expect("save");
+    assert_eq!(saved.days_mask, None);
+    discounts::delete(&conn, saved.meta.id, now()).expect("delete");
+    assert!(discounts::list(&conn).expect("list").is_empty());
+    assert_eq!(count(&conn, "SELECT count(*) FROM discount_rules"), 1);
 }

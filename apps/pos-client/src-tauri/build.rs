@@ -93,6 +93,9 @@ const COMMANDS: &[&str] = &[
     "check_for_updates",
     "install_update",
     "dismiss_update_notice",
+    "list_discount_rules",
+    "save_discount_rule",
+    "delete_discount_rule",
 ];
 
 fn main() {

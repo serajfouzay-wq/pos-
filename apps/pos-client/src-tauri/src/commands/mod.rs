@@ -16,6 +16,7 @@
 pub mod app_info;
 pub mod catalog;
 pub mod customers;
+pub mod discounts;
 pub mod hardware;
 pub mod history;
 pub mod inventory;

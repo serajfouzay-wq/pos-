@@ -1221,3 +1221,58 @@ mod live {
         assert!(matches!(err, SyncError::Unauthorized(_)), "{err:?}");
     }
 }
+
+#[test]
+fn rows_from_a_till_on_an_older_version_keep_the_newer_columns() {
+    let server = Arc::new(MemoryServer::default());
+    let a = till(&server, "A");
+    let id = Uuid::now_v7();
+    // A till updated to Phase 9 writes an automatic happy-hour rule…
+    let current = serde_json::json!({
+        "id": id.to_string(), "created_at": at(0).to_string(), "updated_at": at(0).to_string(),
+        "deleted_at": null, "name": "Happy hour", "kind": "percentage", "value": 1500,
+        "scope": "order", "target_id": null, "min_subtotal": null, "starts_at": null,
+        "ends_at": null, "is_active": true, "apply_mode": "automatic", "days_mask": 31,
+        "time_from": 960, "time_to": 1080,
+    });
+    let conn = a.db.conn();
+    let written = apply::apply(
+        &conn,
+        &Change {
+            entity_type: "discount_rules".into(),
+            row: current.clone(),
+            event_id: Some(Uuid::now_v7()),
+        },
+    )
+    .expect("apply");
+    assert_eq!(written, apply::Applied::Written);
+    // …then a till not updated yet renames it: its row has no schedule.
+    let mut old = current;
+    for column in ["apply_mode", "days_mask", "time_from", "time_to"] {
+        old.as_object_mut().expect("object").remove(column);
+    }
+    old["name"] = "Happy hour!".into();
+    old["updated_at"] = at(5).to_string().into();
+    apply::apply(
+        &conn,
+        &Change {
+            entity_type: "discount_rules".into(),
+            row: old,
+            event_id: Some(Uuid::now_v7()),
+        },
+    )
+    .expect("apply old");
+    let (name, mode, days, from): (String, Option<String>, Option<i64>, Option<i64>) = conn
+        .query_row(
+            "SELECT name, apply_mode, days_mask, time_from FROM discount_rules WHERE id = ?1",
+            [id.to_string()],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        )
+        .expect("row");
+    assert_eq!(name, "Happy hour!");
+    assert_eq!(
+        (mode.as_deref(), days, from),
+        (Some("automatic"), Some(31), Some(960)),
+        "the schedule survives"
+    );
+}

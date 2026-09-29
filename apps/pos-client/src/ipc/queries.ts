@@ -34,6 +34,7 @@ import type {
   TransactionPayloadInput,
   Locale,
   PrintMode,
+  DiscountRuleInput,
 } from '@pos/shared';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
@@ -71,6 +72,7 @@ export const queryKeys = {
   kitchenStatus: ['kitchen_display'] as const,
   kitchenBoard: ['kitchen_board'] as const,
   updates: ['update_status'] as const,
+  discountRules: ['discount_rules'] as const,
 };
 
 /** Raised when the UI is loaded in a plain browser instead of the Tauri shell. */
@@ -376,6 +378,7 @@ export function useTestPrinter() {
 /** Local data another till may have changed; refetched after a sync round. */
 const SYNCED_QUERIES = [
   ['products'],
+  ['discount_rules'],
   ['transactions'],
   ['z_reports'],
   ['dashboard'],
@@ -954,6 +957,41 @@ export function useDismissUpdateNotice() {
     mutationFn: () => ipc.call('dismiss_update_notice'),
     onSuccess: (status) => {
       queryClient.setQueryData(queryKeys.updates, status);
+    },
+  });
+}
+
+// ── Discount rules (Phase 9) ───────────────────────────────────────────────
+
+/** Every rule; `live` flags change with the clock, so this refreshes. */
+export function useDiscountRules(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.discountRules,
+    queryFn: () => ipc.call('list_discount_rules'),
+    enabled,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useSaveDiscountRule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (rule: DiscountRuleInput) => ipc.call('save_discount_rule', { rule }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.discountRules });
+      void queryClient.invalidateQueries({ queryKey: ['quote'] });
+    },
+  });
+}
+
+export function useDeleteDiscountRule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ruleId: Uuid) => ipc.call('delete_discount_rule', { rule_id: ruleId }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.discountRules });
+      void queryClient.invalidateQueries({ queryKey: ['quote'] });
     },
   });
 }

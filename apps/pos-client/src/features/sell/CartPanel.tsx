@@ -212,7 +212,14 @@ export function CartPanel({
             <dd>{format(quote.subtotal)}</dd>
             {quote.discount_total > 0 && (
               <>
-                <dt>{t('sell.discount')}</dt>
+                <dt>
+                  {t('sell.discount')}
+                  {quote.discounts.length > 0 && (
+                    <span className="muted small cart__discounts">
+                      {quote.discounts.map((d) => d.name).join(' · ')}
+                    </span>
+                  )}
+                </dt>
                 <dd>−{format(quote.discount_total)}</dd>
               </>
             )}

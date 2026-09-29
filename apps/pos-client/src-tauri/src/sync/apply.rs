@@ -44,6 +44,8 @@ pub const ENTITIES: &[(&str, Strategy)] = &[
     ("open_orders", Strategy::LastWriteWins),
     ("shop_settings", Strategy::LastWriteWins),
     ("kitchen_tickets", Strategy::LastWriteWins),
+    ("membership_plans", Strategy::LastWriteWins),
+    ("memberships", Strategy::LastWriteWins),
     ("transactions", Strategy::AppendOnly),
     ("transaction_items", Strategy::AppendOnly),
     ("transaction_payments", Strategy::AppendOnly),
@@ -125,8 +127,15 @@ pub fn apply(conn: &Connection, change: &Change) -> Result<Applied, ApplyError> 
         .and_then(Json::as_str)
         .ok_or_else(|| invalid(entity, "row has no id"))?
         .to_owned();
-    let cols = columns(conn, entity).map_err(|e| invalid(entity, e.to_string()))?;
     let derived = derived_columns(entity);
+    // Only the columns the row carries: a till on an older version sends
+    // rows without the newer columns, which then keep their defaults (a new
+    // row) or their current values (an update) instead of being nulled.
+    let cols: Vec<String> = columns(conn, entity)
+        .map_err(|e| invalid(entity, e.to_string()))?
+        .into_iter()
+        .filter(|c| row.contains_key(c) || derived.contains(&c.as_str()))
+        .collect();
 
     if strategy == Strategy::LastWriteWins && local_edit_wins(conn, entity, &id, row, change)? {
         return Ok(Applied::Kept);

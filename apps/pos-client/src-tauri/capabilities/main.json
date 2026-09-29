@@ -2,7 +2,9 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
   "description": "Main till window. Grants only the commands the till UI needs.",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
     "allow-app-info",
@@ -79,6 +81,9 @@
     "allow-update-status",
     "allow-check-for-updates",
     "allow-install-update",
-    "allow-dismiss-update-notice"
+    "allow-dismiss-update-notice",
+    "allow-list-discount-rules",
+    "allow-save-discount-rule",
+    "allow-delete-discount-rule"
   ]
 }

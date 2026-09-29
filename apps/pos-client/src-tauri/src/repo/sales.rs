@@ -22,12 +22,11 @@ use uuid::Uuid;
 use super::audit::{self, Actor};
 use super::catalog::{self, StockReason};
 use super::customers;
+use super::discounts::{self, DiscountRule};
 use super::menu;
 pub use super::orders::ComboRef;
 use super::outbox::{self, EventType};
-use super::{
-    device, enum_at, enum_str, opt_ts_at, print_jobs, shifts, ts_at, uuid_at, Meta, SqlResultExt,
-};
+use super::{device, enum_at, enum_str, print_jobs, shifts, ts_at, uuid_at, Meta, SqlResultExt};
 use crate::loyalty::{self, LoyaltyQuote, LoyaltyRequest};
 
 pub const MAX_LINES: usize = 500;
@@ -90,59 +89,21 @@ pub struct QuoteView {
     pub total: i64,
     pub tax_lines: Vec<TaxLine>,
     pub loyalty: Option<LoyaltyQuote>,
+    /// Discount rules priced into this bill.
+    pub discounts: Vec<AppliedDiscount>,
 }
 
 fn invalid(message: impl Into<String>) -> IpcError {
     IpcError::validation(message)
 }
 
-fn load_discounts(conn: &Connection, ids: &[Uuid], now: Timestamp) -> IpcResult<Vec<Discount>> {
-    let mut out = Vec::with_capacity(ids.len());
-    for id in ids {
-        let row = conn
-            .query_row(
-                "SELECT kind, value, scope, target_id, min_subtotal, starts_at, ends_at, is_active
-                 FROM discount_rules WHERE id = ?1 AND deleted_at IS NULL",
-                [id.to_string()],
-                |r| {
-                    Ok((
-                        r.get::<_, String>(0)?,
-                        r.get::<_, i64>(1)?,
-                        r.get::<_, String>(2)?,
-                        r.get::<_, Option<String>>(3)?,
-                        r.get::<_, Option<i64>>(4)?,
-                        opt_ts_at(r, 5)?,
-                        opt_ts_at(r, 6)?,
-                        r.get::<_, bool>(7)?,
-                    ))
-                },
-            )
-            .optional()
-            .ipc()?
-            .ok_or_else(|| invalid("That discount does not exist."))?;
-        let (kind, value, scope, target, min_subtotal, starts, ends, active) = row;
-        if !active || starts.is_some_and(|s| now < s) || ends.is_some_and(|e| now >= e) {
-            return Err(invalid("That discount is not currently active."));
-        }
-        let target = target.and_then(|t| Uuid::parse_str(&t).ok());
-        let scope = match (scope.as_str(), target) {
-            ("order", _) => DiscountScope::Order,
-            ("product", Some(t)) => DiscountScope::Product(t),
-            ("category", Some(t)) => DiscountScope::Category(t),
-            _ => return Err(invalid("That discount is misconfigured.")),
-        };
-        let value = match kind.as_str() {
-            "percentage" => DiscountValue::Percentage(value),
-            _ => DiscountValue::Fixed(value),
-        };
-        out.push(Discount {
-            id: *id,
-            value,
-            scope,
-            min_subtotal,
-        });
-    }
-    Ok(out)
+/// Discount rules on this bill: every automatic rule running now, plus the
+/// manual ones the till asked for (each must be running too).
+fn bill_rules(conn: &Connection, ids: &[Uuid], now: Timestamp) -> IpcResult<Vec<DiscountRule>> {
+    let mut rules = discounts::automatic(conn, now, discounts::RULE_ZONE)?;
+    rules.retain(|r| !ids.contains(&r.meta.id));
+    rules.extend(discounts::manual(conn, ids, now, discounts::RULE_ZONE)?);
+    Ok(rules)
 }
 
 /// A priced cart plus what each line was sold with (for the snapshots).
@@ -153,6 +114,31 @@ pub struct PricedCart {
     /// What was priced, kept so a redemption can be priced on top.
     pub lines: Vec<PriceLine>,
     pub discounts: Vec<Discount>,
+    /// The discount rules priced in (automatic and manual).
+    pub rules: Vec<DiscountRule>,
+}
+
+impl PricedCart {
+    /// The rules that took money off this bill, for the till to show.
+    pub fn applied_rules(&self, quote: &Quote) -> Vec<AppliedDiscount> {
+        self.rules
+            .iter()
+            .filter(|r| quote.applied_discounts.contains(&r.meta.id))
+            .map(|r| AppliedDiscount {
+                id: r.meta.id,
+                name: r.name.clone(),
+                automatic: r.mode() == discounts::ApplyMode::Automatic,
+            })
+            .collect()
+    }
+}
+
+/// Mirrors `AppliedDiscountSchema`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct AppliedDiscount {
+    pub id: Uuid,
+    pub name: String,
+    pub automatic: bool,
 }
 
 /// Modifiers of one line, validated against the product's groups: options
@@ -373,7 +359,10 @@ pub fn price_cart(
         modifiers.push(chosen);
     }
     let mut discounts = combo_discounts(conn, items, &lines, &modifiers)?;
-    discounts.extend(load_discounts(conn, discount_rule_ids, now)?);
+    let rules = bill_rules(conn, discount_rule_ids, now)?;
+    for rule in &rules {
+        discounts.push(rule.to_pricing()?);
+    }
     let quote = pricing::price(&lines, &discounts, config.tax.prices_include_tax)
         .map_err(|e| invalid(e.to_string()))?;
     Ok(PricedCart {
@@ -381,6 +370,7 @@ pub fn price_cart(
         modifiers,
         lines,
         discounts,
+        rules,
     })
 }
 
@@ -398,10 +388,12 @@ pub fn quote_view(
     quote: Quote,
     currency: CurrencyCode,
     loyalty: Option<LoyaltyQuote>,
+    discounts: Vec<AppliedDiscount>,
 ) -> QuoteView {
     QuoteView {
         currency,
         loyalty,
+        discounts,
         subtotal: quote.subtotal,
         discount_total: quote.discount_total,
         tax_total: quote.tax_total,

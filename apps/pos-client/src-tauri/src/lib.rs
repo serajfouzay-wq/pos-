@@ -178,6 +178,9 @@ pub fn run() {
             commands::updates::check_for_updates,
             commands::updates::install_update,
             commands::updates::dismiss_update_notice,
+            commands::discounts::list_discount_rules,
+            commands::discounts::save_discount_rule,
+            commands::discounts::delete_discount_rule,
         ])
         .build(tauri::generate_context!())
         .expect("failed to start the POS client");

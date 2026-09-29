@@ -6,7 +6,8 @@
  */
 import { z } from 'zod';
 import { CurrencyCodeSchema } from '../currency';
-import { CategorySchema, ProductSchema } from '../entities/catalog';
+import { CategorySchema, DiscountRuleSchema, ProductSchema } from '../entities/catalog';
+import { DiscountRuleInputSchema, DiscountRuleViewSchema } from './discount-types';
 import { KitchenTicketSchema } from '../entities/kitchen';
 import { LoyaltySettingsSchema } from '../entities/shop';
 import { CustomerSchema, UserSchema } from '../entities/people';
@@ -477,6 +478,12 @@ export const POS_IPC = {
   check_for_updates: command(NoArgs, UpdateStatusSchema, 8),
   install_update: command(NoArgs, z.null(), 8),
   dismiss_update_notice: command(NoArgs, UpdateStatusSchema, 8),
+
+  // Discount rules — the list: anyone selling (manual rules are offered to
+  // managers at the till); changes: catalog.manage, audited.
+  list_discount_rules: command(NoArgs, z.array(DiscountRuleViewSchema), 9),
+  save_discount_rule: command(z.object({ rule: DiscountRuleInputSchema }), DiscountRuleSchema, 9),
+  delete_discount_rule: command(z.object({ rule_id: UuidSchema }), z.null(), 9),
 } as const;
 
 export type PosIpcContract = typeof POS_IPC;

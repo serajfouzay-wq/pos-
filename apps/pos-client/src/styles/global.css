@@ -2280,3 +2280,89 @@ h2 {
     display: none;
   }
 }
+
+/* ── Phase 9: discounts ───────────────────────────────────────────────── */
+
+.badge--ok {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.link-button.danger {
+  color: var(--danger);
+}
+
+td.actions {
+  white-space: nowrap;
+  text-align: end;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.chips__sep {
+  inline-size: 12px;
+}
+
+.discount-form {
+  display: grid;
+  gap: 14px;
+}
+
+.discount-form h3 {
+  margin: 4px 0 0;
+  font-size: 1rem;
+}
+
+.discount-form .form-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.discount-form fieldset.segmented {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.discount-form fieldset.segmented legend {
+  margin-block-end: 6px;
+  color: var(--text-muted);
+}
+
+.segmented__option {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-sunken);
+  cursor: pointer;
+}
+
+.segmented__option:has(input:checked) {
+  border-color: var(--brand-primary);
+  box-shadow: inset 0 0 0 1px var(--brand-primary);
+}
+
+.segmented__option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.bill-discounts {
+  display: grid;
+  gap: 6px;
+  padding-block-end: 10px;
+  border-block-end: 1px solid var(--border);
+}
+
+.cart__discounts {
+  display: block;
+  font-weight: 400;
+}

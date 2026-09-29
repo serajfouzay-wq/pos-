@@ -29,6 +29,7 @@ import {
   ProductModifierGroupSchema,
 } from './entities/menu';
 import { KitchenTicketSchema } from './entities/kitchen';
+import { MembershipPlanSchema, MembershipSchema } from './entities/membership';
 import { OpenOrderSchema } from './entities/orders';
 import { ShopSettingRowSchema } from './entities/shop';
 import { ZReportSchema } from './entities/reports';
@@ -77,6 +78,8 @@ export const LOCAL_TABLES = {
   z_reports: ZReportSchema,
   shop_settings: ShopSettingRowSchema,
   kitchen_tickets: KitchenTicketSchema,
+  membership_plans: MembershipPlanSchema,
+  memberships: MembershipSchema,
   sync_queue: SyncQueueRowSchema,
 } as const satisfies Record<string, z.ZodObject>;
 

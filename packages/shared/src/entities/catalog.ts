@@ -79,6 +79,15 @@ export type StockMovement = z.infer<typeof StockMovementSchema>;
 
 export const DISCOUNT_KINDS = ['percentage', 'fixed_amount'] as const;
 export const DISCOUNT_SCOPES = ['order', 'product', 'category'] as const;
+/**
+ * `automatic`: priced into every sale while it runs (a promotion, a happy
+ * hour). `manual`: a manager or owner applies it to a bill at the till.
+ */
+export const DISCOUNT_APPLY_MODES = ['manual', 'automatic'] as const;
+export const DiscountApplyModeSchema = z.enum(DISCOUNT_APPLY_MODES);
+export type DiscountApplyMode = z.infer<typeof DiscountApplyModeSchema>;
+/** Minutes after local midnight. */
+export const MinuteOfDaySchema = z.int().min(0).max(1440);
 
 export const DiscountRuleSchema = EntityBaseSchema.extend({
   name: z.string().min(1).max(80),
@@ -92,6 +101,13 @@ export const DiscountRuleSchema = EntityBaseSchema.extend({
   starts_at: TimestampSchema.nullable(),
   ends_at: TimestampSchema.nullable(),
   is_active: z.boolean(),
+  /** null = manual (rows written before schedules existed). */
+  apply_mode: DiscountApplyModeSchema.nullable(),
+  /** Days it runs, Monday = bit 0 … Sunday = bit 6; null = every day. */
+  days_mask: z.int().min(1).max(127).nullable(),
+  /** Local time window [from, to); `to` before `from` crosses midnight. */
+  time_from: MinuteOfDaySchema.max(1439).nullable(),
+  time_to: MinuteOfDaySchema.min(1).nullable(),
 })
   .refine((rule) => rule.kind !== 'percentage' || rule.value <= 10_000, {
     message: 'percentage discounts are capped at 10 000 bps',

@@ -12,6 +12,7 @@ pub mod pricing;
 pub mod rbac;
 pub mod receipt;
 pub mod sales;
+pub mod schedule;
 pub mod tender;
 pub mod time;
 

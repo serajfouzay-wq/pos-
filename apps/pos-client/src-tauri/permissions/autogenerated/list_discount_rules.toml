@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-list-discount-rules"
+description = "Enables the list_discount_rules command without any pre-configured scope."
+commands.allow = ["list_discount_rules"]
+
+[[permission]]
+identifier = "deny-list-discount-rules"
+description = "Denies the list_discount_rules command without any pre-configured scope."
+commands.deny = ["list_discount_rules"]

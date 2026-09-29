@@ -112,6 +112,14 @@ export const QuoteRequestSchema = z.object({
 });
 export type QuoteRequest = z.input<typeof QuoteRequestSchema>;
 
+export const AppliedDiscountSchema = z.object({
+  id: UuidSchema,
+  name: z.string(),
+  /** Applied by itself (a promotion running now), not asked for. */
+  automatic: z.boolean(),
+});
+export type AppliedDiscount = z.infer<typeof AppliedDiscountSchema>;
+
 export const QuoteSchema = z.object({
   currency: CurrencyCodeSchema,
   lines: z.array(
@@ -140,6 +148,8 @@ export const QuoteSchema = z.object({
   ),
   /** Present when the request named a customer. */
   loyalty: LoyaltyQuoteSchema.nullable(),
+  /** Discount rules priced into this bill (automatic ones and those asked for). */
+  discounts: z.array(AppliedDiscountSchema),
 });
 export type Quote = z.infer<typeof QuoteSchema>;
 

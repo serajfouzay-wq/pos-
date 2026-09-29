@@ -13,7 +13,8 @@ import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AmountPad } from '../../components/AmountPad';
 import { Modal } from '../../components/Modal';
-import { useLoyaltyProgram, useQuote } from '../../ipc/queries';
+import { useDiscountRules, useLoyaltyProgram, useQuote, useSessionStatus } from '../../ipc/queries';
+import { can } from '../../lib/permissions';
 import { useMoney } from '../../lib/money';
 import { CustomerPicker } from '../customers/CustomerPicker';
 import { LoyaltyPanel } from '../customers/LoyaltyPanel';
@@ -45,6 +46,8 @@ export interface PaymentSubmit {
     payments: PaymentInput[],
     idempotencyKey: Uuid,
     customer: BillCustomer | null,
+    /** Manual discount rules a manager applied to this bill. */
+    discountRuleIds: Uuid[],
     callbacks: { onSuccess: (receipt: SaleReceipt) => void },
   ) => void;
   pending: boolean;
@@ -90,16 +93,33 @@ export function PaymentDialog({
   const [maxRedeem, setMaxRedeem] = useState(0);
   const minRedeem = Math.max(1, program.data?.settings.min_redeem_points ?? 1);
   const redeem = redeemDraft >= minRedeem && redeemDraft <= maxRedeem ? redeemDraft : 0;
-  // With a customer, Rust prices the bill again (points off, points earned).
+  // Managers may apply the manual discounts running now.
+  const session = useSessionStatus().data?.session ?? null;
+  const mayDiscount = session !== null && can(session, 'discount.apply');
+  const rules = useDiscountRules(open && mayDiscount);
+  const manual = (rules.data ?? []).filter(
+    (v) => v.live && (v.rule.apply_mode ?? 'manual') === 'manual',
+  );
+  const [chosen, setChosen] = useState<Uuid[]>([]);
+  const discountIds = chosen.filter((id) => manual.some((v) => v.rule.id === id));
+  // With a customer or a manual discount, Rust prices the bill again
+  // (points off, points earned, the discount).
+  const repriced = customer !== null || discountIds.length > 0;
   const customerQuote = useQuote(
-    customer ? { ...request, loyalty: { customer_id: customer.id, redeem_points: redeem } } : null,
+    repriced
+      ? {
+          ...request,
+          discount_rule_ids: [...request.discount_rule_ids, ...discountIds],
+          loyalty: customer ? { customer_id: customer.id, redeem_points: redeem } : null,
+        }
+      : null,
   );
   const loyalty = customer ? customerQuote.data?.loyalty : null;
   if (loyalty && loyalty.max_redeem_points !== maxRedeem) {
     setMaxRedeem(loyalty.max_redeem_points);
   }
-  const total = customer ? (customerQuote.data?.total ?? baseTotal) : baseTotal;
-  const repricing = customer !== null && (customerQuote.isFetching || !customerQuote.data);
+  const total = repriced ? (customerQuote.data?.total ?? baseTotal) : baseTotal;
+  const repricing = repriced && (customerQuote.isFetching || !customerQuote.data);
   const [splitWays, setSplitWays] = useState(Math.max(guests, 2));
   // Equal shares in integer minor units (largest remainder), from Rust's rules.
   const shares = useMemo(
@@ -164,12 +184,14 @@ export function PaymentDialog({
       })),
       idempotencyKey.current,
       customer ? { customer_id: customer.id, loyalty_points_to_redeem: redeem } : null,
+      discountIds,
       {
         onSuccess: (receipt) => {
           idempotencyKey.current = newUuid();
           setTenders([]);
           setCustomer(null);
           setRedeemDraft(0);
+          setChosen([]);
           onComplete(receipt);
         },
       },
@@ -278,6 +300,35 @@ export function PaymentDialog({
           )}
         </div>
         <div className="payment__summary">
+          {manual.length > 0 && (
+            <section className="bill-discounts" aria-label={t('discounts.pickTitle')}>
+              <span className="muted small">{t('discounts.pick')}</span>
+              <div className="chips">
+                {manual.map((v) => (
+                  <button
+                    key={v.rule.id}
+                    type="button"
+                    className="chip"
+                    aria-pressed={discountIds.includes(v.rule.id)}
+                    onClick={() => {
+                      setChosen((ids) =>
+                        ids.includes(v.rule.id)
+                          ? ids.filter((id) => id !== v.rule.id)
+                          : [...ids, v.rule.id],
+                      );
+                    }}
+                  >
+                    {v.rule.name}
+                  </button>
+                ))}
+              </div>
+              {customerQuote.data && customerQuote.data.discount_total > 0 && (
+                <p className="muted small">
+                  {t('sell.discount')}: −{format(customerQuote.data.discount_total)}
+                </p>
+              )}
+            </section>
+          )}
           {program.data && (
             <LoyaltyPanel
               customer={customer}

@@ -46,10 +46,12 @@ pub async fn quote_transaction(
             &client,
             SystemClock.now(),
         )?;
+        let applied = priced.cart.applied_rules(&priced.cart.quote);
         Ok(sales::quote_view(
             priced.cart.quote,
             client.currency.base,
             priced.loyalty,
+            applied,
         ))
     })
     .await
