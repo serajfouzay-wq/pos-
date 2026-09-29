@@ -11,12 +11,13 @@
  * - environment for the Rust build: `POS_CLIENT_CONFIG` (validated again by
  *   build.rs with the same rules the till uses) and `POS_LICENSE_PUBLIC_KEY`.
  *
- * Optional environment (Phase 8, updates):
- * - `POS_CLIENT_VERSION`: the version this build gets (the generator counts
- *   them per client), so the tills see each release as newer;
- * - `POS_UPDATER_PUBLIC_KEY`: the release signing key's public half (from
- *   `tauri signer generate`). The till is built to verify updates with it,
- *   and the build also produces the signed update artifacts.
+ * Updates: `clients/<slug>/updater-public-key.txt` (written by the
+ * generator, which holds the signing key on its own PC) becomes
+ * `POS_UPDATER_PUBLIC_KEY`, so the till accepts only updates the generator
+ * signed. Nothing secret is needed here: the generator signs the installers
+ * after downloading them. `POS_CLIENT_VERSION` (optional environment) is the
+ * version this build gets (the generator counts them per client), so the
+ * tills see each release as newer.
  *
  * Usage: node scripts/prepare-client-build.mjs <slug>
  * In GitHub Actions the environment goes to $GITHUB_ENV and `has_icon` to
@@ -55,7 +56,7 @@ export function productName(displayName, slug) {
   return ascii.length >= 2 ? ascii : `POS ${slug}`;
 }
 
-export function prepare({ root, slug, version = null, updaterKey = null }) {
+export function prepare({ root, slug, version = null }) {
   if (!SLUG.test(slug) || slug.length > 40) {
     throw new Error(`invalid client slug: ${slug}`);
   }
@@ -76,8 +77,12 @@ export function prepare({ root, slug, version = null, updaterKey = null }) {
   if (version !== null && !VERSION.test(version)) {
     throw new Error(`invalid version ${version} (MAJOR.MINOR.PATCH)`);
   }
+  const updaterKeyPath = join(clientDir, 'updater-public-key.txt');
+  const updaterKey = existsSync(updaterKeyPath)
+    ? readFileSync(updaterKeyPath, 'utf8').trim()
+    : null;
   if (updaterKey !== null && !isUpdaterKey(updaterKey)) {
-    throw new Error('POS_UPDATER_PUBLIC_KEY is not a Tauri updater public key');
+    throw new Error('updater-public-key.txt is not a Tauri updater public key');
   }
 
   const tauriDir = join(root, 'apps', 'pos-client', 'src-tauri');
@@ -108,7 +113,6 @@ export function prepare({ root, slug, version = null, updaterKey = null }) {
   }
 
   if (version !== null) overrides.version = version;
-  if (updaterKey !== null) overrides.bundle.createUpdaterArtifacts = true;
 
   const hasIcon = existsSync(join(clientDir, 'app-icon.png'));
   if (hasIcon) {
@@ -137,12 +141,7 @@ function main() {
     const value = process.env[name]?.trim();
     return value ? value : null;
   };
-  const result = prepare({
-    root,
-    slug,
-    version: optional('POS_CLIENT_VERSION'),
-    updaterKey: optional('POS_UPDATER_PUBLIC_KEY'),
-  });
+  const result = prepare({ root, slug, version: optional('POS_CLIENT_VERSION') });
   const envLines = Object.entries(result.env).map(([k, v]) => `${k}=${v}`);
   if (process.env.GITHUB_ENV) appendFileSync(process.env.GITHUB_ENV, `${envLines.join('\n')}\n`);
   else console.log(envLines.join('\n'));

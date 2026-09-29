@@ -8,7 +8,7 @@ import {
   KitchenDisplayStatusSchema,
 } from '../ipc/kitchen-types';
 import { CustomerDetailSchema, LoyaltyProgramSchema } from '../ipc/loyalty-types';
-import { UpdateStatusSchema } from '../ipc/updater-types';
+import { UpdateFileInfoSchema, UpdateStatusSchema } from '../ipc/updater-types';
 import { DiscountRuleViewSchema } from '../ipc/discount-types';
 import { MemberRowSchema, MembershipPlanViewSchema } from '../ipc/membership-types';
 import { PaidOrderSchema, SaleReceiptSchema, TransactionDetailSchema } from '../ipc/pos-contract';
@@ -70,6 +70,7 @@ const cases = {
   kitchen_change: KitchenChangeSchema,
   kitchen_display_status: KitchenDisplayStatusSchema,
   update_status: UpdateStatusSchema,
+  update_file_info: UpdateFileInfoSchema,
   discount_rule_view: DiscountRuleViewSchema,
   membership_plan_view: MembershipPlanViewSchema,
   member_row: MemberRowSchema,

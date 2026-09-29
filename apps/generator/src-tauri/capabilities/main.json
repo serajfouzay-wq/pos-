@@ -31,6 +31,12 @@
     "allow-refresh-builds",
     "allow-download-build",
     "allow-open-build-run",
-    "allow-reveal-build-download"
+    "allow-reveal-build-download",
+    "allow-get-cloud-service-key",
+    "allow-set-cloud-service-key",
+    "allow-update-key-status",
+    "allow-create-update-key",
+    "allow-export-update-key",
+    "allow-restore-update-key"
   ]
 }

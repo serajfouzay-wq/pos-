@@ -9,8 +9,13 @@
 //! After an update the first start shows what changed (`updated_from`),
 //! until someone dismisses the notice.
 //!
-//! Builds without an updater key (`POS_UPDATER_PUBLIC_KEY`) or without a
-//! cloud report `unavailable`: new versions arrive as installers.
+//! Without internet (the usual case), updates come on a USB stick: the
+//! `.posupdate` file the generator signs after each build (see
+//! [`offline`]), checked against the same key.
+//!
+//! Builds without an updater key (`POS_UPDATER_PUBLIC_KEY`) take new
+//! versions as installers only; without a cloud they report `unavailable`
+//! for online checks but still install update files.
 
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::time::Duration;
@@ -26,10 +31,12 @@ use crate::db::Database;
 use crate::license::LicenseService;
 use crate::repo::settings;
 
+pub mod offline;
+
 /// Minisign public key of the release signing key, set by the build.
 pub const PUBLIC_KEY: Option<&str> = option_env!("POS_UPDATER_PUBLIC_KEY");
-/// The tills are Windows machines; the channel only carries Windows builds.
-const TARGET: &str = "windows";
+/// The channel's name for this till's system (`{{target}}` in the URL).
+const TARGET: &str = if cfg!(windows) { "windows" } else { "linux" };
 const CHECK_TIMEOUT: Duration = Duration::from_secs(60);
 const LAST_VERSION: &str = "updater.last_version";
 const PENDING: &str = "updater.pending";
@@ -60,6 +67,14 @@ pub struct UpdateStatus {
     pub last_checked_at: Option<Timestamp>,
     pub updated_from: Option<String>,
     pub updated_notes: Option<String>,
+    /// This till can install signed update files (it has an update key).
+    pub file_updates: bool,
+}
+
+/// Whether this till can replace itself: Windows (the NSIS setup), or Linux
+/// when running as an AppImage (a .deb install is updated with a new .deb).
+pub fn can_self_install() -> bool {
+    cfg!(windows) || std::env::var_os("APPIMAGE").is_some()
 }
 
 /// A downloaded release's notes, kept for the notice after it installs.
@@ -140,6 +155,7 @@ impl UpdateService {
                 last_checked_at: None,
                 updated_from: None,
                 updated_notes: None,
+                file_updates: PUBLIC_KEY.is_some_and(|k| !k.trim().is_empty()),
             }),
             ready: Mutex::new(None),
             busy: tokio::sync::Mutex::new(()),
@@ -322,10 +338,10 @@ impl UpdateService {
         let Some((update, bytes)) = ready else {
             return Err(IpcError::validation("No update is ready to install."));
         };
-        if !cfg!(windows) {
+        if !can_self_install() {
             *lock(&self.ready) = Some((update, bytes));
             return Err(IpcError::validation(
-                "Updates install on Windows tills only.",
+                "This till was installed from a .deb package: install the new .deb instead.",
             ));
         }
         update
@@ -337,12 +353,53 @@ impl UpdateService {
     /// Called as the till exits: a downloaded update installs quietly and
     /// the next start runs the new version.
     pub fn install_on_exit(&self) {
-        if !cfg!(windows) {
+        if !can_self_install() {
             return;
         }
         if let Some((update, bytes)) = lock(&self.ready).take() {
             let _ = update.restart_after_install(false).install(&bytes);
         }
+    }
+}
+
+impl UpdateService {
+    /// Opens and verifies an update file (nothing is installed).
+    pub fn inspect_file(
+        &self,
+        path: &std::path::Path,
+        client: &ClientConfig,
+    ) -> IpcResult<offline::VerifiedUpdate> {
+        let bytes = offline::read(path)?;
+        offline::verify(
+            &bytes,
+            PUBLIC_KEY,
+            client.client_id,
+            &self.status().current_version,
+            &offline::this_target(),
+        )
+    }
+
+    /// Installs a verified, newer update file: its notes are kept for the
+    /// notice after the restart, then the installer starts. The caller exits
+    /// the till right after.
+    pub fn install_file(
+        &self,
+        db: &Database,
+        update: &offline::VerifiedUpdate,
+        now: Timestamp,
+    ) -> IpcResult<()> {
+        if !update.info.newer {
+            return Err(IpcError::validation(format!(
+                "This till already runs {}; the file holds {}.",
+                update.info.current_version, update.info.version
+            )));
+        }
+        let pending = Pending {
+            version: update.info.version.clone(),
+            notes: Some(update.info.notes.clone()).filter(|n| !n.is_empty()),
+        };
+        settings::put(&db.conn(), PENDING, &pending, now).map_err(internal)?;
+        offline::launch(update)
     }
 }
 

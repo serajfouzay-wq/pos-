@@ -965,6 +965,18 @@ export function useInstallUpdate() {
   return useMutation({ mutationFn: () => ipc.call('install_update') });
 }
 
+export function useInspectUpdateFile() {
+  return useMutation({
+    mutationFn: (path: string) => ipc.call('inspect_update_file', { path }),
+  });
+}
+
+export function useInstallUpdateFile() {
+  return useMutation({
+    mutationFn: (path: string) => ipc.call('install_update_file', { path }),
+  });
+}
+
 export function useDismissUpdateNotice() {
   const queryClient = useQueryClient();
   return useMutation({

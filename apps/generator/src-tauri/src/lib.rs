@@ -1,6 +1,6 @@
 //! POS Factory generator core: the client registry, license signing and
-//! client builds on GitHub Actions — all behind typed IPC commands. The
-//! signing key and the GitHub token never reach the webview.
+//! client builds on GitHub Actions and signed updates — all behind typed IPC
+//! commands. The signing keys and the GitHub token never reach the webview.
 
 mod builds;
 mod clients;
@@ -12,16 +12,19 @@ mod secrets;
 mod signing;
 mod state;
 mod store;
+mod updates;
 
 use std::sync::Arc;
 
 use tauri::Manager;
 
-use crate::builds::BuildService;
+use crate::builds::{BuildDeps, BuildService};
 use crate::github::HttpGitHub;
 use crate::signing::KeyStore;
 use crate::state::AppState;
 use crate::store::Store;
+use crate::updates::channel::HttpChannel;
+use crate::updates::UpdateKey;
 
 const WORKSPACE_FILE: &str = "generator.db";
 
@@ -44,18 +47,26 @@ pub fn run() {
                 .path()
                 .download_dir()
                 .unwrap_or_else(|_| data.join("downloads"));
+            let secrets = secrets::platform_store(data.clone());
+            let update_key = Arc::new(UpdateKey::new(secrets(updates::SECRET_NAME)));
             let builds = Arc::new(BuildService::new(
                 Arc::clone(&store),
-                Arc::new(HttpGitHub::new()),
-                secrets::github_token_store(data.clone()),
+                BuildDeps {
+                    github: Arc::new(HttpGitHub::new()),
+                    secrets,
+                    channel: Arc::new(HttpChannel::default()),
+                },
                 Arc::clone(&keys),
+                Arc::clone(&update_key),
                 app.package_info().version.to_string(),
-                downloads,
+                downloads.clone(),
             ));
             app.manage(AppState {
                 store,
                 keys,
                 builds,
+                update_key,
+                downloads,
             });
             Ok(())
         })
@@ -87,6 +98,12 @@ pub fn run() {
             commands::builds::download_build,
             commands::builds::open_build_run,
             commands::builds::reveal_build_download,
+            commands::builds::get_cloud_service_key,
+            commands::builds::set_cloud_service_key,
+            commands::updates::update_key_status,
+            commands::updates::create_update_key,
+            commands::updates::export_update_key,
+            commands::updates::restore_update_key,
         ])
         .run(tauri::generate_context!())
         .expect("failed to start the POS Factory generator");

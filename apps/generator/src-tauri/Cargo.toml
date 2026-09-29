@@ -19,6 +19,7 @@ tauri-build.workspace = true
 base64.workspace = true
 chrono.workspace = true
 hex.workspace = true
+minisign = "0.7"
 pos-core.workspace = true
 pos-hardware.workspace = true
 pos-license = { workspace = true, features = ["issuer"] }
@@ -32,11 +33,13 @@ tauri-plugin-single-instance.workspace = true
 thiserror.workspace = true
 ureq.workspace = true
 uuid.workspace = true
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [target.'cfg(any(windows, target_os = "macos"))'.dependencies]
 keyring.workspace = true
 
 [dev-dependencies]
+minisign-verify = "0.3.0"
 png.workspace = true
 tempfile.workspace = true
 

@@ -1,13 +1,14 @@
 /**
- * Auto-update (Phase 8). The till checks its shop's release channel in the
- * background, downloads and verifies a signed update, and installs it when
- * the till is next restarted.
+ * Updates. Online (Phase 8): the till checks its shop's release channel in
+ * the background, downloads and verifies a signed update, and installs it
+ * when the till is next restarted. Offline (Phase 9): a signed `.posupdate`
+ * file from the generator, installed from a USB stick.
  */
 import { z } from 'zod';
 import { TimestampSchema } from '../primitives';
 
 export const UPDATE_STATES = [
-  /** No updater key or no cloud in this build: updates come as installers. */
+  /** No updater key or no cloud in this build: no online checks. */
   'unavailable',
   'idle',
   'checking',
@@ -33,5 +34,18 @@ export const UpdateStatusSchema = z.object({
   updated_from: z.string().nullable(),
   /** Release notes of the version now running (shown with the notice). */
   updated_notes: z.string().nullable(),
+  /** This till can install signed update files (built with an update key). */
+  file_updates: z.boolean(),
 });
 export type UpdateStatus = z.infer<typeof UpdateStatusSchema>;
+
+/** A verified update file (`inspect_update_file`); nothing installed yet. */
+export const UpdateFileInfoSchema = z.object({
+  version: z.string().min(1),
+  current_version: z.string().min(1),
+  notes: z.string(),
+  created_at: TimestampSchema,
+  /** Newer than the running version: it can be installed. */
+  newer: z.boolean(),
+});
+export type UpdateFileInfo = z.infer<typeof UpdateFileInfoSchema>;

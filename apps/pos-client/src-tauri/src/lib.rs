@@ -186,6 +186,8 @@ pub fn run() {
             commands::updates::update_status,
             commands::updates::check_for_updates,
             commands::updates::install_update,
+            commands::updates::inspect_update_file,
+            commands::updates::install_update_file,
             commands::updates::dismiss_update_notice,
             commands::discounts::list_discount_rules,
             commands::discounts::save_discount_rule,

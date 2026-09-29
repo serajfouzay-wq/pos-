@@ -73,27 +73,30 @@ const updaterKey = Buffer.from(
   'untrusted comment: minisign public key: 1F2E3D4C5B6A7980\nRWSAeWpLXD0uH7ll3UWZBFPfLx7kT6J1r8mJ9oYt+6eL1Xk7dQpLmZ9F\n',
 ).toString('base64');
 
-test('updates: the version and the updater key go into the build', () => {
-  const result = prepare({ root: workspace(), slug: 'acme-cafe', version: '0.8.3', updaterKey });
+test('updates: the version and the committed updater key go into the build', () => {
+  const root = workspace();
+  writeFileSync(join(root, 'clients/acme-cafe/updater-public-key.txt'), `${updaterKey}\n`);
+  const result = prepare({ root, slug: 'acme-cafe', version: '0.8.3' });
   assert.equal(result.overrides.version, '0.8.3');
-  assert.equal(result.overrides.bundle.createUpdaterArtifacts, true);
   assert.equal(result.env.POS_UPDATER_PUBLIC_KEY, updaterKey);
+  // The generator signs the installers itself: no signing in the build.
+  assert.equal(result.overrides.bundle.createUpdaterArtifacts, undefined);
 });
 
-test('without an updater key the build makes no update artifacts', () => {
+test('without an updater key the till is built without updates', () => {
   const result = prepare({ root: workspace(), slug: 'acme-cafe' });
   assert.equal(result.overrides.version, undefined);
-  assert.equal(result.overrides.bundle.createUpdaterArtifacts, undefined);
   assert.equal(result.env.POS_UPDATER_PUBLIC_KEY, undefined);
 });
 
 test('refuses a bad version or key', () => {
   const root = workspace();
   assert.throws(() => prepare({ root, slug: 'acme-cafe', version: 'latest' }), /invalid version/);
-  assert.throws(
-    () => prepare({ root, slug: 'acme-cafe', updaterKey: 'bm90IGEga2V5IGF0IGFsbCBub3QgYSBrZXk=' }),
-    /updater public key/,
+  writeFileSync(
+    join(root, 'clients/acme-cafe/updater-public-key.txt'),
+    'bm90IGEga2V5IGF0IGFsbCBub3QgYSBrZXk=',
   );
+  assert.throws(() => prepare({ root, slug: 'acme-cafe' }), /updater public key/);
   assert.ok(isUpdaterKey(updaterKey));
   assert.ok(!isUpdaterKey('-----BEGIN PUBLIC KEY-----'));
 });

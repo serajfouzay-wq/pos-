@@ -430,6 +430,11 @@ begin
   assert found_version = '0.1.10', coalesce(found_version, 'none');
   select version into found_version from public.app_update_check(ids.client_a, ids.fp_a1, '0.1.10', 'windows-x86_64');
   assert found_version is null, 'up to date';
+  -- Linux tills have their own channel (AppImage builds).
+  perform public.publish_app_release(ids.client_a, '0.1.3', 'linux-x86_64', 'Linux',
+    ids.client_a || '/0.1.3/POS 0.1.3_amd64.AppImage', 'sig-l');
+  select version into found_version from public.app_update_check(ids.client_a, ids.fp_a1, '0.1.1', 'linux-x86_64');
+  assert found_version = '0.1.3', coalesce(found_version, 'none');
   -- Withdrawing the newest offers the previous one again.
   update app_releases set withdrawn_at = now() where client_id = ids.client_a and version = '0.1.10';
   select version into found_version from public.app_update_check(ids.client_a, ids.fp_a1, '0.1.1', 'windows-x86_64');
@@ -437,7 +442,7 @@ begin
   -- Re-publishing is idempotent and un-withdraws.
   perform public.publish_app_release(ids.client_a, '0.1.10', 'windows-x86_64', 'Loyalty',
     ids.client_a || '/0.1.10/POS_0.1.10_x64-setup.exe', 'sig-10');
-  assert (select count(*) from app_releases where client_id = ids.client_a) = 2, 'no duplicate';
+  assert (select count(*) from app_releases where client_id = ids.client_a and target = 'windows-x86_64') = 2, 'no duplicate';
   begin
     perform public.app_update_check(ids.client_a, repeat('ff', 32), '0.1.1', 'windows-x86_64');
     raise exception 'unknown till got a release';

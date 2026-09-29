@@ -28,6 +28,12 @@ const COMMANDS: &[&str] = &[
     "download_build",
     "open_build_run",
     "reveal_build_download",
+    "get_cloud_service_key",
+    "set_cloud_service_key",
+    "update_key_status",
+    "create_update_key",
+    "export_update_key",
+    "restore_update_key",
 ];
 
 fn main() {

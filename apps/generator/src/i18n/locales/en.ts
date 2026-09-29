@@ -139,17 +139,19 @@ export const en = {
       client: 'Client',
       status: 'Status',
       requested: 'Requested',
-      size: 'Installer',
+      size: 'Download',
     },
     actions: {
       openRun: 'Open on GitHub',
-      download: 'Download installer',
+      download: 'Download installers',
       downloadAgain: 'Download again',
-      reveal: 'Show file',
+      reveal: 'Show folder',
     },
     start: {
-      title: 'Build the Windows installer',
-      help: 'Commits clients/{{slug}}/ to {{repo}} in one commit, then runs the build workflow. It takes about 15–25 minutes.',
+      title: 'Build the installers (Windows and Linux)',
+      help: 'Commits clients/{{slug}}/ to {{repo}} in one commit, then runs the build workflow. It takes about 20–30 minutes.',
+      offlineHelp:
+        'Downloading a build saves the installers and a signed update file (.posupdate) for each system. Copy the update file to a USB stick: on the till, Settings → Updates → Install from file. No internet needed.',
       saveFirst: 'Save your changes first. Builds use the saved configuration.',
       configureFirst: 'Set up the build repository and GitHub token first:',
       keyFirst:
@@ -159,11 +161,18 @@ export const en = {
       submit: 'Build installer',
       notes: 'Release notes',
       notesHelp: 'Shown on the tills after they update. Optional.',
-      publish: 'Publish to the tills as an update',
+      publish: 'Also publish it online when downloaded',
       publishHelp:
-        'The tills download it in the background and install it when they are next restarted. Needs the updater key in the repository settings.',
+        'Tills with internet download it in the background and install it when they are next restarted.',
+      noCloud: 'this client has no cloud, so its tills update from the update file.',
     },
-    published: 'Update',
+    cloud: {
+      key: 'Cloud service key (service_role)',
+      keyHelp:
+        'From the client’s Supabase project → Settings → API. Kept in the Windows Credential Manager on this PC only; needed to publish online.',
+      remove: 'Remove key',
+    },
+    published: 'Online',
   },
   licenses: {
     key: {
@@ -239,6 +248,21 @@ export const en = {
       push: 'The token can push',
       branch: 'Branch {{branch}} exists',
       workflow: 'Workflow {{file}} exists',
+    },
+    updates: {
+      title: 'Update signing key',
+      help: 'Signs every client’s updates, on this PC (nothing secret goes to GitHub). The tills install only updates signed with it. Made automatically by the first build.',
+      absent: 'No update key yet.',
+      create: 'Create the update key',
+      ready: 'Update key ready:',
+      backupWarning:
+        'Save a backup and keep it off this PC (a USB stick in a safe place). Without it, a new PC cannot make updates the tills accept; they would have to be reinstalled by hand.',
+      export: 'Save a backup file',
+      exported: 'Saved to',
+      restoreTitle: 'Restore from a backup (new PC)',
+      restoreHelp:
+        'Paste the text of the backup file. A different key already on this PC is never replaced.',
+      restore: 'Restore key',
     },
   },
 } as const;

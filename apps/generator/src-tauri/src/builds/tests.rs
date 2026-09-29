@@ -8,7 +8,8 @@ use super::*;
 use crate::clients::{new_client_config, NewClientInput};
 use crate::github::tests::{FakeGitHubServer, TOKEN};
 use crate::github::HttpGitHub;
-use crate::secrets::MemorySecret;
+use crate::secrets::{memory_store, SecretFactory};
+use crate::updates::channel::{ChannelRelease, ReleaseChannel};
 
 fn at(seconds: i64) -> Timestamp {
     "2026-09-24T10:00:00.000Z"
@@ -18,8 +19,33 @@ fn at(seconds: i64) -> Timestamp {
         .expect("ts")
 }
 
+/// Records what would go to a client's cloud.
+#[derive(Default)]
+struct FakeChannel(std::sync::Mutex<Vec<(String, String, String, String)>>);
+
+impl ReleaseChannel for FakeChannel {
+    fn publish(
+        &self,
+        base_url: &str,
+        service_key: &str,
+        release: &ChannelRelease<'_>,
+    ) -> Result<(), String> {
+        self.0.lock().expect("channel").push((
+            base_url.to_owned(),
+            service_key.to_owned(),
+            release.path(),
+            release.target.to_owned(),
+        ));
+        Ok(())
+    }
+}
+
 struct World {
     service: BuildService,
+    secrets: SecretFactory,
+    channel: Arc<FakeChannel>,
+    update_key: Arc<UpdateKey>,
+    downloads: PathBuf,
     store: Arc<Store>,
     server: FakeGitHubServer,
     client_id: Uuid,
@@ -45,16 +71,27 @@ fn world(with_key: bool) -> World {
         .create_client(&config, at(0))
         .expect("client")
         .client_id;
+    let secrets = memory_store();
+    let channel = Arc::new(FakeChannel::default());
+    let update_key = Arc::new(UpdateKey::new(secrets(updates::SECRET_NAME)));
     let service = BuildService::new(
         Arc::clone(&store),
-        Arc::new(HttpGitHub::new()),
-        Arc::new(MemorySecret::default()),
+        BuildDeps {
+            github: Arc::new(HttpGitHub::new()),
+            secrets: Arc::clone(&secrets),
+            channel: Arc::clone(&channel) as Arc<dyn ReleaseChannel>,
+        },
         keys,
+        Arc::clone(&update_key),
         "0.1.0".into(),
         downloads.path().to_path_buf(),
     );
     World {
         service,
+        secrets,
+        channel,
+        update_key,
+        downloads: downloads.path().to_path_buf(),
         store,
         server,
         client_id,
@@ -147,6 +184,15 @@ fn a_build_publishes_the_client_and_follows_the_run_to_the_installer() {
             String::from_utf8_lossy(&files["clients/acme-cafe/license-public-key.pem"])
                 .starts_with("-----BEGIN PUBLIC KEY-----")
         );
+        // The tills are built to trust the generator's update key.
+        let updater = String::from_utf8_lossy(&files["clients/acme-cafe/updater-public-key.txt"])
+            .trim()
+            .to_owned();
+        assert_eq!(
+            Some(updater),
+            w.update_key.status().expect("key").public_key,
+            "made with the first build"
+        );
         assert!(repo.head_message().ends_with("[skip ci]"));
         assert_eq!(
             repo.dispatches,
@@ -155,7 +201,6 @@ fn a_build_publishes_the_client_and_follows_the_run_to_the_installer() {
                 "build_id": build.build_id.to_string(),
                 "version": build.app_version,
                 "notes": "Loyalty points",
-                "publish": "true",
             })]
         );
     }
@@ -170,7 +215,22 @@ fn a_build_publishes_the_client_and_follows_the_run_to_the_installer() {
     assert_eq!(refreshed[0].status, BuildStatus::InProgress);
     assert_eq!(refreshed[0].run_id, Some(run_id));
 
-    // …and it succeeds with an installer.
+    // …and it succeeds with installers for both platforms (the merged
+    // artifact wins over a platform's own).
+    let artifact = {
+        use std::io::Write;
+        let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        let options = zip::write::SimpleFileOptions::default();
+        for (name, body) in [
+            ("windows/Acme Cafe_0.1.1_x64-setup.exe", &b"MZ windows"[..]),
+            ("linux/Acme Cafe_0.1.1_amd64.AppImage", b"ELF appimage"),
+            ("linux/Acme Cafe_0.1.1_amd64.deb", b"deb"),
+        ] {
+            zip.start_file(name, options).expect("file");
+            zip.write_all(body).expect("write");
+        }
+        zip.finish().expect("zip").into_inner()
+    };
     {
         let mut repo = w.server.repo.lock().expect("repo");
         repo.runs[0]["status"] = json!("completed");
@@ -178,9 +238,12 @@ fn a_build_publishes_the_client_and_follows_the_run_to_the_installer() {
         let name = format!("pos-acme-cafe-{}", build.build_id);
         repo.artifacts.insert(
             run_id,
-            vec![json!({ "id": 77, "name": name, "size_in_bytes": 4, "expired": false })],
+            vec![
+                json!({ "id": 76, "name": format!("{name}-windows"), "size_in_bytes": 4, "expired": false }),
+                json!({ "id": 77, "name": name, "size_in_bytes": 4, "expired": false }),
+            ],
         );
-        repo.artifact_zips.insert(77, b"PK\x03\x04".to_vec());
+        repo.artifact_zips.insert(77, artifact);
     }
     let done = w.service.refresh(build.build_id, at(600)).expect("refresh");
     assert_eq!(done.status, BuildStatus::Succeeded);
@@ -192,16 +255,88 @@ fn a_build_publishes_the_client_and_follows_the_run_to_the_installer() {
         .expect("refresh")
         .is_empty());
 
+    // Publishing online needs a cloud and its service key; the files are
+    // saved either way.
     let downloaded = w
         .service
         .download(build.build_id, at(700))
         .expect("download");
-    let path = downloaded.download_path.expect("path");
-    assert!(
-        path.ends_with(&format!("acme-cafe/pos-acme-cafe-{}.zip", build.build_id)),
-        "{path}"
+    let dir = PathBuf::from(downloaded.download_path.expect("path"));
+    assert_eq!(
+        dir,
+        w.downloads
+            .join("POS Factory")
+            .join("acme-cafe")
+            .join(&build.app_version)
     );
-    assert_eq!(std::fs::read(path).expect("zip"), b"PK\x03\x04");
+    assert_eq!(
+        std::fs::read(dir.join("Acme Cafe_0.1.1_amd64.deb")).expect("deb"),
+        b"deb"
+    );
+    assert!(downloaded
+        .message
+        .as_deref()
+        .unwrap_or_default()
+        .contains("no cloud"));
+    let windows = dir.join(format!("acme-cafe-{}-windows.posupdate", build.app_version));
+    let linux = dir.join(format!("acme-cafe-{}-linux.posupdate", build.app_version));
+    assert!(windows.exists() && linux.exists());
+    let mut package =
+        zip::ZipArchive::new(std::fs::File::open(&windows).expect("open")).expect("zip");
+    let manifest: serde_json::Value =
+        serde_json::from_reader(package.by_name(updates::MANIFEST).expect("manifest"))
+            .expect("json");
+    assert_eq!(manifest["target"], "windows-x86_64");
+    assert_eq!(manifest["version"], json!(build.app_version));
+    assert_eq!(manifest["notes"], "Loyalty points");
+
+    // With a cloud and its key, both platforms are published.
+    let mut client = w.store.client(w.client_id).expect("client");
+    client.config.cloud.supabase_url = Some("https://acme.supabase.co".into());
+    client.config.cloud.supabase_anon_key = Some("anon".into());
+    w.store
+        .save_client(w.client_id, client.config, "", at(701))
+        .expect("save");
+    assert!(!w.service.has_service_key(w.client_id).expect("key"));
+    assert!(w
+        .service
+        .set_service_key(w.client_id, Some("bad key"))
+        .is_err());
+    assert!(w
+        .service
+        .set_service_key(w.client_id, Some("service-role-jwt"))
+        .expect("key"));
+    let published = w
+        .service
+        .download(build.build_id, at(800))
+        .expect("download");
+    assert!(published
+        .message
+        .as_deref()
+        .unwrap_or_default()
+        .starts_with("Published"));
+    let sent = w.channel.0.lock().expect("channel").clone();
+    assert_eq!(sent.len(), 2);
+    assert_eq!(sent[0].0, "https://acme.supabase.co");
+    assert_eq!(sent[0].1, "service-role-jwt");
+    assert_eq!(
+        sent[0].2,
+        format!(
+            "{}/{}/Acme Cafe_0.1.1_x64-setup.exe",
+            w.client_id, build.app_version
+        )
+    );
+    assert_eq!(sent[1].3, "linux-x86_64");
+    // The service key never lands in the workspace database.
+    assert!(!w.secrets.as_ref()("github-token")
+        .get()
+        .expect("t")
+        .unwrap_or_default()
+        .contains("service-role"));
+    assert!(!w
+        .service
+        .set_service_key(w.client_id, None)
+        .expect("removed"));
 }
 
 #[test]

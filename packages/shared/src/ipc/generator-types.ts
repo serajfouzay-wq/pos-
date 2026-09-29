@@ -84,7 +84,10 @@ export const BuildRecordSchema = z.object({
   /** The client version this build produces (MAJOR.MINOR of the app, then a per-client number). */
   app_version: z.string(),
   release_notes: z.string(),
-  /** The installer is published to the client's tills as an update. */
+  /**
+   * Also publish the signed installers to the client's cloud (needs its
+   * service key on this PC). Update files for a USB stick are made either way.
+   */
   publish_update: z.boolean(),
   commit_sha: z.string().nullable(),
   run_id: NonNegativeIntSchema.nullable(),
@@ -92,6 +95,7 @@ export const BuildRecordSchema = z.object({
   artifact_id: NonNegativeIntSchema.nullable(),
   artifact_name: z.string().nullable(),
   artifact_size: NonNegativeIntSchema.nullable(),
+  /** Folder with the installers and the signed `.posupdate` files. */
   download_path: z.string().nullable(),
   message: z.string().nullable(),
   requested_at: TimestampSchema,
@@ -176,3 +180,18 @@ export const ReceiptPreviewSchema = z.object({
   image_png_base64: z.string().nullable(),
 });
 export type ReceiptPreview = z.infer<typeof ReceiptPreviewSchema>;
+
+/**
+ * The key that signs every client's updates (minisign). It lives in the
+ * OS credential store; the tills are built with its public half.
+ */
+export const UpdateKeyStatusSchema = z.object({
+  configured: z.boolean(),
+  key_id: z.string().nullable(),
+  /** Base64 of the minisign public key (what `POS_UPDATER_PUBLIC_KEY` holds). */
+  public_key: z.string().nullable(),
+});
+export type UpdateKeyStatus = z.infer<typeof UpdateKeyStatusSchema>;
+
+/** File extension of a signed offline update (a zip: manifest + installer). */
+export const UPDATE_FILE_EXTENSION = 'posupdate';

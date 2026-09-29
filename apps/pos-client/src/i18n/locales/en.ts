@@ -894,6 +894,20 @@ export const en = {
     upToDate: 'Up to date ({{version}})',
     failed: 'Update check failed: {{error}}',
     version: 'Version {{version}}',
+    file: {
+      title: 'Update from a file (USB stick)',
+      help: 'Your POS provider gives you a .posupdate file. It is checked before anything changes: it must be signed for this shop and newer than this version. Today’s data is backed up first.',
+      choose: 'Choose update file…',
+      kind: 'POS update',
+      checking: 'Checking…',
+      found: 'Version {{version}} (made {{date}})',
+      install: 'Install and restart',
+      installing: 'Installing…',
+      confirm:
+        'Install {{version}} now? The till closes and restarts on the new version. Finish the current sale first.',
+      notNewer: 'This till already runs {{current}}: nothing to install.',
+      noKey: 'This till takes new versions as installers from your POS provider.',
+    },
   },
   license: {
     checking: 'Checking license…',

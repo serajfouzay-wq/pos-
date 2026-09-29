@@ -111,3 +111,22 @@ pub async fn reveal_build_download(
         .reveal_item_in_dir(path)
         .map_err(|e| IpcError::internal(e.to_string()))
 }
+
+/// Whether the client's cloud service key is on this PC (publishing updates
+/// online needs it). The key itself never goes back to the webview.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn get_cloud_service_key(state: State<'_, AppState>, client_id: Uuid) -> IpcResult<bool> {
+    let builds = Arc::clone(&state.builds);
+    blocking(move || builds.has_service_key(client_id)).await
+}
+
+/// `service_key: null` removes it.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn set_cloud_service_key(
+    state: State<'_, AppState>,
+    client_id: Uuid,
+    service_key: Option<String>,
+) -> IpcResult<bool> {
+    let builds = Arc::clone(&state.builds);
+    blocking(move || builds.set_service_key(client_id, service_key.as_deref())).await
+}

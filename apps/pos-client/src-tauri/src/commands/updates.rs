@@ -1,6 +1,7 @@
 //! Updates. Reading the status and checking: any signed-in user. Installing
 //! now restarts the till: `shift.close` (managers and owners). Otherwise a
-//! downloaded update installs when the till is next closed.
+//! downloaded update installs when the till is next closed. Update files
+//! (from a USB stick) are checked by managers and owners too.
 
 use std::sync::Arc;
 
@@ -11,6 +12,7 @@ use tauri::{AppHandle, State};
 
 use super::{authorize, blocking};
 use crate::state::AppState;
+use crate::updater::offline::UpdateFileInfo;
 use crate::updater::UpdateStatus;
 
 #[tauri::command(rename_all = "snake_case")]
@@ -51,4 +53,47 @@ pub async fn install_update(state: State<'_, AppState>) -> IpcResult<()> {
 pub async fn dismiss_update_notice(state: State<'_, AppState>) -> IpcResult<UpdateStatus> {
     let auth = authorize(&state, Permission::SaleCreate)?;
     state.updates.dismiss(&auth.db, SystemClock.now())
+}
+
+/// Opens and verifies an update file; installs nothing.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn inspect_update_file(
+    state: State<'_, AppState>,
+    path: String,
+) -> IpcResult<UpdateFileInfo> {
+    authorize(&state, Permission::ShiftClose)?;
+    let (updates, client) = (Arc::clone(&state.updates), Arc::clone(&state.client));
+    blocking(move || {
+        updates
+            .inspect_file(std::path::Path::new(&path), &client)
+            .map(|u| u.info)
+    })
+    .await
+}
+
+/// Backs up today's data, starts the update file's installer, and closes
+/// the till (it restarts on the new version).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn install_update_file(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    path: String,
+) -> IpcResult<()> {
+    let auth = authorize(&state, Permission::ShiftClose)?;
+    let (updates, client, backups) = (
+        Arc::clone(&state.updates),
+        Arc::clone(&state.client),
+        Arc::clone(&state.backups),
+    );
+    blocking(move || {
+        // Verified again: the file may have changed since it was inspected.
+        let update = updates.inspect_file(std::path::Path::new(&path), &client)?;
+        if update.info.newer {
+            backups.create(&auth.db, crate::backup::Reason::BeforeUpdate)?;
+        }
+        updates.install_file(&auth.db, &update, SystemClock.now())
+    })
+    .await?;
+    app.exit(0);
+    Ok(())
 }

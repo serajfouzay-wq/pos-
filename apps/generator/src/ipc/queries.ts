@@ -21,6 +21,8 @@ export const queryKeys = {
   licenses: (id: string) => ['licenses', id] as const,
   builds: (id: string | null) => ['builds', id] as const,
   buildSettings: ['build_settings'] as const,
+  updateKey: ['update_key'] as const,
+  serviceKey: (id: string) => ['service_key', id] as const,
 };
 
 /** Raised when the UI is loaded in a plain browser instead of the Tauri shell. */
@@ -276,4 +278,55 @@ export function useClearGithubToken() {
 
 export function useCheckBuildSettings() {
   return useMutation({ mutationFn: () => ipc.call('check_build_settings') });
+}
+
+export function useUpdateKey() {
+  return useQuery({
+    queryKey: queryKeys.updateKey,
+    queryFn: () => ipc.call('update_key_status'),
+    enabled: inTauri,
+  });
+}
+
+export function useCreateUpdateKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => ipc.call('create_update_key'),
+    onSuccess: (status) => {
+      queryClient.setQueryData(queryKeys.updateKey, status);
+    },
+  });
+}
+
+export function useExportUpdateKey() {
+  return useMutation({ mutationFn: () => ipc.call('export_update_key') });
+}
+
+export function useRestoreUpdateKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (backup: string) => ipc.call('restore_update_key', { backup }),
+    onSuccess: (status) => {
+      queryClient.setQueryData(queryKeys.updateKey, status);
+    },
+  });
+}
+
+export function useServiceKey(clientId: string) {
+  return useQuery({
+    queryKey: queryKeys.serviceKey(clientId),
+    queryFn: () => ipc.call('get_cloud_service_key', { client_id: clientId }),
+    enabled: inTauri,
+  });
+}
+
+export function useSetServiceKey(clientId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (serviceKey: string | null) =>
+      ipc.call('set_cloud_service_key', { client_id: clientId, service_key: serviceKey }),
+    onSuccess: (stored) => {
+      queryClient.setQueryData(queryKeys.serviceKey(clientId), stored);
+    },
+  });
 }

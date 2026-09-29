@@ -102,7 +102,7 @@ import {
   LoyaltyProgramSchema,
   PointsAdjustmentSchema,
 } from './loyalty-types';
-import { UpdateStatusSchema } from './updater-types';
+import { UpdateFileInfoSchema, UpdateStatusSchema } from './updater-types';
 
 // ── create_transaction ─────────────────────────────────────────────────────
 
@@ -504,6 +504,14 @@ export const POS_IPC = {
   check_for_updates: command(NoArgs, UpdateStatusSchema, 8),
   install_update: command(NoArgs, z.null(), 8),
   dismiss_update_notice: command(NoArgs, UpdateStatusSchema, 8),
+  /** Checks a `.posupdate` file (signature, shop, system, version): shift.close. */
+  inspect_update_file: command(
+    z.object({ path: z.string().min(1).max(4096) }),
+    UpdateFileInfoSchema,
+    9,
+  ),
+  /** Backs up, starts the file's installer and closes the till: shift.close. */
+  install_update_file: command(z.object({ path: z.string().min(1).max(4096) }), z.null(), 9),
 
   // Discount rules — the list: anyone selling (manual rules are offered to
   // managers at the till); changes: catalog.manage, audited.

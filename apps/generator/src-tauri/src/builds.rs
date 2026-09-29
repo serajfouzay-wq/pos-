@@ -1,9 +1,9 @@
 //! Client builds: publish the client's folder to the build repository,
 //! dispatch the `build-client.yml` workflow, follow the run, fetch the
-//! installer.
+//! installers, and sign them into update files (see [`crate::updates`]).
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use chrono::Duration;
@@ -13,11 +13,13 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::github::{GitHub, GitHubError, RepoCheck, RepoTarget, WorkflowRun};
-use crate::secrets::SecretStore;
+use crate::secrets::{SecretFactory, SecretStore, GITHUB_TOKEN};
 use crate::signing::KeyStore;
 use crate::store::{
     sha256_hex, AssetKind, BuildRecord, BuildStatus, BuildUpdate, ReleaseOptions, Store,
 };
+use crate::updates::channel::{ChannelRelease, ReleaseChannel};
+use crate::updates::{self, Manifest, Platform, SignedRelease, UpdateKey};
 
 pub const SETTINGS_KEY: &str = "build.settings";
 /// Every client lives in `clients/<slug>/` of the build repository.
@@ -128,32 +130,76 @@ pub fn run_status(run: &WorkflowRun) -> BuildStatus {
     }
 }
 
+/// The generator's outside world: GitHub, the credential store, the
+/// clients' release channels.
+pub struct BuildDeps {
+    pub github: Arc<dyn GitHub>,
+    pub secrets: SecretFactory,
+    pub channel: Arc<dyn ReleaseChannel>,
+}
+
 pub struct BuildService {
     store: Arc<Store>,
     github: Arc<dyn GitHub>,
+    secrets: SecretFactory,
     token: Arc<dyn SecretStore>,
     keys: Arc<KeyStore>,
+    update_key: Arc<UpdateKey>,
+    channel: Arc<dyn ReleaseChannel>,
     app_version: String,
     downloads: PathBuf,
+}
+
+fn service_key_name(client_id: Uuid) -> String {
+    format!("cloud-service-key-{client_id}")
 }
 
 impl BuildService {
     pub fn new(
         store: Arc<Store>,
-        github: Arc<dyn GitHub>,
-        token: Arc<dyn SecretStore>,
+        deps: BuildDeps,
         keys: Arc<KeyStore>,
+        update_key: Arc<UpdateKey>,
         app_version: String,
         downloads: PathBuf,
     ) -> Self {
         Self {
             store,
-            github,
-            token,
+            github: deps.github,
+            token: (deps.secrets)(GITHUB_TOKEN),
+            secrets: deps.secrets,
             keys,
+            update_key,
+            channel: deps.channel,
             app_version,
             downloads,
         }
+    }
+
+    /// Whether this client's cloud service key is on this PC (needed to
+    /// publish updates online).
+    pub fn has_service_key(&self, client_id: Uuid) -> IpcResult<bool> {
+        Ok((self.secrets)(&service_key_name(client_id))
+            .get()?
+            .is_some())
+    }
+
+    /// `None` removes it.
+    pub fn set_service_key(&self, client_id: Uuid, key: Option<&str>) -> IpcResult<bool> {
+        self.store.client(client_id)?;
+        let secret = (self.secrets)(&service_key_name(client_id));
+        match key.map(str::trim).filter(|k| !k.is_empty()) {
+            Some(key) => {
+                if key.len() > 2000 || key.chars().any(char::is_whitespace) {
+                    return Err(IpcError::validation(
+                        "That does not look like a Supabase service key.",
+                    ));
+                }
+                secret.set(key)?;
+            }
+            None => secret.clear()?,
+        }
+        self.has_service_key(client_id)
     }
 
     pub fn settings(&self) -> IpcResult<BuildSettingsView> {
@@ -215,9 +261,19 @@ impl BuildService {
         let mut config = serde_json::to_vec_pretty(&client.config)
             .map_err(|e| IpcError::internal(e.to_string()))?;
         config.push(b'\n');
+        // Made with the first build: the tills are built to trust it.
+        let updater_key = self
+            .update_key
+            .ensure()?
+            .public_key
+            .ok_or_else(|| IpcError::internal("the update key has no public key"))?;
         let mut files = BTreeMap::from([
             (CONFIG_FILE.to_owned(), config),
             (PUBLIC_KEY_FILE.to_owned(), public_key.into_bytes()),
+            (
+                updates::PUBLIC_KEY_FILE.to_owned(),
+                format!("{updater_key}\n").into_bytes(),
+            ),
         ]);
         for kind in [AssetKind::ReceiptLogo, AssetKind::AppIcon] {
             if let Some(bytes) = self.store.asset(client_id, kind)? {
@@ -278,7 +334,6 @@ impl BuildService {
             ("build_id".to_owned(), build.build_id.to_string()),
             ("version".to_owned(), build.app_version.clone()),
             ("notes".to_owned(), build.release_notes.clone()),
-            ("publish".to_owned(), build.publish_update.to_string()),
         ]);
         if let Err(e) = self.github.dispatch(&token, &target, &inputs) {
             return fail(github_error(e));
@@ -357,7 +412,9 @@ impl BuildService {
                 .artifacts(&token, &target, run.id)
                 .map_err(github_error)?
                 .into_iter()
-                .find(|a| !a.expired && a.name.contains(&marker));
+                .filter(|a| !a.expired && a.name.contains(&marker))
+                // The merged artifact (every platform) over a platform's own.
+                .min_by_key(|a| !a.name.ends_with(&marker));
             match artifact {
                 Some(a) => {
                     update.artifact_id = Some(a.id);
@@ -381,11 +438,13 @@ impl BuildService {
             .collect()
     }
 
-    /// Saves the installer zip under `<Downloads>/POS Factory/<slug>/`.
+    /// Saves the installers under `<Downloads>/POS Factory/<slug>/<version>/`
+    /// with a signed `.posupdate` file per platform (for a USB stick), and
+    /// publishes them online when the build asks for it and the client has a
+    /// cloud. An online failure is reported on the build; the files stay.
     pub fn download(&self, build_id: Uuid, now: Timestamp) -> IpcResult<BuildRecord> {
         let build = self.store.build(build_id)?;
-        let (Some(artifact_id), Some(name)) = (build.artifact_id, build.artifact_name.clone())
-        else {
+        let Some(artifact_id) = build.artifact_id else {
             return Err(IpcError::validation(
                 "This build has no installer to download yet.",
             ));
@@ -395,27 +454,92 @@ impl BuildService {
             .github
             .download_artifact(&token, &target, artifact_id)
             .map_err(github_error)?;
-        let dir = self.downloads.join("POS Factory").join(&build.client_slug);
+        let installers = updates::installers_in(&bytes)?;
+        if installers.is_empty() {
+            return Err(IpcError::internal("The build has no installer in it."));
+        }
+        let client = self.store.client(build.client_id)?;
+        let version = build.app_version.clone();
+        let dir = self
+            .downloads
+            .join("POS Factory")
+            .join(&build.client_slug)
+            .join(&version);
         std::fs::create_dir_all(&dir)
             .map_err(|e| IpcError::internal(format!("create {}: {e}", dir.display())))?;
-        let path = dir.join(format!("{name}.zip"));
-        write_atomically(&path, &bytes)?;
-        self.store.update_build(
-            build_id,
-            &BuildUpdate {
-                download_path: Some(path.display().to_string()),
-                ..BuildUpdate::default()
-            },
-            now,
-        )
-    }
-}
+        for (name, bytes) in &installers {
+            updates::write_file(&dir.join(name), bytes)?;
+        }
 
-fn write_atomically(path: &Path, bytes: &[u8]) -> IpcResult<()> {
-    let partial = path.with_extension("zip.part");
-    std::fs::write(&partial, bytes)
-        .and_then(|()| std::fs::rename(&partial, path))
-        .map_err(|e| IpcError::internal(format!("save {}: {e}", path.display())))
+        let mut signed = Vec::new();
+        for platform in Platform::ALL {
+            let Some((name, bytes)) = installers
+                .iter()
+                .find(|(n, _)| platform.is_update_installer(n))
+            else {
+                continue;
+            };
+            let release = SignedRelease {
+                client_id: build.client_id,
+                version: version.clone(),
+                platform,
+                file: name.clone(),
+            };
+            let signature = self.update_key.sign(bytes, &release, now)?;
+            let manifest = Manifest {
+                format: updates::FORMAT,
+                client_id: build.client_id,
+                client_slug: build.client_slug.clone(),
+                version: version.clone(),
+                target: platform.target(),
+                notes: build.release_notes.clone(),
+                installer: name.clone(),
+                signature: signature.clone(),
+                created_at: now,
+            };
+            let file = format!(
+                "{}-{version}-{}.{}",
+                build.client_slug,
+                platform.short(),
+                updates::PACKAGE_EXTENSION
+            );
+            updates::write_file(&dir.join(file), &updates::package(&manifest, bytes)?)?;
+            signed.push((platform, name, bytes, signature));
+        }
+
+        let mut update = BuildUpdate {
+            download_path: Some(dir.display().to_string()),
+            ..BuildUpdate::default()
+        };
+        if build.publish_update {
+            let outcome = match client.config.cloud.endpoint() {
+                None => Err("This client has no cloud: take the .posupdate file to its tills.".to_owned()),
+                Some((base, _)) => match (self.secrets)(&service_key_name(build.client_id)).get()? {
+                    None => Err("Add the client's cloud service key (Builds) to publish online; the update files are saved.".to_owned()),
+                    Some(key) => signed.iter().try_for_each(|(platform, name, bytes, signature)| {
+                        self.channel.publish(
+                            base,
+                            &key,
+                            &ChannelRelease {
+                                client_id: build.client_id,
+                                version: &version,
+                                target: platform.target(),
+                                notes: &build.release_notes,
+                                file_name: name,
+                                bytes,
+                                signature,
+                            },
+                        )
+                    }),
+                },
+            };
+            update.message = Some(match outcome {
+                Ok(()) => "Published: the tills install it on their next check.".to_owned(),
+                Err(e) => e,
+            });
+        }
+        self.store.update_build(build_id, &update, now)
+    }
 }
 
 #[cfg(test)]

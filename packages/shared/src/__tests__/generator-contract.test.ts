@@ -12,6 +12,7 @@ import {
   NewClientInputSchema,
   ReceiptPreviewSchema,
   RepoCheckSchema,
+  UpdateKeyStatusSchema,
   isActiveBuild,
 } from '../ipc/generator-types';
 
@@ -24,6 +25,7 @@ const cases = {
   build_settings: BuildSettingsSchema,
   repo_check: RepoCheckSchema,
   receipt_preview: ReceiptPreviewSchema,
+  update_key_status: UpdateKeyStatusSchema,
 } as const;
 
 describe('generator response contract (Rust → Zod)', () => {

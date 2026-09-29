@@ -12,7 +12,7 @@ import { authenticateDevice, DeviceAuthError } from './device-auth.ts';
 import type { VerificationKey } from './license.ts';
 
 const VERSION = /^\d{1,5}\.\d{1,5}\.\d{1,9}$/;
-const TARGETS = new Set(['windows-x86_64']);
+const TARGETS = new Set(['windows-x86_64', 'linux-x86_64']);
 /** Minutes a download link stays valid. */
 export const LINK_MINUTES = 60;
 

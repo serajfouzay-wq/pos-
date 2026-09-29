@@ -79,6 +79,8 @@
     "allow-update-status",
     "allow-check-for-updates",
     "allow-install-update",
+    "allow-inspect-update-file",
+    "allow-install-update-file",
     "allow-dismiss-update-notice",
     "allow-list-discount-rules",
     "allow-save-discount-rule",

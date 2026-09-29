@@ -1015,6 +1015,14 @@ fn pos_response_shapes_match_the_contract_fixture() {
                 last_checked_at: Some(at(60)),
                 updated_from: Some("0.1.2".into()),
                 updated_notes: Some("Kitchen display".into()),
+                file_updates: true,
+            },
+            "update_file_info": crate::updater::offline::UpdateFileInfo {
+                version: "0.1.4".into(),
+                current_version: "0.1.3".into(),
+                notes: "Loyalty points".into(),
+                created_at: at(60),
+                newer: true,
             },
         })
     };

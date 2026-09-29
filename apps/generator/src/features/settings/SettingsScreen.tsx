@@ -6,8 +6,101 @@ import {
   useBuildSettings,
   useCheckBuildSettings,
   useClearGithubToken,
+  useCreateUpdateKey,
+  useExportUpdateKey,
+  useRestoreUpdateKey,
   useSaveBuildSettings,
+  useUpdateKey,
 } from '../../ipc/queries';
+
+/** The key that signs every client's updates (kept in the credential store). */
+function UpdateKeyCard() {
+  const { t } = useTranslation();
+  const status = useUpdateKey();
+  const create = useCreateUpdateKey();
+  const exportKey = useExportUpdateKey();
+  const restore = useRestoreUpdateKey();
+  const [backup, setBackup] = useState('');
+  const key = status.data;
+  return (
+    <section className="card form">
+      <h2>{t('settings.updates.title')}</h2>
+      <p className="muted">{t('settings.updates.help')}</p>
+      <ErrorText error={status.error ?? create.error ?? exportKey.error ?? restore.error} />
+      {key?.configured ? (
+        <>
+          <p>
+            {t('settings.updates.ready')} <code dir="ltr">{key.key_id}</code>
+          </p>
+          <p className="warning">{t('settings.updates.backupWarning')}</p>
+          <div className="row">
+            <button
+              type="button"
+              className="button button--primary"
+              disabled={exportKey.isPending}
+              onClick={() => {
+                exportKey.mutate();
+              }}
+            >
+              {t('settings.updates.export')}
+            </button>
+          </div>
+          {exportKey.data && (
+            <p className="muted small">
+              {t('settings.updates.exported')} <code dir="ltr">{exportKey.data}</code>
+            </p>
+          )}
+        </>
+      ) : (
+        key && (
+          <>
+            <p className="muted">{t('settings.updates.absent')}</p>
+            <div className="row">
+              <button
+                type="button"
+                className="button button--primary"
+                disabled={create.isPending}
+                onClick={() => {
+                  create.mutate();
+                }}
+              >
+                {t('settings.updates.create')}
+              </button>
+            </div>
+          </>
+        )
+      )}
+      <details>
+        <summary>{t('settings.updates.restoreTitle')}</summary>
+        <p className="muted small">{t('settings.updates.restoreHelp')}</p>
+        <textarea
+          rows={3}
+          className="mono"
+          dir="ltr"
+          value={backup}
+          placeholder="untrusted comment: POS Factory update signing key"
+          onChange={(e) => {
+            setBackup(e.target.value);
+          }}
+        />
+        <button
+          type="button"
+          className="button"
+          disabled={!backup.trim() || restore.isPending}
+          onClick={() => {
+            restore.mutate(backup, {
+              onSuccess: () => {
+                setBackup('');
+              },
+            });
+          }}
+        >
+          {t('settings.updates.restore')}
+        </button>
+      </details>
+    </section>
+  );
+}
 
 function SettingsForm({ current }: { current: BuildSettings }) {
   const { t } = useTranslation();
@@ -132,6 +225,7 @@ export function SettingsScreen() {
     <>
       <ErrorText error={settings.error} />
       {settings.data && <SettingsForm current={settings.data} />}
+      <UpdateKeyCard />
     </>
   );
 }

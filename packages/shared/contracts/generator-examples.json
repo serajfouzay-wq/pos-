@@ -6,8 +6,8 @@
       "artifact_id": 2,
       "artifact_name": "pos-acme-cafe",
       "artifact_size": 3,
-      "build_id": "01a0ed58-e03f-7361-bf00-c9814e7a9851",
-      "client_id": "80e7ed9e-ad4c-42db-9477-dfbaff68d2d2",
+      "build_id": "01a0ed73-9a3d-7641-8e7d-623e8fd7e1b1",
+      "client_id": "e06e047c-2c80-45bf-bf4d-ad5462fc79e3",
       "client_slug": "acme-cafe",
       "commit_sha": "c0ffee",
       "completed_at": "2026-09-24T10:00:00.000Z",
@@ -41,14 +41,14 @@
           "width": 200
         }
       ],
-      "client_id": "80e7ed9e-ad4c-42db-9477-dfbaff68d2d2",
+      "client_id": "e06e047c-2c80-45bf-bf4d-ad5462fc79e3",
       "config": {
         "branding": {
           "accent_color": "#F59E0B",
           "primary_color": "#1F6FEB"
         },
         "business_type": "cafe",
-        "client_id": "80e7ed9e-ad4c-42db-9477-dfbaff68d2d2",
+        "client_id": "e06e047c-2c80-45bf-bf4d-ad5462fc79e3",
         "client_slug": "acme-cafe",
         "cloud": {
           "offline_grace_days": null,
@@ -90,7 +90,7 @@
     },
     "client_summary": {
       "business_type": "cafe",
-      "client_id": "80e7ed9e-ad4c-42db-9477-dfbaff68d2d2",
+      "client_id": "e06e047c-2c80-45bf-bf4d-ad5462fc79e3",
       "client_slug": "acme-cafe",
       "display_name": "Acme Cafe",
       "has_app_icon": false,
@@ -100,8 +100,8 @@
         "artifact_id": 2,
         "artifact_name": "pos-acme-cafe",
         "artifact_size": 3,
-        "build_id": "01a0ed58-e03f-7361-bf00-c9814e7a9851",
-        "client_id": "80e7ed9e-ad4c-42db-9477-dfbaff68d2d2",
+        "build_id": "01a0ed73-9a3d-7641-8e7d-623e8fd7e1b1",
+        "client_id": "e06e047c-2c80-45bf-bf4d-ad5462fc79e3",
         "client_slug": "acme-cafe",
         "commit_sha": "c0ffee",
         "completed_at": "2026-09-24T10:00:00.000Z",
@@ -120,12 +120,12 @@
       "updated_at": "2026-09-24T10:00:00.000Z"
     },
     "issued_license": {
-      "client_id": "80e7ed9e-ad4c-42db-9477-dfbaff68d2d2",
+      "client_id": "e06e047c-2c80-45bf-bf4d-ad5462fc79e3",
       "device_name": "TILL-1",
       "expires_at": "2026-09-24T10:00:00.000Z",
       "fingerprint_hash": "abababababababababababababababababababababababababababababababab",
       "issued_at": "2026-09-24T10:00:00.000Z",
-      "license_id": "01a0ed58-e03f-7361-bf00-c9809828d5ad",
+      "license_id": "01a0ed73-9a3c-7178-9822-9411bf1f0757",
       "max_devices": 2,
       "token": "eyJ…"
     },
@@ -142,6 +142,11 @@
       "can_push": true,
       "default_branch": "main",
       "workflow_found": false
+    },
+    "update_key_status": {
+      "configured": true,
+      "key_id": "07BC9D7DFADD5483",
+      "public_key": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDA3QkM5RDdERkFERDU0ODMKUldTRFZOMzZmWjI4QjMxR2FQL0hKUjNWbDhwa0lpMHNVNU1Ua0tSM0dhbXRmd0xpR3pjajFSMm8K"
     }
   }
 }

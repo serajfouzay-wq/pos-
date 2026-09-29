@@ -21,6 +21,7 @@ import {
   NewClientInputSchema,
   ReceiptPreviewSchema,
   RepoCheckSchema,
+  UpdateKeyStatusSchema,
 } from './generator-types';
 
 export const MIN_SIGNING_PASSPHRASE_LENGTH = 12;
@@ -138,6 +139,25 @@ export const GENERATOR_IPC = {
   download_build: command(BuildRef, BuildRecordSchema, 5),
   open_build_run: command(BuildRef, z.null(), 5),
   reveal_build_download: command(BuildRef, z.null(), 5),
+  /** Whether the client's cloud service key is on this PC (never the key). */
+  get_cloud_service_key: command(ClientRef, z.boolean(), 9),
+  /** `service_key: null` removes it. */
+  set_cloud_service_key: command(
+    ClientRef.extend({ service_key: z.string().trim().max(2000).nullable() }),
+    z.boolean(),
+    9,
+  ),
+  update_key_status: command(z.object({}), UpdateKeyStatusSchema, 9),
+  /** Made by the first build otherwise. */
+  create_update_key: command(z.object({}), UpdateKeyStatusSchema, 9),
+  /** Saves the backup file under Downloads/POS Factory and shows it; returns its path. */
+  export_update_key: command(z.object({}), z.string(), 9),
+  /** The text of a backup file; never replaces a different key. */
+  restore_update_key: command(
+    z.object({ backup: z.string().trim().min(1).max(4000) }),
+    UpdateKeyStatusSchema,
+    9,
+  ),
 } as const;
 
 export type GeneratorIpcContract = typeof GENERATOR_IPC;

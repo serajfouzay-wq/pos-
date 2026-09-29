@@ -8,6 +8,7 @@ pub mod app_info;
 pub mod builds;
 pub mod clients;
 pub mod license;
+pub mod updates;
 
 use pos_core::{IpcError, IpcResult};
 
