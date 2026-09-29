@@ -82,6 +82,11 @@ pub struct Features {
 pub struct CloudConfig {
     pub supabase_url: Option<String>,
     pub supabase_anon_key: Option<String>,
+    /// Days a till may go without reaching the cloud before it stops
+    /// (license check). `None` = never: the till works offline for as long
+    /// as it needs (internet where the shops are is rare).
+    #[serde(default)]
+    pub offline_grace_days: Option<u32>,
 }
 
 impl CloudConfig {

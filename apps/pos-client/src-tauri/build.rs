@@ -103,6 +103,13 @@ const COMMANDS: &[&str] = &[
     "customer_memberships",
     "grant_membership",
     "cancel_membership",
+    "backup_status",
+    "backup_now",
+    "save_backup_settings",
+    "set_backup_password",
+    "list_backups_in",
+    "restore_backup",
+    "restart_app",
 ];
 
 fn main() {

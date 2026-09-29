@@ -290,7 +290,8 @@ fn expiry_halts_and_cannot_be_dodged_by_winding_the_clock_back() {
 
 #[test]
 fn offline_grace_counts_down_and_cloud_contact_restores_it() {
-    let h = Harness::new();
+    let mut h = Harness::new();
+    Arc::make_mut(&mut h.config).cloud.offline_grace_days = Some(7);
     let service = h.boot(machine_a(), true);
     let token = h.issue_for(&service, None);
     let LicenseStatus::Valid(valid) = service.activate(&token) else {
@@ -324,6 +325,24 @@ fn offline_grace_counts_down_and_cloud_contact_restores_it() {
         h.cloud.seen_tokens.lock().expect("seen").last(),
         Some(&token)
     );
+}
+
+#[test]
+fn without_a_grace_a_cloud_till_works_offline_indefinitely() {
+    // The generator's default: shops that rarely have internet never lock.
+    let h = Harness::new();
+    assert_eq!(h.config.cloud.offline_grace_days, None);
+    let service = h.boot(machine_a(), true);
+    let token = h.issue_for(&service, None);
+    let LicenseStatus::Valid(valid) = service.activate(&token) else {
+        panic!("expected valid");
+    };
+    assert_eq!(valid.grace_days_remaining, None);
+    h.cloud.go_offline();
+    h.clock.advance(Duration::days(60));
+    assert_eq!(service.cloud_check(), CloudCheck::Unreachable);
+    assert_eq!(state(&service.evaluate()), "valid");
+    assert!(service.database().is_ok());
 }
 
 #[test]

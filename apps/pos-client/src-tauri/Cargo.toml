@@ -41,6 +41,7 @@ uuid.workspace = true
 zeroize.workspace = true
 sha2.workspace = true
 hex.workspace = true
+tauri-plugin-dialog = "~2.7"
 
 [dev-dependencies]
 pos-license = { workspace = true, features = ["issuer"] }

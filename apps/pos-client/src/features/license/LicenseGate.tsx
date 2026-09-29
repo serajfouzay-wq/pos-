@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NotInTauriError, useAppInfo, useLicenseStatus } from '../../ipc/queries';
+import { RestorePanel } from '../backups/BackupsScreen';
 import { ActivationPanel } from './ActivationPanel';
 
 /** Warn this many days before offline grace runs out. */
@@ -55,6 +56,13 @@ export function LicenseGate({ children }: { children: ReactNode }) {
           <p className="shell__muted">{t(`license.state.${status.state}.body`)}</p>
           <p className="license__reason">{status.reason}</p>
           {canActivate && <ActivationPanel />}
+          {status.state === 'storage_error' && (
+            <section className="stack">
+              <h2>{t('backups.lockTitle')}</h2>
+              <p className="shell__muted">{t('backups.lockHelp')}</p>
+              <RestorePanel backups={[]} />
+            </section>
+          )}
         </motion.section>
       </main>
     );

@@ -14,6 +14,7 @@
 //!   capability.
 
 pub mod app_info;
+pub mod backups;
 pub mod catalog;
 pub mod customers;
 pub mod discounts;

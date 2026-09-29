@@ -9,7 +9,7 @@ use pos_core::time::{Clock, SystemClock};
 use pos_core::IpcResult;
 use tauri::{AppHandle, State};
 
-use super::authorize;
+use super::{authorize, blocking};
 use crate::state::AppState;
 use crate::updater::UpdateStatus;
 
@@ -35,7 +35,15 @@ pub async fn check_for_updates(
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn install_update(state: State<'_, AppState>) -> IpcResult<()> {
-    authorize(&state, Permission::ShiftClose)?;
+    let auth = authorize(&state, Permission::ShiftClose)?;
+    // Whatever the new version does with the data, today's is kept.
+    let backups = Arc::clone(&state.backups);
+    blocking(move || {
+        backups
+            .create(&auth.db, crate::backup::Reason::BeforeUpdate)
+            .map(|_| ())
+    })
+    .await?;
     state.updates.install_now()
 }
 

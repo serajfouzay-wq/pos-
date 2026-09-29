@@ -68,6 +68,7 @@ pub async fn run_z_report(state: State<'_, AppState>) -> IpcResult<ReportPrint> 
     let auth = authorize(&state, Permission::ReportZRun)?;
     let client = Arc::clone(&state.client);
     let printer = Arc::clone(&state.printer);
+    let backups = Arc::clone(&state.backups);
     blocking(move || {
         let report = reports::run_z(
             &mut auth.db.conn(),
@@ -75,6 +76,8 @@ pub async fn run_z_report(state: State<'_, AppState>) -> IpcResult<ReportPrint> 
             client.currency.base,
             SystemClock.now(),
         )?;
+        // The closed day goes into a backup straight away.
+        backups.in_background(Arc::clone(&auth.db), crate::backup::Reason::ZReport);
         Ok(print(&auth, &printer, &client, report))
     })
     .await

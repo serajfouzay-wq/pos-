@@ -16,6 +16,13 @@ import {
   MembershipPlanInputSchema,
   MembershipPlanViewSchema,
 } from './membership-types';
+import {
+  BackupInfoSchema,
+  BackupSettingsSchema,
+  BackupStatusSchema,
+  RestoredBackupSchema,
+  RestoreRequestSchema,
+} from './backup-types';
 import { KitchenTicketSchema } from '../entities/kitchen';
 import { LoyaltySettingsSchema } from '../entities/shop';
 import { CustomerSchema, UserSchema } from '../entities/people';
@@ -517,6 +524,26 @@ export const POS_IPC = {
   customer_memberships: command(z.object({ customer_id: UuidSchema }), z.array(MemberRowSchema), 9),
   grant_membership: command(z.object({ grant: GrantMembershipSchema }), MembershipSchema, 9),
   cancel_membership: command(z.object({ membership_id: UuidSchema }), MembershipSchema, 9),
+
+  // Backups — status, settings, password, restore: settings.manage; a backup
+  // now: shift.close. Restoring works without sign-in only when the
+  // database cannot be opened at all (storage error).
+  backup_status: command(NoArgs, BackupStatusSchema, 9),
+  backup_now: command(NoArgs, BackupInfoSchema, 9),
+  save_backup_settings: command(
+    z.object({ settings: BackupSettingsSchema }),
+    BackupStatusSchema,
+    9,
+  ),
+  set_backup_password: command(
+    z.object({ password: z.string().min(6).max(200) }),
+    BackupStatusSchema,
+    9,
+  ),
+  list_backups_in: command(z.object({ dir: z.string().min(1) }), z.array(BackupInfoSchema), 9),
+  /** Stages the backup; `restart_app` puts it in place. */
+  restore_backup: command(z.object({ request: RestoreRequestSchema }), RestoredBackupSchema, 9),
+  restart_app: command(NoArgs, z.null(), 9),
 } as const;
 
 export type PosIpcContract = typeof POS_IPC;

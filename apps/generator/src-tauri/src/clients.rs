@@ -71,6 +71,7 @@ pub fn new_client_config(input: &NewClientInput) -> ClientConfig {
         cloud: CloudConfig {
             supabase_url: None,
             supabase_anon_key: None,
+            offline_grace_days: None,
         },
     }
 }

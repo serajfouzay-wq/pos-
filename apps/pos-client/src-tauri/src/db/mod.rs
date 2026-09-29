@@ -8,8 +8,15 @@ mod migrations;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 
+use pos_core::IpcResult;
 use pos_hwid::DatabaseKey;
 use rusqlite::{Connection, ErrorCode};
+use zeroize::Zeroizing;
+
+/// The schema version this build writes (`PRAGMA user_version`).
+pub fn migrations_latest() -> i64 {
+    migrations::LATEST_VERSION
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum DbError {
@@ -24,6 +31,9 @@ pub enum DbError {
 
 pub struct Database {
     conn: Mutex<Connection>,
+    /// This machine's key in `PRAGMA key` form, for backups made without a
+    /// backup password. Memory only.
+    key: Zeroizing<String>,
 }
 
 impl std::fmt::Debug for Database {
@@ -70,7 +80,19 @@ impl Database {
         migrations::apply(&mut conn)?;
         Ok(Self {
             conn: Mutex::new(conn),
+            key: key.sqlcipher_pragma_value(),
         })
+    }
+
+    /// The key backups made without a password are encrypted with.
+    pub fn export_key(&self) -> Zeroizing<String> {
+        self.key.clone()
+    }
+
+    /// A complete, consistent copy of the database encrypted with `key`
+    /// (taken under the connection lock, so no sale is half in it).
+    pub fn export(&self, dest: &Path, key: &str) -> IpcResult<()> {
+        crate::backup::export_connection(&self.conn(), dest, key, migrations_latest())
     }
 
     /// Exclusive access to the connection. Callers run on a blocking thread.

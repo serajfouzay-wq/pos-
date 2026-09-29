@@ -237,6 +237,29 @@ export function DetailsTab({ draft, onChange }: Props) {
               }}
             />
           </label>
+          <label>
+            {t('clients.fields.offlineLimit')}
+            <select
+              value={String(config.cloud.offline_grace_days ?? '')}
+              onChange={(e) => {
+                const days = Number(e.target.value);
+                set({
+                  cloud: {
+                    ...config.cloud,
+                    offline_grace_days: e.target.value && days > 0 ? days : null,
+                  },
+                });
+              }}
+            >
+              <option value="">{t('clients.fields.offlineNever')}</option>
+              {[7, 30, 90, 365].map((d) => (
+                <option key={d} value={d}>
+                  {t('clients.fields.offlineDays', { count: d })}
+                </option>
+              ))}
+            </select>
+            <small className="muted">{t('clients.fields.offlineHelp')}</small>
+          </label>
         </div>
       </section>
 

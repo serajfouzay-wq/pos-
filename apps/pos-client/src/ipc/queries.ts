@@ -38,6 +38,8 @@ import type {
   GrantMembership,
   MemberFilter,
   MembershipPlanInput,
+  BackupSettings,
+  RestoreRequest,
 } from '@pos/shared';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
@@ -79,6 +81,7 @@ export const queryKeys = {
   membershipPlans: ['membership_plans'] as const,
   members: (filter: MemberFilter) => ['members', filter] as const,
   customerMemberships: (id: string) => ['customer_memberships', id] as const,
+  backups: ['backup_status'] as const,
 };
 
 /** Raised when the UI is loaded in a plain browser instead of the Tauri shell. */
@@ -1075,4 +1078,53 @@ export function useCancelMembership() {
   return useMembershipMutation((membershipId: Uuid) =>
     ipc.call('cancel_membership', { membership_id: membershipId }),
   );
+}
+
+// ── Backups (Phase 9) ──────────────────────────────────────────────────────
+
+export function useBackupStatus(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.backups,
+    queryFn: () => ipc.call('backup_status'),
+    enabled,
+    refetchInterval: 60_000,
+  });
+}
+
+function useBackupMutation<A, R>(fn: (args: A) => Promise<R>) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.backups });
+    },
+  });
+}
+
+export function useBackupNow() {
+  return useBackupMutation(() => ipc.call('backup_now'));
+}
+
+export function useSaveBackupSettings() {
+  return useBackupMutation((settings: BackupSettings) =>
+    ipc.call('save_backup_settings', { settings }),
+  );
+}
+
+export function useSetBackupPassword() {
+  return useBackupMutation((password: string) => ipc.call('set_backup_password', { password }));
+}
+
+export function useBackupsIn() {
+  return useMutation({
+    mutationFn: (dir: string) => ipc.call('list_backups_in', { dir }),
+  });
+}
+
+export function useRestoreBackup() {
+  return useBackupMutation((request: RestoreRequest) => ipc.call('restore_backup', { request }));
+}
+
+export function useRestartApp() {
+  return useMutation({ mutationFn: () => ipc.call('restart_app') });
 }

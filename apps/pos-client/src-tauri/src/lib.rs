@@ -1,6 +1,7 @@
 //! POS client core. The React frontend reaches SQLite, hardware and the cloud
 //! only through the commands registered here.
 
+mod backup;
 mod commands;
 mod db;
 mod history;
@@ -48,6 +49,7 @@ const SYNC_FIRST_AFTER: Duration = Duration::from_secs(5);
 /// How often the gate is re-evaluated, so expiry and grace take effect on a
 /// till that is never restarted.
 const REEVALUATE_EVERY: Duration = Duration::from_secs(15 * 60);
+const BACKUP_CHECK_EVERY: Duration = Duration::from_secs(30 * 60);
 const CLOUD_CHECK_AFTER_SUCCESS: Duration = Duration::from_secs(6 * 60 * 60);
 
 pub fn run() {
@@ -59,7 +61,9 @@ pub fn run() {
                 let _ = window.unminimize();
                 let _ = window.set_focus();
             }
-        }));
+        }))
+        // Folder and file pickers (backups on a USB stick, update files).
+        .plugin(tauri_plugin_dialog::init());
     // Only builds signed for updates can verify (and so install) them.
     if let Some(key) = updater::PUBLIC_KEY.filter(|k| !k.trim().is_empty()) {
         builder = builder.plugin(tauri_plugin_updater::Builder::new().pubkey(key).build());
@@ -96,6 +100,7 @@ pub fn run() {
                 );
             }
             spawn_license_worker(Arc::clone(&state.license));
+            spawn_backup_worker(Arc::clone(&state.license), Arc::clone(&state.backups));
             spawn_sync_worker(Arc::clone(&state.license), Arc::clone(&state.sync));
             spawn_print_queue_worker(Arc::clone(&state.license), Arc::clone(&state.printer));
             commands::kitchen::restore_window(app.handle().clone(), &state);
@@ -188,6 +193,13 @@ pub fn run() {
             commands::memberships::customer_memberships,
             commands::memberships::grant_membership,
             commands::memberships::cancel_membership,
+            commands::backups::backup_status,
+            commands::backups::backup_now,
+            commands::backups::save_backup_settings,
+            commands::backups::set_backup_password,
+            commands::backups::list_backups_in,
+            commands::backups::restore_backup,
+            commands::backups::restart_app,
         ])
         .build(tauri::generate_context!())
         .expect("failed to start the POS client");
@@ -195,6 +207,11 @@ pub fn run() {
         // A downloaded update installs as the till closes.
         if let tauri::RunEvent::Exit = event {
             if let Some(state) = handle.try_state::<state::AppState>() {
+                if state.updates.status().state == updater::UpdateState::Ready {
+                    if let Ok(db) = state.license.database() {
+                        let _ = state.backups.create(&db, backup::Reason::BeforeUpdate);
+                    }
+                }
                 state.updates.install_on_exit();
             }
         }
@@ -222,6 +239,43 @@ fn spawn_license_worker(license: Arc<LicenseService>) {
                 let _ = tauri::async_runtime::spawn_blocking(move || service.evaluate()).await;
             }
             tokio::time::sleep(REEVALUATE_EVERY).await;
+        }
+    });
+}
+
+/// Backups: an integrity check and a backup (if due) once the database is
+/// open, then a backup whenever the interval has passed. Checked every 30
+/// minutes; a till that is off simply catches up at the next start.
+fn spawn_backup_worker(license: Arc<LicenseService>, backups: Arc<backup::BackupService>) {
+    tauri::async_runtime::spawn(async move {
+        let mut started = false;
+        loop {
+            tokio::time::sleep(if started {
+                BACKUP_CHECK_EVERY
+            } else {
+                SYNC_FIRST_AFTER
+            })
+            .await;
+            let (license, backups) = (Arc::clone(&license), Arc::clone(&backups));
+            let first = !started;
+            let ran = tauri::async_runtime::spawn_blocking(move || {
+                let Ok(db) = license.database() else {
+                    return false;
+                };
+                if first {
+                    backups.check_integrity(&db);
+                }
+                let reason = if first {
+                    backup::Reason::Start
+                } else {
+                    backup::Reason::Scheduled
+                };
+                let _ = backups.maybe_backup(&db, reason);
+                true
+            })
+            .await
+            .unwrap_or(false);
+            started |= ran;
         }
     });
 }

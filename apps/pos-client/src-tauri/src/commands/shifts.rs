@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use pos_core::rbac::Permission;
 use pos_core::time::{Clock, SystemClock};
 use pos_core::{IpcError, IpcErrorCode, IpcResult};
@@ -95,6 +97,7 @@ pub async fn close_shift(
             "Counted cash and the float left in the drawer must be ≥ 0, and the float cannot exceed the count.",
         ));
     }
+    let backups = Arc::clone(&state.backups);
     blocking(move || {
         let now = SystemClock.now();
         let actor = auth.actor()?;
@@ -127,6 +130,9 @@ pub async fn close_shift(
         .ipc()?;
         let summary = summarize(&tx, closed)?;
         tx.commit().ipc()?;
+        drop(conn);
+        // The closed shift goes into a backup straight away.
+        backups.in_background(Arc::clone(&auth.db), crate::backup::Reason::ShiftClose);
         Ok(summary)
     })
     .await

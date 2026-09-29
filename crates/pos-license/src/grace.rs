@@ -1,14 +1,16 @@
 //! Offline grace period.
 //!
 //! Cloud validation only ever *moves `last_seen_at` forward*; it is not
-//! required for every launch. A device may trade offline for
-//! [`GRACE_DAYS`] after the later of token issuance and the last successful
-//! cloud check. Anchoring on `iat` means wiping the local database does not
-//! buy a fresh grace window.
+//! required for every launch. A device may trade offline for the client's
+//! grace (`cloud.offline_grace_days`, set in the generator; none = never
+//! enforced, for shops that are offline most of the time) after the later
+//! of token issuance and the last successful cloud check. Anchoring on
+//! `iat` means wiping the local database does not buy a fresh grace window.
 
 use chrono::Duration;
 use pos_core::time::Timestamp;
 
+/// The shortest grace the generator offers.
 pub const GRACE_DAYS: i64 = 7;
 const DAY_SECONDS: i64 = 86_400;
 
@@ -33,18 +35,20 @@ pub fn effective_now(wall_clock: Timestamp, high_water: Option<Timestamp>) -> Ti
     high_water.map_or(wall_clock, |hw| hw.max(wall_clock))
 }
 
+/// `grace_days: None` = not enforced (no cloud, or the client allows tills
+/// to stay offline indefinitely).
 pub fn evaluate(
-    cloud_enabled: bool,
+    grace_days: Option<i64>,
     issued_at: Timestamp,
     last_seen_at: Option<Timestamp>,
     now: Timestamp,
 ) -> Grace {
-    if !cloud_enabled {
+    let Some(grace_days) = grace_days else {
         return Grace::NotEnforced;
-    }
+    };
     let anchor = last_seen_at.map_or(issued_at, |seen| seen.max(issued_at));
     let deadline = anchor
-        .checked_add(Duration::days(GRACE_DAYS))
+        .checked_add(Duration::days(grace_days))
         .unwrap_or(anchor);
     if now >= deadline {
         return Grace::Exhausted { deadline };
@@ -69,7 +73,7 @@ mod tests {
     fn not_enforced_without_cloud() {
         let issued = at("2026-01-01T00:00:00.000Z");
         assert_eq!(
-            evaluate(false, issued, None, at("2030-01-01T00:00:00.000Z")),
+            evaluate(None, issued, None, at("2030-01-01T00:00:00.000Z")),
             Grace::NotEnforced
         );
     }
@@ -78,7 +82,12 @@ mod tests {
     fn counts_down_from_the_latest_anchor() {
         let issued = at("2026-01-01T00:00:00.000Z");
         let seen = at("2026-01-05T12:00:00.000Z");
-        let grace = evaluate(true, issued, Some(seen), at("2026-01-05T12:00:00.000Z"));
+        let grace = evaluate(
+            Some(GRACE_DAYS),
+            issued,
+            Some(seen),
+            at("2026-01-05T12:00:00.000Z"),
+        );
         assert!(matches!(
             grace,
             Grace::Within {
@@ -86,7 +95,12 @@ mod tests {
                 ..
             }
         ));
-        let grace = evaluate(true, issued, Some(seen), at("2026-01-12T11:00:00.000Z"));
+        let grace = evaluate(
+            Some(GRACE_DAYS),
+            issued,
+            Some(seen),
+            at("2026-01-12T11:00:00.000Z"),
+        );
         assert!(matches!(
             grace,
             Grace::Within {
@@ -94,14 +108,24 @@ mod tests {
                 ..
             }
         ));
-        let grace = evaluate(true, issued, Some(seen), at("2026-01-12T12:00:00.000Z"));
+        let grace = evaluate(
+            Some(GRACE_DAYS),
+            issued,
+            Some(seen),
+            at("2026-01-12T12:00:00.000Z"),
+        );
         assert!(matches!(grace, Grace::Exhausted { .. }));
     }
 
     #[test]
     fn falls_back_to_issuance_when_never_seen_online() {
         let issued = at("2026-01-01T00:00:00.000Z");
-        let grace = evaluate(true, issued, None, at("2026-01-08T00:00:00.001Z"));
+        let grace = evaluate(
+            Some(GRACE_DAYS),
+            issued,
+            None,
+            at("2026-01-08T00:00:00.001Z"),
+        );
         assert!(matches!(grace, Grace::Exhausted { .. }));
     }
 
@@ -110,7 +134,12 @@ mod tests {
         // A renewed token re-anchors even if the old last_seen was long ago.
         let issued = at("2026-03-01T00:00:00.000Z");
         let seen = at("2026-01-01T00:00:00.000Z");
-        let grace = evaluate(true, issued, Some(seen), at("2026-03-02T00:00:00.000Z"));
+        let grace = evaluate(
+            Some(GRACE_DAYS),
+            issued,
+            Some(seen),
+            at("2026-03-02T00:00:00.000Z"),
+        );
         assert!(matches!(
             grace,
             Grace::Within {

@@ -89,6 +89,14 @@
     "allow-list-members",
     "allow-customer-memberships",
     "allow-grant-membership",
-    "allow-cancel-membership"
+    "allow-cancel-membership",
+    "allow-backup-status",
+    "allow-backup-now",
+    "allow-save-backup-settings",
+    "allow-set-backup-password",
+    "allow-list-backups-in",
+    "allow-restore-backup",
+    "allow-restart-app",
+    "dialog:allow-open"
   ]
 }

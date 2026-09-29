@@ -79,6 +79,12 @@ export const ClientConfigSchema = z
         )
         .nullable(),
       supabase_anon_key: z.string().min(1).nullable(),
+      /**
+       * Days a till may go without reaching the cloud before it stops (the
+       * license check). null = never: it works offline for as long as it
+       * needs. Only meaningful with a cloud.
+       */
+      offline_grace_days: z.int().min(1).max(3650).nullable().default(null),
     }),
   })
   .refine((config) => config.locale.supported.includes(config.locale.default), {

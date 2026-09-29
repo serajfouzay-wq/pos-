@@ -154,6 +154,18 @@ impl LicenseService {
             .map(|hw| hw.device_key(self.env.client.client_id).public_hash())
     }
 
+    /// This machine's database key in `PRAGMA key` form, for restoring a
+    /// backup made here without a password (also when the database itself
+    /// cannot be opened). `None` if the hardware cannot be read.
+    pub fn machine_key(&self) -> Option<zeroize::Zeroizing<String>> {
+        let hardware = self.hardware().ok()?;
+        Some(
+            hardware
+                .database_key(self.env.client.client_id)
+                .sqlcipher_pragma_value(),
+        )
+    }
+
     /// Credentials for the sync API: the active token plus this machine's
     /// device key. `None` unless the license is currently valid.
     pub fn sync_credentials(&self) -> Option<SyncCredentials> {
@@ -284,6 +296,13 @@ impl LicenseService {
             )
         };
         std::fs::create_dir_all(&self.env.data_dir).map_err(|e| storage_error(&e))?;
+        // A restore the owner staged takes effect here, before anything opens the file.
+        crate::backup::apply_staged_restore(
+            &self.env.data_dir,
+            DATABASE_FILE,
+            self.env.clock.now(),
+        )
+        .map_err(|e| storage_error(&e))?;
         let key = hardware.database_key(self.env.client.client_id);
         match Database::open(&self.db_path(), &key) {
             Ok(db) => Ok(db),
@@ -350,7 +369,14 @@ impl LicenseService {
         }
 
         let cloud_enabled = self.env.cloud.is_some();
-        let grace_days_remaining = match grace::evaluate(cloud_enabled, verified.issued_at, last_seen_at, now) {
+        // Enforced only with a cloud to check against and a grace the client chose.
+        let grace_days = self
+            .env
+            .cloud
+            .as_ref()
+            .and(self.env.client.cloud.offline_grace_days)
+            .map(i64::from);
+        let grace_days_remaining = match grace::evaluate(grace_days, verified.issued_at, last_seen_at, now) {
             Grace::NotEnforced => None,
             Grace::Within { days_remaining, .. } => Some(days_remaining),
             Grace::Exhausted { deadline } => {

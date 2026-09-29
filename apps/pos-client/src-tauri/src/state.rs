@@ -46,6 +46,7 @@ pub struct AppState {
     pub sync: Arc<SyncEngine>,
     pub kitchen: Arc<KitchenHub>,
     pub updates: Arc<UpdateService>,
+    pub backups: Arc<crate::backup::BackupService>,
 }
 
 /// Receipt logo (PNG) from the client's bundled assets
@@ -81,6 +82,12 @@ impl AppState {
             .endpoint()
             .map(|(url, key)| Arc::new(HttpTransport::new(url, key)) as Arc<dyn SyncTransport>);
 
+        let backups = Arc::new(crate::backup::BackupService::new(
+            data_dir.clone(),
+            client.client_id,
+            app.package_info().version.to_string(),
+            Arc::new(SystemClock),
+        ));
         let license = LicenseService::new(LicenseEnv {
             client: Arc::clone(&client),
             public_key,
@@ -103,6 +110,7 @@ impl AppState {
                 app.package_info().version.to_string(),
                 &client,
             )),
+            backups,
             client,
         })
     }

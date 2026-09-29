@@ -74,6 +74,11 @@ export const en = {
         'Leave both empty for a fully offline install (no cloud license checks, no sync between tills).',
       supabaseUrl: 'Supabase URL',
       supabaseKey: 'Supabase anon key',
+      offlineLimit: 'Tills may stay offline',
+      offlineNever: 'Always (recommended for offline shops)',
+      offlineDays: 'Up to {{count}} days, then they must reach the cloud',
+      offlineHelp:
+        'Only with a cloud. A limit lets a revoked license take effect, but a till that cannot reach the internet for longer stops selling.',
       notesHelp: 'Only visible here: contacts, site details, anything useful.',
     },
     features: {
