@@ -103,6 +103,13 @@ jobs:
             echo "- Windows: download the \`-setup.exe\` and run it. SmartScreen may warn about an unknown publisher: More info, then Run anyway."
             echo "- Linux: the \`.AppImage\` (make it executable, then run it) or the \`.deb\` (Debian/Ubuntu)."
           } > notes.md
-          ls -la dist
-          gh release create "$tag" dist/* --title "POS Factory generator ${version} (build ${RUN})" \
-            --notes-file notes.md --target "$GITHUB_SHA"
+          # The artifacts keep their bundle folders (appimage/, deb/): upload files.
+          mapfile -t files < <(find dist -type f)
+          printf '%s\n' "${files[@]}"
+          [ "${#files[@]}" -ge 3 ] || { echo "::error::expected the Windows and Linux installers"; exit 1; }
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "${files[@]}" --clobber
+          else
+            gh release create "$tag" "${files[@]}" --title "POS Factory generator ${version} (build ${RUN})" \
+              --notes-file notes.md --target "$GITHUB_SHA"
+          fi
