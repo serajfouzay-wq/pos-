@@ -44,8 +44,6 @@ jobs:
             output: |
               target/release/bundle/appimage/*.AppImage
               target/release/bundle/deb/*.deb
-    env:
-      BUNDLES: ${{ matrix.bundles }}
     steps:
       - uses: actions/checkout@v5
       - name: Linux build dependencies
@@ -66,9 +64,10 @@ jobs:
         with:
           shared-key: generator-${{ matrix.platform }}
       - run: pnpm install --frozen-lockfile
+      # The runner's default shell: on Windows, Git Bash would put its own
+      # Perl first, which cannot configure the vendored OpenSSL.
       - name: Build
-        shell: bash
-        run: pnpm --filter @pos/generator tauri build --bundles "$BUNDLES"
+        run: pnpm --filter @pos/generator tauri build --bundles ${{ matrix.bundles }}
       - uses: actions/upload-artifact@v4
         with:
           name: generator-${{ matrix.platform }}

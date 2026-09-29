@@ -69,7 +69,6 @@ jobs:
       CLIENT: ${{ inputs.client }}
       BUILD_ID: ${{ inputs.build_id }}
       POS_CLIENT_VERSION: ${{ inputs.version }}
-      BUNDLES: ${{ matrix.bundles }}
     steps:
       - name: Validate inputs
         shell: bash
@@ -113,11 +112,12 @@ jobs:
       # POS_CLIENT_CONFIG, POS_LICENSE_PUBLIC_KEY and POS_UPDATER_PUBLIC_KEY
       # come from the prepare step; build.rs refuses the development license
       # key in release builds.
+      # The runner's default shell: on Windows, Git Bash would put its own
+      # Perl first, which cannot configure the vendored OpenSSL.
       - name: Build
-        shell: bash
         run: >
           pnpm --filter @pos/pos-client tauri build
-          --config src-tauri/tauri.client.json --bundles "$BUNDLES"
+          --config src-tauri/tauri.client.json --bundles ${{ matrix.bundles }}
       - uses: actions/upload-artifact@v4
         with:
           name: pos-${{ inputs.client }}-${{ inputs.build_id }}-${{ matrix.platform }}

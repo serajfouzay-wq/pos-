@@ -554,7 +554,7 @@ fn list_dir(dir: &Path) -> Vec<BackupInfo> {
             })
         })
         .collect();
-    found.sort_by(|a, b| b.meta.created_at.cmp(&a.meta.created_at));
+    found.sort_by_key(|b| std::cmp::Reverse(b.meta.created_at));
     found
 }
 
