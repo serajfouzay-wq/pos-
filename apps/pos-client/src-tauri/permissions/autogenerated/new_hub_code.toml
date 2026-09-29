@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-new-hub-code"
+description = "Enables the new_hub_code command without any pre-configured scope."
+commands.allow = ["new_hub_code"]
+
+[[permission]]
+identifier = "deny-new-hub-code"
+description = "Denies the new_hub_code command without any pre-configured scope."
+commands.deny = ["new_hub_code"]

@@ -12,7 +12,7 @@
 //! The database lock is never held across a network call.
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, RwLock};
 
 use chrono::Duration;
 use pos_core::time::{Clock, Timestamp};
@@ -37,9 +37,23 @@ const MAX_PULL_PAGES: usize = 50;
 const BACKOFF_BASE_SECS: i64 = 30;
 const BACKOFF_MAX_SECS: i64 = 60 * 60;
 
+/// Where this till syncs to. Mirrors `SyncModeSchema`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SyncMode {
+    /// No cloud and no shop network: everything stays on this till.
+    Off,
+    Cloud,
+    /// This till is the shop-network hub.
+    Hub,
+    /// This till syncs with the hub on the shop network.
+    Lan,
+}
+
 /// Mirrors `SyncStatusSchema`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SyncStatus {
+    pub mode: SyncMode,
     pub state: SyncState,
     pub pending: u64,
     pub parked: u64,
@@ -70,13 +84,18 @@ pub struct SyncReport {
 
 type StatusListener = Box<dyn Fn(&SyncStatus) + Send + Sync>;
 
+/// The mode, its transport and the settings key of its pull position.
+type Target = (SyncMode, Option<Arc<dyn SyncTransport>>, String);
+
 struct Runtime {
     state: SyncState,
     last_error: Option<String>,
 }
 
 pub struct SyncEngine {
-    transport: Option<Arc<dyn SyncTransport>>,
+    /// Where to sync, and the settings key of the pull position there (each
+    /// target — the cloud, this hub, a given hub — has its own).
+    transport: RwLock<Target>,
     clock: Arc<dyn Clock>,
     /// Serialises rounds (worker vs. "Sync now").
     round: Mutex<()>,
@@ -125,13 +144,13 @@ pub fn backoff(attempts: i64) -> Duration {
 impl SyncEngine {
     /// `transport: None` = offline-only install (no cloud configured).
     pub fn new(transport: Option<Arc<dyn SyncTransport>>, clock: Arc<dyn Clock>) -> Self {
-        let state = if transport.is_some() {
-            SyncState::Idle
+        let (state, mode) = if transport.is_some() {
+            (SyncState::Idle, SyncMode::Cloud)
         } else {
-            SyncState::Disabled
+            (SyncState::Disabled, SyncMode::Off)
         };
         Self {
-            transport,
+            transport: RwLock::new((mode, transport, CURSOR_KEY.to_owned())),
             clock,
             round: Mutex::new(()),
             runtime: Mutex::new(Runtime {
@@ -146,7 +165,58 @@ impl SyncEngine {
     }
 
     pub fn enabled(&self) -> bool {
-        self.transport.is_some()
+        self.current().1.is_some()
+    }
+
+    pub fn mode(&self) -> SyncMode {
+        self.current().0
+    }
+
+    fn current(&self) -> (SyncMode, Option<Arc<dyn SyncTransport>>) {
+        let guard = self
+            .transport
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        (guard.0, guard.1.clone())
+    }
+
+    fn cursor_key(&self) -> String {
+        self.transport
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .2
+            .clone()
+    }
+
+    /// Switches where this till syncs to (the shop network set up or left).
+    /// `target` names it (a hub's address): each target keeps its own pull
+    /// position. Waits for a running round.
+    pub fn set_transport(
+        &self,
+        mode: SyncMode,
+        transport: Option<Arc<dyn SyncTransport>>,
+        target: &str,
+    ) {
+        let _round = lock(&self.round);
+        let enabled = transport.is_some();
+        let cursor = match mode {
+            SyncMode::Cloud | SyncMode::Off => CURSOR_KEY.to_owned(),
+            SyncMode::Hub => format!("{CURSOR_KEY}.hub"),
+            SyncMode::Lan => format!("{CURSOR_KEY}.lan.{target}"),
+        };
+        *self
+            .transport
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = (mode, transport, cursor);
+        let mut runtime = lock(&self.runtime);
+        runtime.state = if enabled {
+            SyncState::Idle
+        } else {
+            SyncState::Disabled
+        };
+        runtime.last_error = None;
+        drop(runtime);
+        self.nudge();
     }
 
     /// Whether a round has been attempted in this process.
@@ -188,6 +258,7 @@ impl SyncEngine {
         drop(conn);
         let runtime = lock(&self.runtime);
         SyncStatus {
+            mode: self.mode(),
             state: runtime.state,
             pending,
             parked,
@@ -217,7 +288,7 @@ impl SyncEngine {
     ) -> Result<SyncReport, SyncError> {
         let _round = lock(&self.round);
         self.attempted.store(true, Ordering::Relaxed);
-        let Some(transport) = self.transport.clone() else {
+        let Some(transport) = self.current().1 else {
             return Ok(self.report(db, false, PushOutcome::default(), 0));
         };
         let Some(credentials) = credentials else {
@@ -361,11 +432,12 @@ impl SyncEngine {
         credentials: &SyncCredentials,
     ) -> Result<u64, SyncError> {
         let mut pulled = 0;
+        let cursor_key = self.cursor_key();
         let (device_id, mut cursor) = {
             let conn = db.conn();
             (
                 device::id(&conn).map_err(local)?,
-                settings::get::<String>(&conn, CURSOR_KEY).map_err(local)?,
+                settings::get::<String>(&conn, &cursor_key).map_err(local)?,
             )
         };
         for _ in 0..MAX_PULL_PAGES {
@@ -392,7 +464,7 @@ impl SyncEngine {
                 }
             }
             if let Some(next) = &page.next_cursor {
-                settings::put(&tx, CURSOR_KEY, next, now).map_err(local)?;
+                settings::put(&tx, &cursor_key, next, now).map_err(local)?;
             }
             tx.commit().map_err(local)?;
             drop(conn);

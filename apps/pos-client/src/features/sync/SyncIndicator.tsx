@@ -5,13 +5,21 @@ import { useTranslation } from 'react-i18next';
 import { useSyncNow, useSyncStatus } from '../../ipc/queries';
 
 function label(status: SyncStatus, t: TFunction): string {
+  const text = stateLabel(status, t);
+  // The shop network says so; the cloud is the plain case.
+  if (status.mode === 'hub') return `${t('sync.hub')} · ${text}`;
+  if (status.mode === 'lan') return `${t('sync.lan')} · ${text}`;
+  return text;
+}
+
+function stateLabel(status: SyncStatus, t: TFunction): string {
   switch (status.state) {
     case 'disabled':
       return '';
     case 'syncing':
       return t('sync.syncing');
     case 'offline':
-      return t('sync.offline');
+      return status.mode === 'lan' ? t('sync.hubOffline') : t('sync.offline');
     case 'error':
       return t('sync.error');
     case 'idle':

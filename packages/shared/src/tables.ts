@@ -15,6 +15,8 @@ import {
 } from './entities/catalog';
 import {
   DeviceRowSchema,
+  HubEventSchema,
+  HubRowSchema,
   KitchenPrintJobRowSchema,
   LicenseRowSchema,
   PrintJobRowSchema,
@@ -53,6 +55,8 @@ export const LOCAL_TABLES = {
   settings: SettingRowSchema,
   print_jobs: PrintJobRowSchema,
   kitchen_print_jobs: KitchenPrintJobRowSchema,
+  hub_rows: HubRowSchema,
+  hub_events: HubEventSchema,
   users: UserRowSchema,
   categories: CategorySchema,
   products: ProductSchema,

@@ -4,6 +4,8 @@
 
 pub mod apply;
 pub mod engine;
+pub mod hub;
+pub mod lan;
 pub mod protocol;
 pub mod transport;
 

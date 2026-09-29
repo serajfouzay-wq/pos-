@@ -40,6 +40,7 @@ import type {
   MembershipPlanInput,
   BackupSettings,
   RestoreRequest,
+  LanSettings,
 } from '@pos/shared';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
@@ -82,6 +83,7 @@ export const queryKeys = {
   members: (filter: MemberFilter) => ['members', filter] as const,
   customerMemberships: (id: string) => ['customer_memberships', id] as const,
   backups: ['backup_status'] as const,
+  lan: ['lan_status'] as const,
 };
 
 /** Raised when the UI is loaded in a plain browser instead of the Tauri shell. */
@@ -1127,4 +1129,46 @@ export function useRestoreBackup() {
 
 export function useRestartApp() {
   return useMutation({ mutationFn: () => ipc.call('restart_app') });
+}
+
+// ── Shop network (Phase 9) ─────────────────────────────────────────────────
+
+export function useLanStatus() {
+  return useQuery({
+    queryKey: queryKeys.lan,
+    queryFn: () => ipc.call('lan_status'),
+    refetchInterval: 10_000,
+  });
+}
+
+export function useSaveLanSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (settings: LanSettings) => ipc.call('save_lan_settings', { settings }),
+    onSuccess: (status) => {
+      queryClient.setQueryData(queryKeys.lan, status);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.syncStatus });
+    },
+  });
+}
+
+export function useDiscoverHubs() {
+  return useMutation({ mutationFn: (port: number) => ipc.call('discover_hubs', { port }) });
+}
+
+export function useTestHub() {
+  return useMutation({
+    mutationFn: (args: { address: string; code: string; port: number }) =>
+      ipc.call('test_hub', args),
+  });
+}
+
+export function useNewHubCode() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => ipc.call('new_hub_code'),
+    onSuccess: (status) => {
+      queryClient.setQueryData(queryKeys.lan, status);
+    },
+  });
 }

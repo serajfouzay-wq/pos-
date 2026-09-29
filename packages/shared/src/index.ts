@@ -35,6 +35,7 @@ export * from './ipc/updater-types';
 export * from './ipc/discount-types';
 export * from './ipc/membership-types';
 export * from './ipc/backup-types';
+export * from './ipc/lan-types';
 export * from './ipc/generator-contract';
 export * from './ipc/generator-types';
 export * from './ipc/events';

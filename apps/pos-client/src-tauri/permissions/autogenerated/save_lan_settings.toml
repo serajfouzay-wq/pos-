@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-save-lan-settings"
+description = "Enables the save_lan_settings command without any pre-configured scope."
+commands.allow = ["save_lan_settings"]
+
+[[permission]]
+identifier = "deny-save-lan-settings"
+description = "Denies the save_lan_settings command without any pre-configured scope."
+commands.deny = ["save_lan_settings"]

@@ -23,6 +23,7 @@ import {
   RestoredBackupSchema,
   RestoreRequestSchema,
 } from './backup-types';
+import { FoundHubSchema, HubHelloSchema, LanSettingsSchema, LanStatusSchema } from './lan-types';
 import { KitchenTicketSchema } from '../entities/kitchen';
 import { LoyaltySettingsSchema } from '../entities/shop';
 import { CustomerSchema, UserSchema } from '../entities/people';
@@ -544,6 +545,18 @@ export const POS_IPC = {
   /** Stages the backup; `restart_app` puts it in place. */
   restore_backup: command(z.object({ request: RestoreRequestSchema }), RestoredBackupSchema, 9),
   restart_app: command(NoArgs, z.null(), 9),
+
+  // Shop network (LAN hub) — per till, settings.manage.
+  lan_status: command(NoArgs, LanStatusSchema, 9),
+  /** Saves and applies at once (starts/stops the hub, retargets sync). */
+  save_lan_settings: command(z.object({ settings: LanSettingsSchema }), LanStatusSchema, 9),
+  discover_hubs: command(z.object({ port: z.int() }), z.array(FoundHubSchema), 9),
+  test_hub: command(
+    z.object({ address: z.string().min(1), code: z.string().min(1), port: z.int() }),
+    HubHelloSchema,
+    9,
+  ),
+  new_hub_code: command(NoArgs, LanStatusSchema, 9),
 } as const;
 
 export type PosIpcContract = typeof POS_IPC;

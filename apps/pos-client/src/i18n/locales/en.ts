@@ -32,6 +32,7 @@ export const en = {
     cashier: 'Cashier',
   },
   nav: {
+    lan: 'Shop network',
     backups: 'Backups',
     memberships: 'Memberships',
     discounts: 'Discounts',
@@ -61,6 +62,9 @@ export const en = {
     lowStock_other: '{{count}} items low on stock',
   },
   sync: {
+    hub: 'Hub',
+    lan: 'Shop network',
+    hubOffline: 'Hub not reachable',
     synced: 'Synced',
     syncing: 'Syncing…',
     waiting: 'Sync pending',
@@ -743,6 +747,40 @@ export const en = {
     lockTitle: 'Restore from a backup',
     lockHelp:
       'If the database cannot be opened (a power cut, a failing disk), restore the latest backup from this PC or from a USB stick.',
+  },
+  lan: {
+    title: 'Shop network',
+    help: 'Tills in the same shop share products, sales, stock, customers and kitchen tickets over the shop network (cable or Wi-Fi router), with no internet at all. One till is the hub and stays on while the shop is open; the others join it.',
+    role: 'This till',
+    roles: {
+      off: 'On its own',
+      offHelp: 'Only this till (or the cloud, if your installation has one).',
+      hub: 'The hub',
+      hubHelp: 'The main till: the others sync with it. Keep it switched on.',
+      client: 'Join the hub',
+      clientHelp: 'Syncs with the hub over the shop network.',
+    },
+    joinTitle: 'Join the hub',
+    find: 'Find the hub',
+    searching: 'Looking…',
+    noneFound: 'No hub answered. Check the hub is on and on the same network, or type its address.',
+    address: 'Hub address',
+    code: 'Pairing code',
+    test: 'Test',
+    testOk: 'Connected to {{name}} ({{tills}} tills).',
+    hubTitle: 'This till is the hub',
+    hubHelp:
+      'On each other till: Back office → Shop network → Join the hub, then enter this code (the hub is found by itself).',
+    addresses: 'Address on the shop network',
+    running: 'Running',
+    stopped: 'Not running',
+    stats: '{{rows}} records · {{tills}} tills synced',
+    firewall:
+      'The first time, Windows asks whether this app may use the network: choose Allow (private networks).',
+    newCode: 'New pairing code',
+    newCodeConfirm: 'Every other till must enter the new code. Continue?',
+    advanced: 'Advanced',
+    port: 'Port',
   },
   customers: {
     title: 'Customers',

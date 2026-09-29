@@ -47,6 +47,7 @@ pub struct AppState {
     pub kitchen: Arc<KitchenHub>,
     pub updates: Arc<UpdateService>,
     pub backups: Arc<crate::backup::BackupService>,
+    pub lan: Arc<crate::sync::lan::LanService>,
 }
 
 /// Receipt logo (PNG) from the client's bundled assets
@@ -104,6 +105,10 @@ impl AppState {
             license: Arc::new(license),
             session: SessionStore::default(),
             printer: Arc::new(printer),
+            lan: Arc::new(crate::sync::lan::LanService::new(
+                client.client_id,
+                transport.clone(),
+            )),
             sync: Arc::new(SyncEngine::new(transport, Arc::new(SystemClock))),
             kitchen: Arc::new(KitchenHub::default()),
             updates: Arc::new(UpdateService::new(

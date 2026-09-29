@@ -97,6 +97,11 @@
     "allow-list-backups-in",
     "allow-restore-backup",
     "allow-restart-app",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "allow-lan-status",
+    "allow-save-lan-settings",
+    "allow-discover-hubs",
+    "allow-test-hub",
+    "allow-new-hub-code"
   ]
 }

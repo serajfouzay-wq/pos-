@@ -59,6 +59,27 @@
       "append_only": false,
       "sync": null
     },
+    "hub_rows": {
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "entity_type",
+        "entity_id",
+        "row",
+        "seq",
+        "origin_device_id",
+        "event_id"
+      ],
+      "append_only": false,
+      "sync": null
+    },
+    "hub_events": {
+      "columns": ["id", "created_at", "updated_at", "deleted_at", "device_id"],
+      "append_only": false,
+      "sync": null
+    },
     "users": {
       "columns": [
         "id",

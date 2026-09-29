@@ -79,3 +79,24 @@ export const KitchenPrintJobRowSchema = EntityBaseSchema.extend({
   last_error: z.string().nullable(),
 });
 export type KitchenPrintJobRow = z.infer<typeof KitchenPrintJobRowSchema>;
+
+/**
+ * `hub_rows` — on the till that is the shop-network hub: the shop's shared
+ * rows as the other tills pull them (same rules as the cloud). Local only.
+ */
+export const HubRowSchema = EntityBaseSchema.extend({
+  entity_type: z.string(),
+  entity_id: UuidSchema,
+  /** The row as JSON text. */
+  row: z.string(),
+  seq: z.int().nonnegative(),
+  origin_device_id: UuidSchema,
+  event_id: UuidSchema.nullable(),
+});
+export type HubRow = z.infer<typeof HubRowSchema>;
+
+/** `hub_events` — event ids the hub has applied (`id` = the event id). Local only. */
+export const HubEventSchema = EntityBaseSchema.extend({
+  device_id: UuidSchema,
+});
+export type HubEvent = z.infer<typeof HubEventSchema>;

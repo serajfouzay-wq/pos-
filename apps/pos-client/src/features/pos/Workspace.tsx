@@ -33,6 +33,7 @@ import { DashboardScreen } from '../dashboard/DashboardScreen';
 import { DiscountsScreen } from '../discounts/DiscountsScreen';
 import { MembershipsScreen } from '../memberships/MembershipsScreen';
 import { HistoryScreen } from '../history/HistoryScreen';
+import { LanScreen } from '../lan/LanScreen';
 import { ReportsScreen } from '../reports/ReportsScreen';
 import { SellScreen } from '../sell/SellScreen';
 import { SyncIndicator } from '../sync/SyncIndicator';
@@ -55,6 +56,7 @@ type View =
   | 'users'
   | 'printer'
   | 'backups'
+  | 'lan'
   | 'audit';
 const LOCALE_LABELS: Record<Locale, string> = { en: 'EN', ar: 'ع' };
 
@@ -105,6 +107,7 @@ export function Workspace({ session }: { session: Session }) {
     { id: 'users', allowed: can(session, 'user.manage') },
     { id: 'printer', allowed: can(session, 'settings.manage') },
     { id: 'backups', allowed: can(session, 'settings.manage') },
+    { id: 'lan', allowed: can(session, 'settings.manage') },
     { id: 'audit', allowed: can(session, 'audit.view') },
   ];
   const office = backOffice.filter((v) => v.allowed);
@@ -147,6 +150,8 @@ export function Workspace({ session }: { session: Session }) {
         return <PrinterAdmin />;
       case 'backups':
         return <BackupsScreen />;
+      case 'lan':
+        return <LanScreen />;
       case 'sell':
         return shift ? <SellScreen session={session} /> : null;
     }

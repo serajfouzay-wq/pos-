@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-discover-hubs"
+description = "Enables the discover_hubs command without any pre-configured scope."
+commands.allow = ["discover_hubs"]
+
+[[permission]]
+identifier = "deny-discover-hubs"
+description = "Denies the discover_hubs command without any pre-configured scope."
+commands.deny = ["discover_hubs"]

@@ -22,6 +22,7 @@ pub mod hardware;
 pub mod history;
 pub mod inventory;
 pub mod kitchen;
+pub mod lan;
 pub mod license;
 pub mod memberships;
 pub mod menu;

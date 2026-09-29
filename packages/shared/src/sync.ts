@@ -169,7 +169,15 @@ export const SyncPullResponseSchema = z.object({
 export type SyncPullResponse = z.infer<typeof SyncPullResponseSchema>;
 
 /** Result of `sync_status` and payload of the `sync://status` event. */
+/**
+ * Where a till syncs to: nowhere (`off`), the `cloud`, or the shop network
+ * (`hub` = this till is the hub; `lan` = it syncs with the hub).
+ */
+export const SyncModeSchema = z.enum(['off', 'cloud', 'hub', 'lan']);
+export type SyncMode = z.infer<typeof SyncModeSchema>;
+
 export const SyncStatusSchema = z.object({
+  mode: SyncModeSchema,
   /**
    * - `disabled`: no cloud configured for this client (offline-only install).
    * - `idle`: last attempt succeeded. `syncing`: a round is running.

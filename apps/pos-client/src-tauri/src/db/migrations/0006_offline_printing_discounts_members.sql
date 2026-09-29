@@ -76,3 +76,36 @@ CREATE INDEX memberships_card ON memberships (card_number);
 CREATE INDEX memberships_transaction ON memberships (transaction_id);
 CREATE TRIGGER memberships_no_delete BEFORE DELETE ON memberships
 BEGIN SELECT RAISE(ABORT, 'hard deletes are forbidden; set deleted_at'); END;
+
+-- ── Shop network (LAN) hub ──────────────────────────────────────────────────
+-- On the till chosen as the hub, the shop's shared state as the other tills
+-- see it: the same rules as the cloud (last-write-wins by (updated_at,
+-- event id), insert-once appends, a change sequence for pulls). Local only.
+CREATE TABLE hub_rows (
+  id TEXT PRIMARY KEY CHECK (length(id) = 36),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL CHECK (length(entity_id) = 36),
+  row TEXT NOT NULL CHECK (json_valid(row)),
+  seq INTEGER NOT NULL,
+  origin_device_id TEXT NOT NULL,
+  -- The event that wrote this version (last-write-wins rows only).
+  event_id TEXT,
+  UNIQUE (entity_type, entity_id)
+) STRICT;
+CREATE INDEX hub_rows_seq ON hub_rows (seq);
+CREATE TRIGGER hub_rows_no_delete BEFORE DELETE ON hub_rows
+BEGIN SELECT RAISE(ABORT, 'hard deletes are forbidden; set deleted_at'); END;
+
+-- Events already applied (a till retrying after a lost answer is not applied twice).
+CREATE TABLE hub_events (
+  id TEXT PRIMARY KEY CHECK (length(id) = 36),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT,
+  device_id TEXT NOT NULL
+) STRICT;
+CREATE TRIGGER hub_events_no_delete BEFORE DELETE ON hub_events
+BEGIN SELECT RAISE(ABORT, 'hard deletes are forbidden; set deleted_at'); END;

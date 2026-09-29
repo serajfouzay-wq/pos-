@@ -3,13 +3,16 @@
 
 use pos_core::time::Timestamp;
 use serde::{Deserialize, Serialize};
+
+// Both directions derive both traits: tills send and read them, and the
+// shop-network hub (`super::hub`) reads requests and sends answers.
 use uuid::Uuid;
 
 pub const PROTOCOL_VERSION: u8 = 1;
 pub const PUSH_BATCH: usize = 500;
 pub const PULL_PAGE: u32 = 500;
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SyncEvent {
     pub event_id: Uuid,
     pub device_id: Uuid,
@@ -20,28 +23,28 @@ pub struct SyncEvent {
     pub occurred_at: Timestamp,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PushRequest {
     pub protocol_version: u8,
     pub device_id: Uuid,
     pub events: Vec<SyncEvent>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Rejected {
     pub event_id: Uuid,
     pub reason: String,
     pub retryable: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PushResponse {
     pub acknowledged: Vec<Uuid>,
     pub rejected: Vec<Rejected>,
     pub server_time: Timestamp,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PullRequest {
     pub protocol_version: u8,
     pub device_id: Uuid,
@@ -49,7 +52,7 @@ pub struct PullRequest {
     pub limit: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Change {
     pub entity_type: String,
     pub row: serde_json::Value,
@@ -57,7 +60,7 @@ pub struct Change {
     pub event_id: Option<Uuid>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PullResponse {
     pub changes: Vec<Change>,
     pub next_cursor: Option<String>,

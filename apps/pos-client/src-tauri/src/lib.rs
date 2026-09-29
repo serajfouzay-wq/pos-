@@ -101,7 +101,11 @@ pub fn run() {
             }
             spawn_license_worker(Arc::clone(&state.license));
             spawn_backup_worker(Arc::clone(&state.license), Arc::clone(&state.backups));
-            spawn_sync_worker(Arc::clone(&state.license), Arc::clone(&state.sync));
+            spawn_sync_worker(
+                Arc::clone(&state.license),
+                Arc::clone(&state.sync),
+                Arc::clone(&state.lan),
+            );
             spawn_print_queue_worker(Arc::clone(&state.license), Arc::clone(&state.printer));
             commands::kitchen::restore_window(app.handle().clone(), &state);
             app.manage(state);
@@ -200,6 +204,11 @@ pub fn run() {
             commands::backups::list_backups_in,
             commands::backups::restore_backup,
             commands::backups::restart_app,
+            commands::lan::lan_status,
+            commands::lan::save_lan_settings,
+            commands::lan::discover_hubs,
+            commands::lan::test_hub,
+            commands::lan::new_hub_code,
         ])
         .build(tauri::generate_context!())
         .expect("failed to start the POS client");
@@ -302,16 +311,33 @@ fn spawn_print_queue_worker(license: Arc<LicenseService>, printer: Arc<PrintServ
 /// Offline sync: a round every 60 s, and right away when a change is made
 /// (nudge) or the UI reports the network is back (`sync_to_cloud`). Rounds
 /// while unlicensed or offline are cheap no-ops; changes wait in the outbox.
-fn spawn_sync_worker(license: Arc<LicenseService>, sync: Arc<SyncEngine>) {
-    if !sync.enabled() {
-        return;
-    }
+fn spawn_sync_worker(
+    license: Arc<LicenseService>,
+    sync: Arc<SyncEngine>,
+    lan: Arc<sync::lan::LanService>,
+) {
+    // Runs even without a target: the shop network can be set up later.
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(SYNC_FIRST_AFTER).await;
         loop {
-            let (service, engine) = (Arc::clone(&license), Arc::clone(&sync));
-            let _ =
-                tauri::async_runtime::spawn_blocking(move || sync::round(&service, &engine)).await;
+            // The shop-network role lives in the database: apply it once
+            // the license has opened it (hub server, or the hub as target).
+            if !lan.applied() {
+                let (service, engine, lan) =
+                    (Arc::clone(&license), Arc::clone(&sync), Arc::clone(&lan));
+                let _ = tauri::async_runtime::spawn_blocking(move || {
+                    if let Ok(db) = service.database() {
+                        let _ = lan.apply(&db, &service, &engine);
+                    }
+                })
+                .await;
+            }
+            if sync.enabled() {
+                let (service, engine) = (Arc::clone(&license), Arc::clone(&sync));
+                let _ =
+                    tauri::async_runtime::spawn_blocking(move || sync::round(&service, &engine))
+                        .await;
+            }
             let every = if sync.is_fast() {
                 SYNC_FAST_EVERY
             } else {

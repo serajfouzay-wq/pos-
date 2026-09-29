@@ -2463,3 +2463,39 @@ td.actions {
 .tone--warn {
   color: var(--warn);
 }
+
+/* ── Phase 9: shop network ────────────────────────────────────────────── */
+
+.lan-roles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.lan-role {
+  display: grid;
+  gap: 4px;
+  text-align: start;
+  padding: 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+
+.lan-role[aria-checked='true'] {
+  border-color: var(--brand-primary);
+  box-shadow: inset 0 0 0 2px var(--brand-primary);
+}
+
+.lan-hub__code strong {
+  display: block;
+  font-size: 2rem;
+  letter-spacing: 0.12em;
+}
+
+.lan-hub__addresses {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 1.2rem;
+}

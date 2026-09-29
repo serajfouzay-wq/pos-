@@ -110,6 +110,11 @@ const COMMANDS: &[&str] = &[
     "list_backups_in",
     "restore_backup",
     "restart_app",
+    "lan_status",
+    "save_lan_settings",
+    "discover_hubs",
+    "test_hub",
+    "new_hub_code",
 ];
 
 fn main() {

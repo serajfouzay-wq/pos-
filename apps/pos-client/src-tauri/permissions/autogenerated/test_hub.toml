@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-test-hub"
+description = "Enables the test_hub command without any pre-configured scope."
+commands.allow = ["test_hub"]
+
+[[permission]]
+identifier = "deny-test-hub"
+description = "Denies the test_hub command without any pre-configured scope."
+commands.deny = ["test_hub"]
