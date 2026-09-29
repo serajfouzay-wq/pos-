@@ -695,11 +695,9 @@ installs it when the app exits (`installMode: quiet`), or at once with
 
 The generator gives every build a version: the app's MAJOR.MINOR and a
 build number per client (`next_client_version`), so each client's releases
-always increase. The build workflow passes the version, notes and a
-`publish` flag. When `publish` is set, it signs the build with
-`TAURI_SIGNING_PRIVATE_KEY`, and `scripts/publish-release.mjs` uploads
-the installer to the `releases` bucket of the client's project and records
-it with `publish_app_release`.
+always increase. The build workflow passes the version and notes. (Signing
+and publishing moved from the workflow to the generator in Phase 9, see
+D65.)
 
 ### D60 — Motion is decoration, and it follows the OS setting
 
@@ -709,15 +707,104 @@ are short springs. Nothing waits for an animation to finish before taking
 input. `MotionConfig reducedMotion="user"` turns movement off when the OS
 asks for reduced motion.
 
+### D61 — Offline is the normal case
+
+The target shops rarely have internet and lose power often. So no feature
+may need the cloud: selling, reports, loyalty, memberships, discounts,
+printing, backups and updates all work offline. The cloud is optional, per
+client. `cloud.offline_grace_days` is `null` (never enforced) by default, so
+a till that cannot reach the cloud is never locked out. A client can be
+given a limit in the generator.
+
+### D62 — Backups are whole encrypted databases, restored by staging
+
+A backup is `sqlcipher_export` into a new file, with `user_version` copied
+(export drops it), plus a JSON description. It runs at start, on a timer,
+at shift close and after a Z report, and can be copied to a second folder.
+With a backup password the file is keyed with Argon2id(password), so it
+opens on another PC. Otherwise it uses this machine's key. Restoring checks
+the file on a copy, re-keys it for this machine into a staged file, and
+restarts. The staged file is swapped in before the database opens, and the
+old database is kept aside. `quick_check` at start reports damage. Deleting
+old backups is file cleanup, not deleting records.
+
+### D63 — The shop network is the cloud protocol on a till
+
+One till can be the hub. It stores every synced row in `hub_rows` (with a
+change number `seq`) and the events it applied in `hub_events`. It answers
+the same push and pull as the cloud, with the same rules: insert-once
+events, last-write-wins on `(updated_at, event_id)`, append-only and delta
+rows inserted once, derived columns zeroed, and a till never pulling its
+own versions. The other tills swap the cloud transport for `LanTransport`
+(HTTP on port 47800, UDP discovery on 47801). The hub uses
+`LocalHubTransport`, so its own changes follow the same path. Each target
+has its own pull cursor. Every request carries the client id and a pairing
+code. A till that already has data seeds an empty hub. A till syncs with
+one target at a time: the cloud or the hub.
+
+### D64 — Receipts print as text or as an image, chosen per job
+
+The receipt, kitchen, report and label layouts build a `Doc` (lines with
+alignment, size and weight). `PrintMode::Auto` prints it as ESC/POS text
+when every character is in the printer's code page. Otherwise it rasterises
+the doc and prints it as `GS v 0` bands of 128 rows: rustybuzz shaping,
+unicode-bidi with each line's direction taken from its first strong
+letter, ab_glyph drawing, and the bundled Tajawal font (OFL). Kitchen
+tickets go through their own queue (`kitchen_print_jobs`), like receipts,
+so a kitchen printer that is off loses nothing.
+
+### D65 — The generator holds the update key; updates can travel on USB
+
+GitHub never holds a secret. The generator makes a minisign key with the
+first build and keeps it in the OS credential store. Every build commits
+its public half (`updater-public-key.txt`), which becomes
+`POS_UPDATER_PUBLIC_KEY`. After downloading a build, the generator signs
+each installer. The trusted comment names the client, version, target and
+file. It then writes `.posupdate` zips (a manifest plus the installer). The
+till trusts only the signature: it checks the signed client, target, file
+and version against its own, and installs only a newer version. It backs up
+first, then runs the NSIS setup (`/P /UPDATE /R`) or swaps the AppImage,
+and exits. The same signature serves the online channel. The generator
+uploads to the client's project with a per-client service key from the
+credential store. `build-client.yml` builds Windows and Linux into one
+artifact and needs no secrets.
+
+### D66 — Discount rules are scheduled, priced in Rust
+
+`discount_rules` gained `apply_mode` (automatic or manual), `days_mask`
+(Monday = bit 0) and a local `time_from`/`time_to` window, which may cross
+midnight. The engine takes every automatic rule running at the sale's local
+time, plus the manual rules the manager picked (`discount.apply`). It
+applies them before points, and records each on the receipt. The back
+office shows when a rule runs with a TypeScript copy of the schedule check,
+which has its own tests.
+
+### D67 — A membership plan is a product
+
+A plan owns a product in the "Memberships" category. So selling, refunds,
+reports and printing need nothing new. Selling it to a named customer
+starts a period or adds one after the current period. A refund or void
+cancels the periods that sale bought. An active member gets the plan's
+percentage as an order discount, before points, and a points multiplier.
+Plans and memberships sync last-write-wins. Card numbers are EAN-13 with
+the in-store prefix 29, so any scanner reads them.
+
+### D68 — Linux is a shipped platform
+
+Client builds make an AppImage and a .deb (Ubuntu 22.04 glibc) next to the
+Windows setup. Printing on Linux goes to raw devices (`/dev/usb/lp*`,
+serial) or CUPS queues (`lp -o raw`). The online channel has a
+`linux-x86_64` target. The generator itself is released for both systems
+by `release-generator.yml`.
+
 ## Open items for upcoming phases
 
-- **Arabic receipts (next).** Text-mode ESC/POS cannot render Arabic.
-  The plan is to rasterise the receipt layout (shaping + bidi, a bundled
-  OFL font) through the existing `GS v 0` path, which logos already use.
-
-- **Discount rules UI, multi-currency tenders.** The engine supports
-  discount rules (tested); creating them needs back-office UI.
-  Foreign-currency tenders are rejected with a clear message.
+- **Multi-currency tenders.** Foreign-currency tenders are rejected with a
+  clear message.
+- **Hub failover.** If the hub PC dies, another till can become the hub
+  (it seeds from its own copy), but tills must be pointed at it by hand.
+- **Update key rotation.** A lost update key means reinstalling every till.
+  A signed "trust this new key" message would let tills move to a new key.
 - **Points expiry.** The ledger has an `expire` reason, but nothing writes
   it yet. Expiry needs a rule (for example, points unused for 12 months)
   and a job that runs on one till only, so points don't expire twice.
@@ -737,9 +824,9 @@ asks for reduced motion.
 - **Delivering tokens.** The activation code and token are still
   copy-pasted. The generator could push issued tokens to Supabase so tills
   fetch them online, with copy-paste as the offline fallback.
-- **Code signing.** Installers are unsigned. `build-client.yml` is the place
-  to add Authenticode signing from repository secrets, so SmartScreen
-  doesn't warn.
+- **Code signing.** Installers are unsigned, so SmartScreen warns once.
+  Authenticode signing could be done by the generator after download, like
+  update signing, with the certificate kept on the operator's PC.
 - **Kitchen-only PCs.** A PC that only runs the display still shows the
   main window at the login screen. A device setting could start it
   display-only.

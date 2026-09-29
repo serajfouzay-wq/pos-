@@ -1,7 +1,11 @@
 # POS Factory System
 
-A Windows desktop **generator** that produces fully compiled, client-specific,
-offline-first **Point of Sale** installers.
+A desktop **generator** (Windows or Linux) that produces fully compiled,
+client-specific, offline-first **Point of Sale** installers for Windows and
+Linux tills. It is built for shops where the internet and the power come and
+go: everything works with no internet, tills in one shop can share data over
+the local network, the data is backed up automatically, and updates can come
+on a USB stick. The cloud (Supabase) is optional.
 
 ```
 apps/
@@ -38,7 +42,16 @@ pnpm workspaces + Turborepo · GitHub Actions.
 | Windows | [Tauri prerequisites](https://tauri.app/start/prerequisites/): MSVC Build Tools + WebView2 |
 
 Linux works for development and CI checks (`libwebkit2gtk-4.1-dev`, `libgtk-3-dev`,
-`libsoup-3.0-dev`); shipped installers target Windows only.
+`libsoup-3.0-dev`). Client builds make a Windows installer (NSIS) and Linux
+packages (AppImage and .deb).
+
+### Installing the generator
+
+Actions → **Release generator** → Run workflow builds the generator for
+Windows and Linux and publishes both on the repository's Releases page.
+On Windows, run the `-setup.exe` (SmartScreen may say "unknown publisher":
+**More info → Run anyway**). On Linux, use the `.AppImage` (make it
+executable) or the `.deb`.
 
 ## Commands
 
@@ -84,22 +97,32 @@ Normally the generator drives all of this (see below).
    - **Receipt & branding**: header and footer, paper width, tax number,
      colours, the receipt logo and the app icon. The live preview is the
      till's own receipt layout, with the logo dithered exactly as printed.
-4. **Builds → Build installer**: the generator commits `clients/<slug>/` in
+4. **Builds → Build installers**: the generator commits `clients/<slug>/` in
    one commit and runs [`build-client.yml`](.github/workflows/build-client.yml)
-   on GitHub Actions. It follows the run and offers **Download installer**
-   when it's done (about 15–25 min). Each client gets its own app identity
+   on GitHub Actions, which builds Windows and Linux in parallel. It follows
+   the run and offers **Download installers** when it's done (about
+   20–30 min). They are saved in `Downloads/POS Factory/<slug>/<version>/`:
+   the Windows setup, the Linux AppImage and .deb, and a signed update file
+   (`.posupdate`) for each system. Each client gets its own app identity
    (`com.posfactory.pos.<slug>`), name, icon and embedded config. Every
    build of a client gets a higher version (`MAJOR.MINOR` of the app, then
-   the client's build number). Add **release notes** and keep **Publish to
-   the tills as an update** ticked to ship it to that client's tills (see
-   [Updates](#updates)).
+   the client's build number). Add **release notes**; they show on the tills
+   after they update (see [Updates](#updates)).
 5. **Licenses** (on the client, or in the Licenses section): paste the till's
    activation code and sign. A code from another client's till is refused,
    and every license is kept in the client's history.
 
 `build-client.yml` must be on the repository's default branch for dispatch to
-work. It can also be run by hand from the Actions tab for any committed
-client.
+work, and **Settings → Branch** must be the branch the generator commits to
+(the repository's default branch, unless you use another). It can also be
+run by hand from the Actions tab for any committed client.
+
+The only secret the generator needs is the GitHub token, and it stays in the
+Windows Credential Manager on your PC. Nothing secret goes into GitHub.
+If the build repository is **public**, everything the generator commits
+(`clients/<slug>/client.json`: business names, tax numbers, Supabase URL and
+anon key, logos) is public too. Make the repository private before adding
+real clients.
 
 ## Licensing
 
@@ -175,25 +198,79 @@ DENO_NO_PACKAGE_JSON=1 deno run --no-config -A supabase/functions/dev-server.ts
 
 ## Updates
 
-Tills update themselves from their shop's cloud project. A published build
-is downloaded in the background and checked against the release key compiled
-into the till. It installs quietly the next time the till is closed; a
-manager can choose **Restart now** from the banner instead. After the update,
-the first sign-in shows what changed.
+The generator signs every update with its **update key**, which it makes with
+the first build and keeps in the Windows Credential Manager. Each build
+embeds the key's public half (`clients/<slug>/updater-public-key.txt`), so a
+till installs only updates signed by your generator. **Settings → Update
+signing key → Save a backup file**, and keep that file off the PC (a USB
+stick in a safe place). A new PC restores it from the same screen. Without
+it, new updates are refused and every till has to be reinstalled by hand.
 
-One-time setup:
+- **From a USB stick (no internet).** Copy
+  `<slug>-<version>-windows.posupdate` (or `-linux`) from the build folder.
+  On the till: **Printer → Update from a file (USB stick)** (manager or
+  owner). The till checks the signature, the shop, the system and the
+  version before anything changes, backs up today's data, runs the
+  installer and restarts on the new version. A file for another shop, or an
+  older version, is refused.
+- **Online (optional).** For a client with a cloud, tick **Also publish it
+  online** before building and add the client's Supabase service key on the
+  Builds tab. The key stays on your PC. On download the generator uploads
+  the signed installers to the client's private `releases` bucket and
+  records them (`publish_app_release`). Tills with internet then download
+  in the background, install when they are next closed, or on **Restart
+  now**, and show what changed. A release is withdrawn by setting
+  `withdrawn_at` on its `app_releases` row (tills never downgrade).
 
-1. `pnpm --filter @pos/pos-client tauri signer generate -w updater.key` and
-   keep the private key safe (losing it means reinstalling every till by hand).
-2. In the build repository: variable `POS_UPDATER_PUBLIC_KEY` (the `.pub`
-   contents); secrets `TAURI_SIGNING_PRIVATE_KEY` (+ `_PASSWORD`) and
-   `POS_SUPABASE_SERVICE_ROLE_KEY` (uploads to the private `releases`
-   bucket).
-3. Deploy the `app-update` function (above). Tills built before this key was
-   set, or without a cloud, keep updating by installer.
+Linux tills installed as an AppImage replace themselves. A till installed
+from the .deb is updated by installing the new .deb.
 
-A release can be withdrawn by setting `withdrawn_at` on its `app_releases`
-row; tills then get the previous one offered (they never downgrade).
+## Offline first
+
+- **Backups.** The till backs itself up at start, every 12 hours (you can
+  change this), when a shift closes and after a Z report. It keeps the
+  newest ones, and can copy each to a second folder (a USB stick or another
+  disk). With a **backup password**, a backup restores on a new PC (for
+  example after a theft or a dead disk). Without one, it restores only on
+  the same PC. **Backups → Restore** works from the list, a folder or a
+  file. It is also offered on the start screen when the database is
+  damaged. The database in use is kept aside, never deleted. An update
+  always makes a backup first.
+- **No lock-out.** In the generator, **Details → Tills may stay offline**
+  decides whether a till that cannot reach the cloud keeps working. The
+  default is **Always**. Tills without a cloud never check.
+- **Shop network (several tills, no internet).** On one till: **Shop
+  network → The hub**. It shows a pairing code and its
+  addresses. On the others: **Join the hub → Find the hub**, pick it, type the code.
+  The tills then share products, customers, sales, stock and kitchen
+  tickets through the hub, over the shop's Wi-Fi or cable, with the same
+  conflict rules as the cloud. A till that loses the hub keeps selling and
+  catches up when it is back. Windows asks once, on the hub, whether the
+  app may use the network: answer **Allow** (private networks). The hub
+  listens on TCP port 47800 and answers discovery on UDP 47801.
+
+## Printing, discounts and memberships
+
+- **Printing.** Receipts, kitchen tickets, reports and labels print in the
+  printer's language. In **auto** mode they print as text when the
+  printer's own font can show everything, and as an image when it can't
+  (Arabic shaped and right-to-left, with the bundled Tajawal font). You can
+  also force text or image mode. Printers: network (IP), USB/serial
+  devices, Windows printers or CUPS queues (Linux), with backups in order.
+  Kitchen tickets queue while the kitchen printer is off and print when it
+  is back. **Test print** checks the language and mode.
+- **Discount rules** (back office, owner): a percentage or amount off the
+  bill, a product or a category, with a minimum spend, dates, days of the
+  week and a time window (happy hour, including windows that cross
+  midnight). **Automatic** rules apply to every bill while they run.
+  **Manual** ones are offered to a manager at payment. The receipt lists
+  each discount.
+- **Memberships** (back office): plans such as a monthly club or a yearly
+  VIP card, with a price, length, member discount and points multiplier.
+  Selling a plan to a customer at the till starts or renews their
+  membership. Members get their discount on every bill, and their card
+  number (EAN-13) can be scanned. Refunding the sale cancels the period it
+  bought.
 
 ## Using the till
 
@@ -324,13 +401,14 @@ These are enforced by tooling where possible — see [`docs/ARCHITECTURE.md`](do
 
 ## Roadmap
 
-| Phase | Scope                                                                   | Status |
-| ----- | ----------------------------------------------------------------------- | ------ |
-| 1     | Monorepo, shared types/contracts, Tauri 2 shells for both apps          | ✅     |
-| 2     | Hardware fingerprint, RS256 licensing, SQLCipher, `verify_license`      | ✅     |
-| 3     | Core POS UI: products, cart, payment, receipt print, cash drawer        | ✅     |
-| 4     | Offline sync engine: outbox, background worker, conflict resolution     | ✅     |
-| 5     | Generator: client dashboard, asset upload, GitHub Actions build trigger | ✅     |
-| 6     | Business-type layouts: retail / cafe / restaurant                       | ✅     |
-| 7     | Analytics, Z-reports, audit trail, role-based views                     | ✅     |
-| 8     | Polish: animations, KDS window, loyalty, auto-updater                   | ✅     |
+| Phase | Scope                                                                                             | Status |
+| ----- | ------------------------------------------------------------------------------------------------- | ------ |
+| 1     | Monorepo, shared types/contracts, Tauri 2 shells for both apps                                    | ✅     |
+| 2     | Hardware fingerprint, RS256 licensing, SQLCipher, `verify_license`                                | ✅     |
+| 3     | Core POS UI: products, cart, payment, receipt print, cash drawer                                  | ✅     |
+| 4     | Offline sync engine: outbox, background worker, conflict resolution                               | ✅     |
+| 5     | Generator: client dashboard, asset upload, GitHub Actions build trigger                           | ✅     |
+| 6     | Business-type layouts: retail / cafe / restaurant                                                 | ✅     |
+| 7     | Analytics, Z-reports, audit trail, role-based views                                               | ✅     |
+| 8     | Polish: animations, KDS window, loyalty, auto-updater                                             | ✅     |
+| 9     | Offline first: backups, shop network, USB updates, Arabic printing, discounts, memberships, Linux | ✅     |
