@@ -413,7 +413,7 @@ the form. Archiving is a soft delete that frees the slug.
 
 ### D34 — Builds are GitOps: one commit, one dispatch, one run
 
-1. **Publish.** "Build installer" commits `clients/<slug>/` (`client.json`,
+1. **Publish.** "Build installers" commits `clients/<slug>/` (`client.json`,
    the public key, the logo, the icon) to the build repository in a single
    commit through the Git Data API:
    - blobs → tree with deletions → commit;

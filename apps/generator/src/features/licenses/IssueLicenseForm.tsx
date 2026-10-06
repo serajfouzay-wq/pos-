@@ -50,6 +50,11 @@ export function IssueLicenseForm({ clientId, enabled }: Props) {
             setCode(e.target.value);
             issue.reset();
           }}
+          onPaste={(e) => {
+            // Show which till and client the code is for at once.
+            const pasted = e.clipboardData.getData('text').trim();
+            if (pasted) decode.mutate(pasted);
+          }}
           onBlur={() => {
             if (code.trim()) decode.mutate(code.trim());
           }}

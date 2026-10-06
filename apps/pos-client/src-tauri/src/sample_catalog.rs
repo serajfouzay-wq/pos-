@@ -1,7 +1,10 @@
-//! Starter catalogues so a new till can trade immediately. Prices are written
-//! in fils (1/1000) and scaled to the client's currency exponent, integer only.
+//! Starter catalogues so a new till can trade immediately (or be shown to a
+//! customer). Prices are written in fils (1/1000 of a Kuwaiti-dinar-like
+//! unit), brought to the local price level of the client's currency and
+//! scaled to its exponent, integer only. Names are Arabic when the shop's
+//! default language is Arabic (English kept in `name_localized.en`).
 
-use pos_core::config::BusinessType;
+use pos_core::config::{BusinessType, Locale};
 use pos_core::currency::CurrencyCode;
 use pos_core::time::Timestamp;
 use rusqlite::Connection;
@@ -81,29 +84,29 @@ fn catalogue(business: BusinessType) -> Vec<(&'static str, &'static str, Vec<Ite
                 "Starters",
                 "#C05621",
                 vec![
+                    each("Libyan Soup", 1_250),
                     each("Hummus", 1_250),
                     each("Fattoush", 1_500),
-                    each("Lentil Soup", 1_000),
-                    each("Mutabbal", 1_250),
+                    each("Bourek", 1_000),
                 ],
             ),
             (
                 "Mains",
                 "#9B2C2C",
                 vec![
-                    each("Chicken Machboos", 3_500),
-                    each("Lamb Kabsa", 4_750),
+                    each("Couscous with Lamb", 4_750),
+                    each("Mbakbaka", 3_500),
                     each("Mixed Grill", 5_500),
-                    each("Grilled Hammour", 5_250),
-                    each("Vegetable Biryani", 3_000),
+                    each("Grilled Fish", 5_250),
+                    each("Chicken Shawarma Plate", 3_000),
                 ],
             ),
             (
                 "Desserts",
                 "#6B46C1",
                 vec![
-                    each("Umm Ali", 1_750),
                     each("Kunafa", 2_000),
+                    each("Basbousa", 1_250),
                     each("Ice Cream", 1_000),
                 ],
             ),
@@ -154,6 +157,135 @@ fn catalogue(business: BusinessType) -> Vec<(&'static str, &'static str, Vec<Ite
                 ],
             ),
         ],
+    }
+}
+
+/// How many times a Kuwaiti-dinar fils price a local price is, roughly
+/// (a coffee costs about 1 KWD, 5 LYD, 12 AED, 4 USD…).
+fn price_level(currency: CurrencyCode) -> i64 {
+    use CurrencyCode::*;
+    match currency {
+        KWD | BHD | OMR | JOD => 1,
+        LYD => 5,
+        TND | USD | EUR | GBP => 3,
+        AED | SAR | QAR | MYR => 10,
+        MAD => 25,
+        EGP => 50,
+        DZD => 300,
+        JPY => 400,
+        IQD => 3_000,
+    }
+}
+
+/// A sample price in `currency` minor units at its local price level.
+fn local_price(price_fils: i64, currency: CurrencyCode) -> i64 {
+    scale(price_fils * price_level(currency), currency)
+}
+
+/// Arabic for every sample name (categories, products, options, combos,
+/// areas); `None` keeps the English.
+fn arabic(en: &str) -> Option<&'static str> {
+    Some(match en {
+        // Cafe
+        "Coffee" => "القهوة",
+        "Espresso" => "إسبريسو",
+        "Americano" => "أمريكانو",
+        "Cappuccino" => "كابتشينو",
+        "Flat White" => "فلات وايت",
+        "Spanish Latte" => "سبانش لاتيه",
+        "Iced Latte" => "لاتيه مثلج",
+        "Tea & more" => "الشاي والمزيد",
+        "Karak Tea" => "شاي كرك",
+        "Green Tea" => "شاي أخضر",
+        "Hot Chocolate" => "شوكولاتة ساخنة",
+        "Fresh Orange" => "برتقال طازج",
+        "Bakery" => "المخبوزات",
+        "Croissant" => "كرواسون",
+        "Cheese Croissant" => "كرواسون بالجبن",
+        "Muffin" => "مافن",
+        "Cheesecake Slice" => "شريحة تشيز كيك",
+        "Cookie" => "كوكيز",
+        "Size" => "الحجم",
+        "Small" => "صغير",
+        "Medium" => "وسط",
+        "Large" => "كبير",
+        "Milk" => "الحليب",
+        "Full cream" => "كامل الدسم",
+        "Oat" => "حليب الشوفان",
+        "Almond" => "حليب اللوز",
+        "Lactose-free" => "خالٍ من اللاكتوز",
+        "Sugar" => "السكر",
+        "No sugar" => "بدون سكر",
+        "Less sugar" => "سكر قليل",
+        "Normal" => "عادي",
+        "Extra sugar" => "سكر زيادة",
+        "Extras" => "إضافات",
+        "Extra shot" => "شوت إضافي",
+        "Vanilla syrup" => "شراب الفانيليا",
+        "Caramel syrup" => "شراب الكراميل",
+        "Breakfast Set" => "وجبة الفطور",
+        "Afternoon Treat" => "تحلية العصر",
+        "Seating" => "الصالة",
+        // Restaurant
+        "Starters" => "المقبلات",
+        "Libyan Soup" => "شوربة ليبية",
+        "Hummus" => "حمص",
+        "Fattoush" => "فتوش",
+        "Bourek" => "بوريك",
+        "Mains" => "الأطباق الرئيسية",
+        "Couscous with Lamb" => "كسكسي باللحم",
+        "Mbakbaka" => "مبكبكة",
+        "Mixed Grill" => "مشاوي مشكلة",
+        "Grilled Fish" => "سمك مشوي",
+        "Chicken Shawarma Plate" => "صحن شاورما دجاج",
+        "Desserts" => "الحلويات",
+        "Kunafa" => "كنافة",
+        "Basbousa" => "بسبوسة",
+        "Ice Cream" => "آيس كريم",
+        "Drinks" => "المشروبات",
+        "Water" => "مياه",
+        "Soft Drink" => "مشروب غازي",
+        "Fresh Juice" => "عصير طازج",
+        "Laban" => "لبن",
+        "Doneness" => "درجة الاستواء",
+        "Rare" => "نيء",
+        "Medium rare" => "نصف استواء",
+        "Well done" => "مستوٍ جيدًا",
+        "Side" => "الطبق الجانبي",
+        "Rice" => "رز",
+        "Fries" => "بطاطا مقلية",
+        "Salad" => "سلطة",
+        "Bread" => "خبز",
+        "Spice level" => "درجة الحرارة",
+        "Mild" => "خفيف",
+        "Hot" => "حار",
+        "Lunch Set" => "وجبة الغداء",
+        "Main hall" => "الصالة الرئيسية",
+        "Terrace" => "التراس",
+        "Bar" => "البار",
+        // Retail
+        "Groceries" => "مواد غذائية",
+        "Rice 5kg" => "رز ٥ كغ",
+        "Sugar 2kg" => "سكر ٢ كغ",
+        "Olive Oil 1L" => "زيت زيتون ١ لتر",
+        "Dates (loose)" => "تمر (بالوزن)",
+        "Water 1.5L" => "مياه ١٫٥ لتر",
+        "Orange Juice 1L" => "عصير برتقال ١ لتر",
+        "Cola 330ml" => "كولا ٣٣٠ مل",
+        "Household" => "المنظفات",
+        "Dish Soap" => "سائل الصحون",
+        "Paper Towels" => "مناديل ورقية",
+        "Laundry Detergent" => "مسحوق الغسيل",
+        _ => return None,
+    })
+}
+
+/// The shown name and the other language, for `name_localized`.
+fn label(en: &str, locale: Locale) -> (String, serde_json::Value) {
+    match (locale, arabic(en)) {
+        (Locale::Ar, Some(ar)) => (ar.to_owned(), serde_json::json!({ "en": en })),
+        (_, Some(ar)) => (en.to_owned(), serde_json::json!({ "ar": ar })),
+        (_, None) => (en.to_owned(), serde_json::json!({})),
     }
 }
 
@@ -276,14 +408,14 @@ fn groups(business: BusinessType) -> Vec<GroupSpec> {
                     ("Salad", 0, false),
                     ("Bread", 0, false),
                 ],
-                products: &["Mixed Grill", "Grilled Hammour"],
+                products: &["Mixed Grill", "Grilled Fish"],
             },
             GroupSpec {
                 name: "Spice level",
                 min: 0,
                 max: 1,
                 options: &[("Mild", 0, false), ("Medium", 0, false), ("Hot", 0, false)],
-                products: &["Chicken Machboos", "Lamb Kabsa", "Vegetable Biryani"],
+                products: &["Couscous with Lamb", "Mbakbaka", "Chicken Shawarma Plate"],
             },
         ],
         BusinessType::Retail => vec![],
@@ -304,7 +436,7 @@ fn combos(business: BusinessType) -> Vec<(&'static str, i64, &'static [&'static 
         BusinessType::Restaurant => vec![(
             "Lunch Set",
             4_250,
-            &["Lentil Soup", "Chicken Machboos", "Soft Drink"],
+            &["Libyan Soup", "Mbakbaka", "Soft Drink"],
         )],
         BusinessType::Retail => vec![],
     }
@@ -367,16 +499,18 @@ fn load_menu(
     conn: &Connection,
     business: BusinessType,
     currency: CurrencyCode,
+    locale: Locale,
     products: &[(String, uuid::Uuid)],
     now: Timestamp,
 ) -> rusqlite::Result<()> {
     let id_of = |name: &str| products.iter().find(|(n, _)| n == name).map(|(_, id)| *id);
     let mut asked: Vec<(uuid::Uuid, Vec<uuid::Uuid>)> = Vec::new();
     for (sort, spec) in groups(business).into_iter().enumerate() {
+        let (name, name_localized) = label(spec.name, locale);
         let group = ModifierGroup {
             meta: Meta::new(now),
-            name: spec.name.to_owned(),
-            name_localized: serde_json::json!({}),
+            name,
+            name_localized,
             min_select: spec.min,
             max_select: spec.max,
             sort_order: i64::try_from(sort).unwrap_or(0),
@@ -386,15 +520,18 @@ fn load_menu(
             .options
             .iter()
             .enumerate()
-            .map(|(i, (name, fils, default))| Modifier {
-                meta: Meta::new(now),
-                group_id: group.meta.id,
-                name: (*name).to_owned(),
-                name_localized: serde_json::json!({}),
-                price_delta: scale(*fils, currency),
-                is_default: *default,
-                sort_order: i64::try_from(i).unwrap_or(0),
-                is_active: true,
+            .map(|(i, (en, fils, default))| {
+                let (name, name_localized) = label(en, locale);
+                Modifier {
+                    meta: Meta::new(now),
+                    group_id: group.meta.id,
+                    name,
+                    name_localized,
+                    price_delta: local_price(*fils, currency),
+                    is_default: *default,
+                    sort_order: i64::try_from(i).unwrap_or(0),
+                    is_active: true,
+                }
             })
             .collect();
         menu::save_group(conn, &group, &options, now)?;
@@ -408,12 +545,13 @@ fn load_menu(
     for (product, group_ids) in asked {
         menu::set_product_groups(conn, product, &group_ids, now)?;
     }
-    for (sort, (name, fils, parts)) in combos(business).into_iter().enumerate() {
+    for (sort, (en, fils, parts)) in combos(business).into_iter().enumerate() {
+        let (name, name_localized) = label(en, locale);
         let combo = Combo {
             meta: Meta::new(now),
-            name: name.to_owned(),
-            name_localized: serde_json::json!({}),
-            price: scale(fils, currency),
+            name,
+            name_localized,
+            price: local_price(fils, currency),
             color: Some("#B7791F".to_owned()),
             sort_order: i64::try_from(sort).unwrap_or(0),
             is_active: true,
@@ -432,12 +570,12 @@ fn load_menu(
             .collect();
         menu::save_combo(conn, &combo, &items, now)?;
     }
-    for (label, area, seats, shape, x, y) in tables(business) {
+    for (table_label, area, seats, shape, x, y) in tables(business) {
         let table = DiningTable {
             meta: Meta::new(now),
             sort_order: y * 24 + x,
-            label,
-            area: area.to_owned(),
+            label: table_label,
+            area: label(area, locale).0,
             seats,
             shape,
             grid_x: x,
@@ -455,6 +593,7 @@ pub fn load(
     conn: &Connection,
     business: BusinessType,
     currency: CurrencyCode,
+    locale: Locale,
     tax_rate_bps: i64,
     actor: &Actor,
     now: Timestamp,
@@ -464,21 +603,22 @@ pub fn load(
     let mut products = Vec::new();
     for (sort, (category_name, color, items)) in catalogue(business).into_iter().enumerate() {
         let category = catalog::new_category(
-            category_name,
+            &label(category_name, locale).0,
             i64::try_from(sort).unwrap_or(0),
             Some(color),
             now,
         );
         catalog::save_category(conn, &category, now)?;
         for item in items {
+            let (name, name_localized) = label(item.name, locale);
             let product = Product {
                 meta: Meta::new(now),
-                name: item.name.to_owned(),
-                name_localized: serde_json::json!({}),
+                name,
+                name_localized,
                 category_id: Some(category.meta.id),
                 sku: None,
                 barcode: item.barcode.map(str::to_owned),
-                price: scale(item.price_fils, currency),
+                price: local_price(item.price_fils, currency),
                 cost: None,
                 tax_rate_bps,
                 unit: item.unit,
@@ -492,7 +632,8 @@ pub fn load(
                 is_active: true,
             };
             catalog::save(conn, &product, now)?;
-            products.push((product.name.clone(), product.meta.id));
+            // Options and combos find products by their English name.
+            products.push((item.name.to_owned(), product.meta.id));
             if let Some(stock) = item.stock {
                 catalog::move_stock(
                     conn,
@@ -508,13 +649,45 @@ pub fn load(
             created += 1;
         }
     }
-    load_menu(conn, business, currency, &products, now)?;
+    load_menu(conn, business, currency, locale, &products, now)?;
     Ok(created)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_sample_name_has_arabic_and_libyan_prices_look_local() {
+        for business in [
+            BusinessType::Retail,
+            BusinessType::Cafe,
+            BusinessType::Restaurant,
+        ] {
+            let mut names: Vec<&str> = Vec::new();
+            for (category, _, items) in catalogue(business) {
+                names.push(category);
+                names.extend(items.iter().map(|i| i.name));
+            }
+            for group in groups(business) {
+                names.push(group.name);
+                names.extend(group.options.iter().map(|o| o.0));
+            }
+            names.extend(combos(business).iter().map(|c| c.0));
+            names.extend(tables(business).iter().map(|t| t.1));
+            for name in names {
+                assert!(arabic(name).is_some(), "no Arabic for {name}");
+            }
+        }
+        let (ar, other) = label("Espresso", Locale::Ar);
+        assert_eq!(ar, "إسبريسو");
+        assert_eq!(other["en"], "Espresso");
+        assert_eq!(label("Espresso", Locale::En).1["ar"], "إسبريسو");
+        // An espresso: 0.900 KWD, 4.500 LYD, 2.70 USD.
+        assert_eq!(local_price(900, CurrencyCode::KWD), 900);
+        assert_eq!(local_price(900, CurrencyCode::LYD), 4_500);
+        assert_eq!(local_price(900, CurrencyCode::USD), 270);
+    }
 
     #[test]
     fn prices_scale_to_the_currency() {
@@ -550,7 +723,16 @@ mod tests {
                 role: pos_core::rbac::Role::Owner,
                 device_id: uuid::Uuid::nil(),
             };
-            load(&conn, business, CurrencyCode::KWD, 0, &actor, now).expect("load");
+            load(
+                &conn,
+                business,
+                CurrencyCode::KWD,
+                Locale::En,
+                0,
+                &actor,
+                now,
+            )
+            .expect("load");
             let menu = menu::menu(&conn, false).expect("menu");
             for combo in &menu.combos {
                 let instance = uuid::Uuid::now_v7();

@@ -79,6 +79,11 @@ struct Shaped {
 
 /// Bidi runs of one line in visual order, each with its direction.
 fn visual_runs(text: &str, rtl: bool) -> Vec<(Range<usize>, bool)> {
+    // unicode-bidi indexes the first level of the line: an empty line
+    // (a blank receipt field) has none.
+    if text.is_empty() {
+        return Vec::new();
+    }
     let base = if rtl { Level::rtl() } else { Level::ltr() };
     let info = ParagraphBidiInfo::new(text, Some(base));
     let (levels, runs) = info.visual_runs(0..text.len());
@@ -395,6 +400,20 @@ mod tests {
             }
         }
         span
+    }
+
+    #[test]
+    fn empty_lines_render_on_an_arabic_receipt() {
+        // A blank field (an empty option label, a row with no value) once
+        // panicked in the bidi pass and failed the sale it printed for.
+        let mut doc = Doc::new(80, true);
+        doc.push(Line::text("", crate::escpos::Align::Center));
+        doc.push(Line::row("المجموع", ""));
+        doc.push(Line::row("", "1.250"));
+        doc.push(Line::total("الإجمالي", "12.500"));
+        assert!(visual_runs("", true).is_empty());
+        assert!(ink(&render(&doc)) > 0);
+        assert!(doc.to_escpos(crate::doc::PrintMode::Image).len() > 100);
     }
 
     #[test]

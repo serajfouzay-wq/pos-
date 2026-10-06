@@ -92,6 +92,7 @@ const COMMANDS: &[&str] = &[
     "update_status",
     "check_for_updates",
     "install_update",
+    "find_update_files",
     "inspect_update_file",
     "install_update_file",
     "dismiss_update_notice",

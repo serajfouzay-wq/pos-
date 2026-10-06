@@ -204,8 +204,14 @@ impl Doc {
     /// ESC/POS bytes: initialise, content, feed, cut.
     pub fn to_escpos(&self, mode: PrintMode) -> Vec<u8> {
         let mut p = EscPos::new();
-        if self.prints_as_image(mode) {
-            p.raster_bands(&raster::render(self));
+        // A failure in the image path (shaping, fonts) must never cost a
+        // receipt: it falls back to text, which every printer can print.
+        let image = self
+            .prints_as_image(mode)
+            .then(|| std::panic::catch_unwind(|| raster::render(self)).ok())
+            .flatten();
+        if let Some(bands) = image {
+            p.raster_bands(&bands);
         } else {
             self.text_escpos(&mut p);
         }

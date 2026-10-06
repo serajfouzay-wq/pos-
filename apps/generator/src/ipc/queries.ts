@@ -299,7 +299,14 @@ export function useCreateUpdateKey() {
 }
 
 export function useExportUpdateKey() {
-  return useMutation({ mutationFn: () => ipc.call('export_update_key') });
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => ipc.call('export_update_key'),
+    onSuccess: () => {
+      // The backup date shows on Settings and ticks the Start checklist.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.updateKey });
+    },
+  });
 }
 
 export function useRestoreUpdateKey() {

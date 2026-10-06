@@ -547,3 +547,126 @@ button {
   content: '✗';
   color: var(--danger);
 }
+
+.ok-text {
+  color: var(--ok);
+}
+
+/* Start: how the pieces fit together. */
+.flow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: stretch;
+  padding: 0;
+  margin: 0 0 12px;
+  list-style: none;
+}
+
+.flow__item {
+  display: flex;
+  flex: 1 1 180px;
+  gap: 8px;
+  align-items: center;
+}
+
+.flow__node {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  block-size: 100%;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-block-start: 3px solid var(--brand);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.flow__node--github {
+  border-block-start-color: #9aa1b2;
+}
+
+.flow__node--shop {
+  border-block-start-color: #f59e0b;
+}
+
+.flow__node--license {
+  border-block-start-color: var(--ok);
+}
+
+.flow__number {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 24px;
+  block-size: 24px;
+  border-radius: 50%;
+  background: var(--surface-raised);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.flow__arrow {
+  color: var(--text-muted);
+  font-size: 1.4rem;
+}
+
+[dir='rtl'] .flow__arrow {
+  transform: scaleX(-1);
+}
+
+/* Start: the setup checklist. */
+.steps {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.step__body {
+  display: grid;
+  gap: 2px;
+}
+
+.step__mark {
+  display: grid;
+  place-items: center;
+  inline-size: 32px;
+  block-size: 32px;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  font-weight: 700;
+}
+
+.step--done {
+  opacity: 0.75;
+}
+
+.step--done .step__mark {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.step--next,
+.step--waiting {
+  border-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 8%, transparent);
+}
+
+.step--next .step__mark,
+.step--waiting .step__mark {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
+}

@@ -965,6 +965,16 @@ export function useInstallUpdate() {
   return useMutation({ mutationFn: () => ipc.call('install_update') });
 }
 
+/** Update files on USB sticks and in Downloads (asked when the screen opens). */
+export function useFoundUpdateFiles(enabled: boolean) {
+  return useQuery({
+    queryKey: ['update_files'],
+    queryFn: () => ipc.call('find_update_files'),
+    enabled: inTauri && enabled,
+    staleTime: 0,
+  });
+}
+
 export function useInspectUpdateFile() {
   return useMutation({
     mutationFn: (path: string) => ipc.call('inspect_update_file', { path }),

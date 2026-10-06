@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-find-update-files"
+description = "Enables the find_update_files command without any pre-configured scope."
+commands.allow = ["find_update_files"]
+
+[[permission]]
+identifier = "deny-find-update-files"
+description = "Denies the find_update_files command without any pre-configured scope."
+commands.deny = ["find_update_files"]

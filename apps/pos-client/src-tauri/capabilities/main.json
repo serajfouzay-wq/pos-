@@ -79,6 +79,7 @@
     "allow-update-status",
     "allow-check-for-updates",
     "allow-install-update",
+    "allow-find-update-files",
     "allow-inspect-update-file",
     "allow-install-update-file",
     "allow-dismiss-update-notice",

@@ -504,6 +504,8 @@ export const POS_IPC = {
   check_for_updates: command(NoArgs, UpdateStatusSchema, 8),
   install_update: command(NoArgs, z.null(), 8),
   dismiss_update_notice: command(NoArgs, UpdateStatusSchema, 8),
+  /** `.posupdate` files on USB sticks and in Downloads, newest first: shift.close. */
+  find_update_files: command(NoArgs, z.array(z.string()), 9),
   /** Checks a `.posupdate` file (signature, shop, system, version): shift.close. */
   inspect_update_file: command(
     z.object({ path: z.string().min(1).max(4096) }),

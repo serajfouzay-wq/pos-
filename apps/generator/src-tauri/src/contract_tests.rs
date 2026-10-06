@@ -15,7 +15,7 @@ use crate::clients::{new_client_config, preview_receipt, NewClientInput};
 use crate::github::RepoCheck;
 use crate::secrets::MemorySecret;
 use crate::store::{AssetKind, BuildStatus, BuildUpdate, IssuedLicenseRecord, Store};
-use crate::updates::UpdateKey;
+use crate::updates::{UpdateKey, UpdateKeyStatus};
 
 fn png(width: u32, height: u32) -> Vec<u8> {
     let mut out = Vec::new();
@@ -112,7 +112,10 @@ fn generator_response_shapes_match_the_contract_fixture() {
         "build_settings": BuildSettingsView { settings: BuildSettings::default(), token_configured: true },
         "repo_check": RepoCheck { default_branch: "main".into(), can_push: true, branch_found: true, workflow_found: false },
         "receipt_preview": preview_receipt(&detail.config, Some(&logo), now).expect("preview"),
-        "update_key_status": UpdateKey::new(Arc::new(MemorySecret::default())).ensure().expect("key"),
+        "update_key_status": UpdateKeyStatus {
+            backed_up_at: Some(now),
+            ..UpdateKey::new(Arc::new(MemorySecret::default())).ensure().expect("key")
+        },
     });
 
     let path = concat!(

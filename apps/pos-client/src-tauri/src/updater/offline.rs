@@ -170,6 +170,80 @@ pub fn verify(
     })
 }
 
+/// How deep the search looks under each place (a USB stick's root, its
+/// folders, the generator's `POS Factory/<shop>/<version>/` layout).
+const SEARCH_DEPTH: usize = 4;
+/// Entries looked at per place, so a full disk never stalls the till.
+const SEARCH_BUDGET: usize = 5_000;
+const MAX_FOUND: usize = 20;
+
+/// Where update files usually are: removable drives (USB sticks) and the
+/// Downloads folder. Windows: every drive letter but A:, B: and C:; Linux:
+/// the desktop's mount folders.
+pub fn search_roots(downloads: Option<PathBuf>) -> Vec<PathBuf> {
+    let mut roots: Vec<PathBuf> = Vec::new();
+    if cfg!(windows) {
+        roots.extend(
+            ('D'..='Z')
+                .map(|d| PathBuf::from(format!("{d}:\\")))
+                .filter(|p| p.exists()),
+        );
+    } else {
+        for base in ["/media", "/run/media", "/mnt"] {
+            if let Ok(entries) = std::fs::read_dir(base) {
+                roots.extend(entries.flatten().map(|e| e.path()).filter(|p| p.is_dir()));
+            }
+        }
+    }
+    roots.extend(downloads);
+    roots
+}
+
+/// `.posupdate` files under `roots`, newest first.
+pub fn find_files(roots: &[PathBuf]) -> Vec<PathBuf> {
+    let mut found: Vec<(std::time::SystemTime, PathBuf)> = Vec::new();
+    for root in roots {
+        let mut budget = SEARCH_BUDGET;
+        let mut stack = vec![(root.clone(), 0usize)];
+        while let Some((dir, depth)) = stack.pop() {
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                if budget == 0 {
+                    break;
+                }
+                budget -= 1;
+                let path = entry.path();
+                let Ok(kind) = entry.file_type() else {
+                    continue;
+                };
+                if kind.is_dir() && depth < SEARCH_DEPTH {
+                    let hidden = path
+                        .file_name()
+                        .is_some_and(|n| n.to_string_lossy().starts_with(['.', '$']));
+                    if !hidden {
+                        stack.push((path, depth + 1));
+                    }
+                } else if kind.is_file()
+                    && path
+                        .extension()
+                        .is_some_and(|e| e.eq_ignore_ascii_case("posupdate"))
+                {
+                    let modified = entry
+                        .metadata()
+                        .and_then(|m| m.modified())
+                        .unwrap_or(std::time::UNIX_EPOCH);
+                    found.push((modified, path));
+                }
+            }
+        }
+    }
+    found.sort_by_key(|f| std::cmp::Reverse(f.0));
+    found.dedup_by(|a, b| a.1 == b.1);
+    found.into_iter().take(MAX_FOUND).map(|(_, p)| p).collect()
+}
+
 pub fn read(path: &Path) -> IpcResult<Vec<u8>> {
     let size = std::fs::metadata(path)
         .map_err(|e| IpcError::validation(format!("Cannot open {}: {e}", path.display())))?

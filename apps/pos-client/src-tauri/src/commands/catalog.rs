@@ -147,6 +147,7 @@ pub async fn load_sample_catalog(state: State<'_, AppState>) -> IpcResult<usize>
             &tx,
             client.business_type,
             client.currency.base,
+            client.locale.default,
             i64::from(client.tax.default_rate_bps),
             &actor,
             now,

@@ -2,6 +2,7 @@ import type { BuildSettings, BuildSettingsInput } from '@pos/shared';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ErrorText } from '../../components/ErrorText';
+import { formatDateTime, parseRepo } from '../../lib/format';
 import {
   useBuildSettings,
   useCheckBuildSettings,
@@ -15,7 +16,7 @@ import {
 
 /** The key that signs every client's updates (kept in the credential store). */
 function UpdateKeyCard() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const status = useUpdateKey();
   const create = useCreateUpdateKey();
   const exportKey = useExportUpdateKey();
@@ -32,7 +33,15 @@ function UpdateKeyCard() {
           <p>
             {t('settings.updates.ready')} <code dir="ltr">{key.key_id}</code>
           </p>
-          <p className="warning">{t('settings.updates.backupWarning')}</p>
+          {key.backed_up_at ? (
+            <p className="ok-text">
+              {t('settings.updates.backedUp', {
+                date: formatDateTime(key.backed_up_at, i18n.language),
+              })}
+            </p>
+          ) : (
+            <p className="warning">{t('settings.updates.backupWarning')}</p>
+          )}
           <div className="row">
             <button
               type="button"
@@ -115,20 +124,37 @@ function SettingsForm({ current }: { current: BuildSettings }) {
     api_base_url: current.api_base_url,
   });
   const [token, setToken] = useState('');
-  const field = (key: keyof BuildSettingsInput, label: string, placeholder?: string) => (
-    <label>
-      {label}
-      <input
-        className="mono"
-        value={form[key]}
-        placeholder={placeholder}
-        onChange={(e) => {
-          setForm({ ...form, [key]: e.target.value.trim() });
-          check.reset();
-        }}
-      />
-    </label>
-  );
+  const field = (key: keyof BuildSettingsInput, label: string, placeholder?: string) => {
+    // A pasted link (or owner/name) fills both repository fields: on paste,
+    // or when leaving the field after typing it.
+    const repoField = key === 'repo_owner' || key === 'repo_name';
+    return (
+      <label>
+        {label}
+        <input
+          className="mono"
+          value={form[key]}
+          placeholder={placeholder}
+          onChange={(e) => {
+            setForm({ ...form, [key]: e.target.value.trim() });
+            check.reset();
+          }}
+          onPaste={(e) => {
+            const repo = repoField ? parseRepo(e.clipboardData.getData('text')) : null;
+            if (repo) {
+              e.preventDefault();
+              setForm({ ...form, repo_owner: repo.owner, repo_name: repo.name });
+              check.reset();
+            }
+          }}
+          onBlur={(e) => {
+            const repo = repoField ? parseRepo(e.target.value) : null;
+            if (repo) setForm({ ...form, repo_owner: repo.owner, repo_name: repo.name });
+          }}
+        />
+      </label>
+    );
+  };
 
   return (
     <div className="stack">
@@ -149,12 +175,15 @@ function SettingsForm({ current }: { current: BuildSettings }) {
         <h2>{t('settings.repo.title')}</h2>
         <p className="muted">{t('settings.repo.help')}</p>
         <div className="grid">
-          {field('repo_owner', t('settings.repo.owner'), 'acme')}
+          {field('repo_owner', t('settings.repo.owner'), 'https://github.com/owner/repo')}
           {field('repo_name', t('settings.repo.name'), 'pos-factory')}
           {field('branch', t('settings.repo.branch'))}
           {field('workflow_file', t('settings.repo.workflow'))}
         </div>
-        {field('api_base_url', t('settings.repo.apiBase'))}
+        <details>
+          <summary className="muted">{t('settings.repo.advanced')}</summary>
+          {field('api_base_url', t('settings.repo.apiBase'))}
+        </details>
         <label>
           {t('settings.token.label')}
           <input
@@ -208,6 +237,31 @@ function SettingsForm({ current }: { current: BuildSettings }) {
             <li className={check.data.can_push ? 'ok' : 'bad'}>{t('settings.check.push')}</li>
             <li className={check.data.branch_found ? 'ok' : 'bad'}>
               {t('settings.check.branch', { branch: form.branch })}
+              {!check.data.branch_found && check.data.default_branch !== form.branch && (
+                <>
+                  {' '}
+                  <button
+                    type="button"
+                    className="link"
+                    disabled={save.isPending}
+                    onClick={() => {
+                      // Save with the repository's own default branch, then test again.
+                      const fixed = { ...form, branch: check.data.default_branch };
+                      setForm(fixed);
+                      save.mutate(
+                        { settings: fixed, githubToken: null },
+                        {
+                          onSuccess: () => {
+                            check.mutate();
+                          },
+                        },
+                      );
+                    }}
+                  >
+                    {t('settings.check.useDefault', { branch: check.data.default_branch })}
+                  </button>
+                </>
+              )}
             </li>
             <li className={check.data.workflow_found ? 'ok' : 'bad'}>
               {t('settings.check.workflow', { file: form.workflow_file })}

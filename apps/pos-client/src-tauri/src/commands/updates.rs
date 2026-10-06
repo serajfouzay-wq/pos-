@@ -55,6 +55,33 @@ pub async fn dismiss_update_notice(state: State<'_, AppState>) -> IpcResult<Upda
     state.updates.dismiss(&auth.db, SystemClock.now())
 }
 
+/// Update files on USB sticks and in Downloads (newest first), so nobody has
+/// to browse for them.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn find_update_files(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> IpcResult<Vec<String>> {
+    use tauri::Manager;
+    authorize(&state, Permission::ShiftClose)?;
+    let downloads = app.path().download_dir().ok();
+    blocking(move || {
+        let roots = crate::updater::offline::search_roots(downloads);
+        // The generator names each file for its system: skip the other one.
+        let other = if cfg!(windows) {
+            "-linux."
+        } else {
+            "-windows."
+        };
+        Ok(crate::updater::offline::find_files(&roots)
+            .into_iter()
+            .map(|p| p.display().to_string())
+            .filter(|p| !p.to_lowercase().contains(other))
+            .collect())
+    })
+    .await
+}
+
 /// Opens and verifies an update file; installs nothing.
 #[tauri::command(rename_all = "snake_case")]
 pub async fn inspect_update_file(

@@ -23,7 +23,8 @@ function NewClientForm({ onDone }: { onDone: () => void }) {
   const [slug, setSlug] = useState('');
   const [slugEdited, setSlugEdited] = useState(false);
   const [businessType, setBusinessType] = useState<BusinessType>('retail');
-  const [currency, setCurrency] = useState<CurrencyCode>('KWD');
+  // Most shops served are in Libya.
+  const [currency, setCurrency] = useState<CurrencyCode>('LYD');
 
   const input = {
     display_name: name,
@@ -159,7 +160,8 @@ export function ClientsScreen() {
   const { t } = useTranslation();
   const clients = useClients();
   const clientId = useNavigationStore((s) => s.clientId);
-  const [creating, setCreating] = useState(false);
+  const creating = useNavigationStore((s) => s.creatingClient);
+  const setCreating = useNavigationStore((s) => s.setCreatingClient);
 
   if (clientId) return <ClientEditor key={clientId} clientId={clientId} />;
 

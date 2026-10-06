@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   useCheckForUpdates,
+  useFoundUpdateFiles,
   useInspectUpdateFile,
   useInstallUpdateFile,
   useKitchenDisplayStatus,
@@ -69,8 +70,14 @@ function UpdateFromFile() {
   const locale = useUiStore((s) => s.locale);
   const inspect = useInspectUpdateFile();
   const install = useInstallUpdateFile();
+  const found = useFoundUpdateFiles(true);
   const [path, setPath] = useState<string | null>(null);
   const info = inspect.data;
+  const check = (file: string) => {
+    setPath(file);
+    install.reset();
+    inspect.mutate(file);
+  };
   const choose = async () => {
     const chosen = await openDialog({
       multiple: false,
@@ -79,15 +86,47 @@ function UpdateFromFile() {
       filters: [{ name: t('updates.file.kind'), extensions: ['posupdate'] }],
     });
     if (typeof chosen !== 'string') return;
-    setPath(chosen);
-    install.reset();
-    inspect.mutate(chosen);
+    check(chosen);
   };
+  const fileName = (file: string) => file.split(/[\\/]/).pop() ?? file;
   return (
     <div className="stack">
       <h3>{t('updates.file.title')}</h3>
       <p className="muted small">{t('updates.file.help')}</p>
+      {found.data && found.data.length > 0 && (
+        <div className="stack">
+          <span className="small">{t('updates.file.found_on')}</span>
+          {found.data.map((file) => (
+            <button
+              key={file}
+              type="button"
+              className="button update-file"
+              aria-pressed={path === file}
+              disabled={inspect.isPending || install.isPending}
+              onClick={() => {
+                check(file);
+              }}
+            >
+              <strong dir="ltr">{fileName(file)}</strong>
+              <span className="muted small" dir="ltr">
+                {file}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      {found.data?.length === 0 && <p className="muted small">{t('updates.file.noneFound')}</p>}
       <div className="row">
+        <button
+          type="button"
+          className="button"
+          disabled={found.isFetching}
+          onClick={() => {
+            void found.refetch();
+          }}
+        >
+          {found.isFetching ? t('updates.file.searching') : t('updates.file.search')}
+        </button>
         <button
           type="button"
           className="button"

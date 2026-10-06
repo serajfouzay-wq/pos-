@@ -2,7 +2,14 @@ import type { ComboWithItems, Product } from '@pos/shared';
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useCategories, useProducts } from '../../ipc/queries';
+import {
+  useAppInfo,
+  useCategories,
+  useLoadSampleCatalog,
+  useProducts,
+  useSessionStatus,
+} from '../../ipc/queries';
+import { can } from '../../lib/permissions';
 import { useMoney } from '../../lib/money';
 
 interface Props {
@@ -29,6 +36,12 @@ export function ProductGrid({
   const { t } = useTranslation();
   const { format } = useMoney();
   const categories = useCategories();
+  const info = useAppInfo();
+  const sample = useLoadSampleCatalog();
+  const session = useSessionStatus().data?.session ?? null;
+  // A new till has no products: the owner can start from a sample menu
+  // (to try the till or show it to a customer) instead of an empty screen.
+  const mayLoadSample = session !== null && can(session, 'catalog.manage');
   const [tab, setTab] = useState<Tab>(quickKeys ? { kind: 'quick' } : { kind: 'all' });
   const [search, setSearch] = useState('');
   const searching = search.trim().length > 0;
@@ -144,6 +157,28 @@ export function ProductGrid({
                 {tab.kind === 'quick' && !searching ? t('sell.noQuickKeys') : t('sell.noProducts')}
               </p>
             )}
+            {shown.length === 0 &&
+              tab.kind === 'all' &&
+              !searching &&
+              products.isSuccess &&
+              mayLoadSample && (
+                <div className="product-grid__empty">
+                  <button
+                    type="button"
+                    className="button button--primary"
+                    disabled={sample.isPending}
+                    onClick={() => {
+                      sample.mutate();
+                    }}
+                  >
+                    {t('admin.products.loadSample', {
+                      type: t(`shell.businessType.${info.data?.client.business_type ?? 'retail'}`),
+                    })}
+                  </button>
+                  <p className="muted small">{t('sell.sampleHelp')}</p>
+                  {sample.error && <p className="error-text">{sample.error.message}</p>}
+                </div>
+              )}
             {shown.map((p) => (
               <motion.button
                 key={p.id}

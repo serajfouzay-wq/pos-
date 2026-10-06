@@ -190,6 +190,8 @@ export const UpdateKeyStatusSchema = z.object({
   key_id: z.string().nullable(),
   /** Base64 of the minisign public key (what `POS_UPDATER_PUBLIC_KEY` holds). */
   public_key: z.string().nullable(),
+  /** When a backup file was last saved; `null` = never (the Start checklist warns). */
+  backed_up_at: TimestampSchema.nullable(),
 });
 export type UpdateKeyStatus = z.infer<typeof UpdateKeyStatusSchema>;
 

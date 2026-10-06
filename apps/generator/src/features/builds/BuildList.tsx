@@ -5,7 +5,16 @@ import { ErrorText } from '../../components/ErrorText';
 import { useDownloadBuild, useOpenBuildRun, useRevealBuild } from '../../ipc/queries';
 import { formatBytes, formatDateTime } from '../../lib/format';
 
-function BuildRow({ build, showClient }: { build: BuildRecord; showClient: boolean }) {
+function BuildRow({
+  build,
+  showClient,
+  latest,
+}: {
+  build: BuildRecord;
+  showClient: boolean;
+  /** The newest downloaded build: says what to do with it. */
+  latest: boolean;
+}) {
   const { t, i18n } = useTranslation();
   const open = useOpenBuildRun();
   const download = useDownloadBuild();
@@ -20,6 +29,12 @@ function BuildRow({ build, showClient }: { build: BuildRecord; showClient: boole
       <td>
         <BuildStatusBadge status={build.status} />
         {build.message && <div className="muted small">{build.message}</div>}
+        {build.download_path && (
+          <div className="small">
+            {t('builds.savedIn')} <code dir="ltr">{build.download_path}</code>
+            {latest && <div className="muted">{t('builds.next')}</div>}
+          </div>
+        )}
         <ErrorText error={open.error ?? download.error ?? reveal.error} />
       </td>
       <td>
@@ -90,6 +105,7 @@ export function BuildList({
 }) {
   const { t } = useTranslation();
   if (builds.length === 0) return <p className="muted">{t('builds.empty')}</p>;
+  const latestDownload = builds.find((b) => b.download_path !== null)?.build_id;
   return (
     <table className="table">
       <thead>
@@ -103,7 +119,12 @@ export function BuildList({
       </thead>
       <tbody>
         {builds.map((build) => (
-          <BuildRow key={build.build_id} build={build} showClient={showClient} />
+          <BuildRow
+            key={build.build_id}
+            build={build}
+            showClient={showClient}
+            latest={build.build_id === latestDownload}
+          />
         ))}
       </tbody>
     </table>

@@ -488,8 +488,16 @@ fn the_sample_catalogue_loads_for_every_business_type() {
             role: Role::Owner,
             device_id: w.device,
         };
-        let n = crate::sample_catalog::load(&conn, business, CurrencyCode::KWD, 0, &actor, now())
-            .expect("load");
+        let n = crate::sample_catalog::load(
+            &conn,
+            business,
+            CurrencyCode::KWD,
+            pos_core::config::Locale::En,
+            0,
+            &actor,
+            now(),
+        )
+        .expect("load");
         assert!(n >= 10);
         assert_eq!(
             catalog::count(&conn).expect("count"),

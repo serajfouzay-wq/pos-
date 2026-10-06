@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatBps, parseBps, slugify } from './format';
+import { formatBps, parseBps, parseRepo, slugify } from './format';
 
 describe('basis points', () => {
   it('parses percentages without floats', () => {
@@ -30,5 +30,27 @@ describe('slugify', () => {
     expect(slugify('  --Acme--  ')).toBe('acme');
     expect(slugify('مقهى')).toBe('');
     expect(slugify('a'.repeat(50)).length).toBe(40);
+  });
+});
+
+describe('parseRepo', () => {
+  it('reads owner/name and GitHub links', () => {
+    expect(parseRepo('serajfouzay-wq/pos-')).toEqual({ owner: 'serajfouzay-wq', name: 'pos-' });
+    expect(parseRepo('https://github.com/serajfouzay-wq/pos-')).toEqual({
+      owner: 'serajfouzay-wq',
+      name: 'pos-',
+    });
+    expect(parseRepo(' https://github.com/acme/pos.git ')).toEqual({ owner: 'acme', name: 'pos' });
+    expect(parseRepo('https://github.com/acme/pos/tree/main/apps')).toEqual({
+      owner: 'acme',
+      name: 'pos',
+    });
+    expect(parseRepo('git@github.com:acme/pos.git')).toEqual({ owner: 'acme', name: 'pos' });
+  });
+
+  it('leaves anything else alone', () => {
+    expect(parseRepo('acme')).toBeNull();
+    expect(parseRepo('')).toBeNull();
+    expect(parseRepo('https://example.com/a')).toBeNull();
   });
 });

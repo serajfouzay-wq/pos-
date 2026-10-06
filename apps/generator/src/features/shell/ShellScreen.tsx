@@ -9,10 +9,12 @@ import { BuildsScreen } from '../builds/BuildsScreen';
 import { ClientsScreen } from '../clients/ClientsScreen';
 import { LicensesScreen } from '../licenses/LicensesScreen';
 import { SettingsScreen } from '../settings/SettingsScreen';
+import { StartScreen } from '../start/StartScreen';
 
 import { useUiStore } from '../../stores/ui';
 
 const SCREENS: Record<Section, () => JSX.Element | null> = {
+  start: StartScreen,
   clients: ClientsScreen,
   builds: BuildsScreen,
   licenses: LicensesScreen,

@@ -12,6 +12,7 @@ export const en = {
   },
   businessType: { retail: 'Retail', cafe: 'Cafe', restaurant: 'Restaurant' },
   nav: {
+    start: 'Start here',
     clients: 'Clients',
     builds: 'Builds',
     licenses: 'Licenses',
@@ -22,6 +23,73 @@ export const en = {
     language: 'Language',
     notInTauri: 'This screen must run inside the POS Factory desktop app.',
     error: 'The generator core could not be reached: {{message}}',
+  },
+  start: {
+    intro:
+      'Set things up once, then make a POS system for every shop. Follow the steps in order; each one ticks itself off when it is done.',
+    how: {
+      title: 'How it works',
+      pc: {
+        title: 'This PC',
+        text: 'POS Factory: you describe each shop (name, logo, currency, business type).',
+      },
+      github: {
+        title: 'GitHub',
+        text: 'Builds that shop’s own installer for you (20–30 minutes).',
+      },
+      shop: {
+        title: 'The shop’s PC',
+        text: 'You install the POS there. It works without internet.',
+      },
+      license: {
+        title: 'Activation',
+        text: 'The POS shows a code; you sign a license for it here.',
+      },
+      updates:
+        'Later, new versions go to the shop on a USB stick (a .posupdate file), or online if the shop has a cloud.',
+    },
+    steps: {
+      title: 'Setup steps',
+      progress: '{{done}} of {{total}} done',
+      allDone: 'All set. Make a new shop any time from Clients.',
+      open: 'Open',
+      licenseKey: {
+        title: 'Create your license key',
+        text: 'It signs a license for each shop PC. Choose a passphrase you will not forget.',
+        action: 'Go to Licenses',
+      },
+      github: {
+        title: 'Connect GitHub',
+        text: 'GitHub builds the installers. Enter your repository and a token in Settings, then press Test connection.',
+        action: 'Go to Settings',
+      },
+      client: {
+        title: 'Add your first shop',
+        text: 'Name, business type (shop, café or restaurant) and currency. You can change the details later.',
+        action: 'New client',
+      },
+      build: {
+        title: 'Build its installers',
+        text: 'Open the shop → Builds → Build installers.',
+        action: 'Open Builds',
+        waiting: 'Building on GitHub… this takes 20–30 minutes. You can keep working.',
+      },
+      download: {
+        title: 'Download the installers',
+        text: 'When the build says Ready, press Download installers. They are saved in Downloads → POS Factory.',
+        action: 'Go to Builds',
+      },
+      activate: {
+        title: 'Install on the shop’s PC and activate it',
+        text: 'Run the setup on that PC. It shows an activation code: paste it in Licenses here, sign, and type the license back on the PC.',
+        action: 'Go to Licenses',
+      },
+      backup: {
+        title: 'Back up your keys',
+        text: 'Save the update key backup (Settings) and the license key file (Licenses) on a USB stick kept somewhere safe.',
+        action: 'Go to Settings',
+      },
+    },
   },
   clients: {
     intro: 'Every client gets its own branded, licensed POS installer.',
@@ -151,14 +219,14 @@ export const en = {
       title: 'Build the installers (Windows and Linux)',
       help: 'Commits clients/{{slug}}/ to {{repo}} in one commit, then runs the build workflow. It takes about 20–30 minutes.',
       offlineHelp:
-        'Downloading a build saves the installers and a signed update file (.posupdate) for each system. Copy the update file to a USB stick: on the till, Settings → Updates → Install from file. No internet needed.',
+        'Downloading a build saves the installers and a signed update file (.posupdate) for each system. Copy the update file to a USB stick: on the till, Printer → Update from a file (USB stick). No internet needed.',
       saveFirst: 'Save your changes first. Builds use the saved configuration.',
       configureFirst: 'Set up the build repository and GitHub token first:',
       keyFirst:
         'Create the license signing key first (Licenses). Its public key is embedded in the build.',
       publishing: 'Publishing…',
       running: 'A build is running…',
-      submit: 'Build installer',
+      submit: 'Build installers',
       notes: 'Release notes',
       notesHelp: 'Shown on the tills after they update. Optional.',
       publish: 'Also publish it online when downloaded',
@@ -173,6 +241,8 @@ export const en = {
       remove: 'Remove key',
     },
     published: 'Online',
+    savedIn: 'Saved in',
+    next: 'Next: a new shop PC → run the setup file there, then activate it in Licenses. A shop already running an older version → copy the .posupdate file to a USB stick; on the till: Printer → Update from a file.',
   },
   licenses: {
     key: {
@@ -228,10 +298,11 @@ export const en = {
     repo: {
       title: 'Build repository',
       help: 'The GitHub repository with this code base. Client folders are committed to it, and its build-client workflow builds the installers.',
-      owner: 'Owner',
+      owner: 'Owner (or paste the repository link)',
       name: 'Repository',
       branch: 'Branch',
       workflow: 'Workflow file',
+      advanced: 'Advanced (GitHub Enterprise only)',
       apiBase: 'API URL (GitHub Enterprise: https://HOST/api/v3)',
     },
     token: {
@@ -248,6 +319,7 @@ export const en = {
       push: 'The token can push',
       branch: 'Branch {{branch}} exists',
       workflow: 'Workflow {{file}} exists',
+      useDefault: 'Use “{{branch}}” (the repository’s branch)',
     },
     updates: {
       title: 'Update signing key',
@@ -258,6 +330,7 @@ export const en = {
       backupWarning:
         'Save a backup and keep it off this PC (a USB stick in a safe place). Without it, a new PC cannot make updates the tills accept; they would have to be reinstalled by hand.',
       export: 'Save a backup file',
+      backedUp: 'Backup saved {{date}}. Keep a copy off this PC.',
       exported: 'Saved to',
       restoreTitle: 'Restore from a backup (new PC)',
       restoreHelp:

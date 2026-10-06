@@ -54,7 +54,9 @@ export function LicenseGate({ children }: { children: ReactNode }) {
           </span>
           <h1>{t(`license.state.${status.state}.title`)}</h1>
           <p className="shell__muted">{t(`license.state.${status.state}.body`)}</p>
-          <p className="license__reason">{status.reason}</p>
+          {/* The technical detail (English, from the core) helps support; a
+              till that was simply never activated needs none. */}
+          {status.state !== 'missing' && <p className="license__reason">{status.reason}</p>}
           {canActivate && <ActivationPanel />}
           {status.state === 'storage_error' && (
             <section className="stack">

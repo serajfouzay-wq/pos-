@@ -2503,3 +2503,15 @@ td.actions {
 .pre-line {
   white-space: pre-line;
 }
+
+.update-file {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  text-align: start;
+  inline-size: 100%;
+}
+
+.update-file[aria-pressed='true'] {
+  border-color: var(--brand-primary);
+}

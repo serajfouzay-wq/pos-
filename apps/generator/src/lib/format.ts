@@ -70,3 +70,18 @@ export function fileToBase64(file: File): Promise<string> {
 export function linesFromText(text: string): string[] {
   return text.split('\n');
 }
+
+/**
+ * A repository typed or pasted as `owner/name` or a GitHub link
+ * (`https://github.com/owner/name`, `.git` and trailing paths allowed);
+ * `null` for anything else.
+ */
+export function parseRepo(input: string): { owner: string; name: string } | null {
+  const text = input
+    .trim()
+    .replace(/^git@github\.com:/i, '')
+    .replace(/^https?:\/\/(www\.)?github\.com\//i, '');
+  const match = /^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?(?:[/?#].*)?$/.exec(text);
+  if (!match?.[1] || !match[2]) return null;
+  return { owner: match[1], name: match[2] };
+}

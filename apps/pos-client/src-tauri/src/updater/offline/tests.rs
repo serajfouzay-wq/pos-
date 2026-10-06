@@ -173,3 +173,23 @@ fn an_appimage_is_swapped_whole() {
         "no leftovers"
     );
 }
+
+#[test]
+fn update_files_are_found_on_a_stick_newest_first() {
+    let stick = tempfile::TempDir::new().expect("tmp");
+    let nested = stick.path().join("POS Factory").join("acme").join("0.2.0");
+    std::fs::create_dir_all(&nested).expect("dirs");
+    std::fs::create_dir_all(stick.path().join(".Trash")).expect("dirs");
+    std::fs::write(stick.path().join("old.posupdate"), b"x").expect("old");
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    std::fs::write(nested.join("acme-0.2.0-windows.POSUPDATE"), b"x").expect("new");
+    std::fs::write(stick.path().join(".Trash").join("gone.posupdate"), b"x").expect("hidden");
+    std::fs::write(stick.path().join("notes.txt"), b"x").expect("other");
+    let found = find_files(&[stick.path().to_path_buf(), stick.path().join("missing")]);
+    let names: Vec<String> = found
+        .iter()
+        .map(|p| p.file_name().expect("name").to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(names, ["acme-0.2.0-windows.POSUPDATE", "old.posupdate"]);
+    assert!(search_roots(Some(stick.path().to_path_buf())).contains(&stick.path().to_path_buf()));
+}

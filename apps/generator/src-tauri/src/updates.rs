@@ -80,6 +80,8 @@ pub struct UpdateKeyStatus {
     pub key_id: Option<String>,
     /// What the tills are built with (base64 of the minisign public key).
     pub public_key: Option<String>,
+    /// When a backup file was last saved (recorded by the generator's store).
+    pub backed_up_at: Option<Timestamp>,
 }
 
 /// What a signature vouches for (its trusted comment).
@@ -167,6 +169,7 @@ impl UpdateKey {
                 configured: false,
                 key_id: None,
                 public_key: None,
+                backed_up_at: None,
             });
         };
         let pk = PublicKey::from_secret_key(&sk).map_err(key_error)?;
@@ -174,6 +177,7 @@ impl UpdateKey {
             configured: true,
             key_id: Some(key_id(&pk)),
             public_key: Some(tauri_public_key(&pk)?),
+            backed_up_at: None,
         })
     }
 
