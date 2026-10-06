@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-find-license-files"
+description = "Enables the find_license_files command without any pre-configured scope."
+commands.allow = ["find_license_files"]
+
+[[permission]]
+identifier = "deny-find-license-files"
+description = "Denies the find_license_files command without any pre-configured scope."
+commands.deny = ["find_license_files"]

@@ -78,6 +78,7 @@ pub fn run() {
             commands::license::lock_license_key,
             commands::license::decode_activation_request,
             commands::license::issue_license,
+            commands::license::save_license_file,
             commands::license::list_issued_licenses,
             commands::clients::list_clients,
             commands::clients::get_client,

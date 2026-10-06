@@ -266,6 +266,20 @@ export const POS_IPC = {
     LicenseStatusSchema,
     2,
   ),
+  /** Saves the activation code as a `.posactivate` file (USB stick); returns its path. */
+  save_activation_file: command(
+    z.object({ path: z.string().min(1).max(4096) }),
+    z.string(),
+    10,
+  ),
+  /** `.poslicense` files on USB sticks and in Downloads, newest first. */
+  find_license_files: command(NoArgs, z.array(z.string()), 10),
+  /** Activates with the license in a `.poslicense` file. */
+  activate_license_file: command(
+    z.object({ path: z.string().min(1).max(4096) }),
+    LicenseStatusSchema,
+    10,
+  ),
 
   // Sessions (pre-authentication, behind the license gate).
   session_status: command(NoArgs, SessionStatusSchema, 3),

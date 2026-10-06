@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-save-activation-file"
+description = "Enables the save_activation_file command without any pre-configured scope."
+commands.allow = ["save_activation_file"]
+
+[[permission]]
+identifier = "deny-save-activation-file"
+description = "Denies the save_activation_file command without any pre-configured scope."
+commands.deny = ["save_activation_file"]

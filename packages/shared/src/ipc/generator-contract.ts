@@ -86,6 +86,16 @@ export const GENERATOR_IPC = {
     2,
   ),
   issue_license: command(z.object({ request: IssueLicenseRequestSchema }), IssuedLicenseSchema, 2),
+  /** Saves a license as `<till>.poslicense` beside the client's installers; returns the path. */
+  save_license_file: command(
+    z.object({
+      client_id: UuidSchema,
+      device_name: z.string().min(1).max(200),
+      token: z.string().min(1).max(8192),
+    }),
+    z.string(),
+    10,
+  ),
   list_issued_licenses: command(ClientRef, z.array(IssuedLicenseRecordSchema), 5),
 
   // Clients

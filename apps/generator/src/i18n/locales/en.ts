@@ -242,7 +242,9 @@ export const en = {
     },
     published: 'Online',
     savedIn: 'Saved in',
-    next: 'Next: a new shop PC → run the setup file there, then activate it in Licenses. A shop already running an older version → copy the .posupdate file to a USB stick; on the till: Printer → Update from a file.',
+    next: 'Next: copy this folder to a USB stick. A new shop PC → run the setup file there (no internet needed), then activate it in Licenses. A shop already running an older version → on the till: Printer → Update from a file.',
+    offline:
+      'No internet: GitHub cannot be reached, so running builds are not updated. They catch up when you are online again. Shops, licenses and update files work without internet.',
   },
   licenses: {
     key: {
@@ -281,7 +283,12 @@ export const en = {
       maxDevices: 'Max tills (whole client)',
       expiry: 'Expires (optional)',
       submit: 'Sign license {{name}}',
-      result: 'Send this license back to the till and paste it into its activation screen.',
+      result:
+        'Bring this license to the till: save it as a file and copy it to the USB stick (the till finds it by itself), or copy the text and paste it there.',
+      openFile: 'Open activation file…',
+      openFileHelp: 'The .posactivate file the till saved on the USB stick.',
+      saveFile: 'Save license file',
+      savedFile: 'Saved — copy it to the USB stick:',
     },
     history: {
       title: 'Issued licenses',

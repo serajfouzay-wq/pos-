@@ -53,7 +53,7 @@
     ],
     "windows": {
       "webviewInstallMode": {
-        "type": "embedBootstrapper"
+        "type": "offlineInstaller"
       },
       "nsis": {
         "installMode": "currentUser",

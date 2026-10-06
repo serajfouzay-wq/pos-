@@ -154,6 +154,35 @@ export function useActivateLicense() {
   });
 }
 
+/** Saves the activation code to `path` (picked in the save dialog). */
+export function useSaveActivationFile() {
+  return useMutation({
+    mutationFn: (path: string) => ipc.call('save_activation_file', { path }),
+  });
+}
+
+/** License files the generator saved, found on USB sticks and in Downloads. */
+export function useFoundLicenseFiles() {
+  return useQuery({
+    queryKey: ['license_files'],
+    queryFn: () => ipc.call('find_license_files'),
+    enabled: inTauri,
+    staleTime: 0,
+    // A stick plugged in while the screen is open shows up by itself.
+    refetchInterval: 5_000,
+  });
+}
+
+export function useActivateLicenseFile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (path: string) => ipc.call('activate_license_file', { path }),
+    onSuccess: (status) => {
+      if (status.state === 'valid') queryClient.setQueryData(queryKeys.license, status);
+    },
+  });
+}
+
 // ── Session ────────────────────────────────────────────────────────────────
 
 export function useSessionStatus() {

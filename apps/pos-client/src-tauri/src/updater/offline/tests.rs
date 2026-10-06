@@ -185,7 +185,10 @@ fn update_files_are_found_on_a_stick_newest_first() {
     std::fs::write(nested.join("acme-0.2.0-windows.POSUPDATE"), b"x").expect("new");
     std::fs::write(stick.path().join(".Trash").join("gone.posupdate"), b"x").expect("hidden");
     std::fs::write(stick.path().join("notes.txt"), b"x").expect("other");
-    let found = find_files(&[stick.path().to_path_buf(), stick.path().join("missing")]);
+    let found = find_files(
+        &[stick.path().to_path_buf(), stick.path().join("missing")],
+        "posupdate",
+    );
     let names: Vec<String> = found
         .iter()
         .map(|p| p.file_name().expect("name").to_string_lossy().into_owned())

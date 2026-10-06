@@ -196,6 +196,23 @@ LICENSE_PUBLIC_KEY_PEM="$(cat keys/dev/license-dev.public.pem)" \
 DENO_NO_PACKAGE_JSON=1 deno run --no-config -A supabase/functions/dev-server.ts
 ```
 
+## Setting up a shop with no internet
+
+Only the generator's **builds** need the internet (they run on GitHub).
+Everything at the shop works offline:
+
+1. At home: make the shop in the generator, press **Build installers**, then
+   **Download**. Copy the folder `Downloads/POS Factory/<slug>/<version>/` to
+   a USB stick.
+2. At the shop: run the `-setup.exe` from the stick. It brings WebView2 with
+   it, so it installs on a PC that has never been online.
+3. Activation: on the till, **Save code to a USB stick…** (or copy the code).
+   In the generator, **Licenses → Open activation file…**, sign, then **Save
+   license file**: it lands in `Downloads/POS Factory/<slug>/licenses/`. Copy
+   it to the stick and plug the stick into the till: the activation screen
+   finds the `.poslicense` file and activates with one press. With the
+   generator on a laptop at the shop, it is all one visit.
+
 ## Updates
 
 The generator signs every update with its **update key**, which it makes with

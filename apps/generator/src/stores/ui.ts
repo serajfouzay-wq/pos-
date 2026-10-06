@@ -17,6 +17,9 @@ function savedLocale(): Locale {
 interface UiState {
   locale: Locale;
   setLocale: (locale: Locale) => void;
+  /** The last GitHub check failed for lack of internet. */
+  githubOffline: boolean;
+  setGithubOffline: (offline: boolean) => void;
 }
 
 const initial = savedLocale();
@@ -32,5 +35,9 @@ export const useUiStore = create<UiState>()((set) => ({
       // Storage unavailable: the choice lasts until the app closes.
     }
     set({ locale });
+  },
+  githubOffline: false,
+  setGithubOffline: (githubOffline) => {
+    set({ githubOffline });
   },
 }));

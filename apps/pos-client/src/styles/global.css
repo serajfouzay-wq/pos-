@@ -962,6 +962,20 @@ h2 {
   margin-block-start: 10px;
 }
 
+.activation .button + .button {
+  margin-inline-start: 8px;
+}
+
+.activation__files {
+  display: grid;
+  gap: 4px;
+  margin-block-end: 8px;
+}
+
+.activation__files .button + .button {
+  margin-inline-start: 0;
+}
+
 .banner {
   padding: 8px 16px;
   text-align: center;

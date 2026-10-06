@@ -8,6 +8,7 @@ const COMMANDS: &[&str] = &[
     "lock_license_key",
     "decode_activation_request",
     "issue_license",
+    "save_license_file",
     "list_issued_licenses",
     "list_clients",
     "get_client",

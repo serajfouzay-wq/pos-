@@ -73,7 +73,7 @@ pub async fn find_update_files(
         } else {
             "-windows."
         };
-        Ok(crate::updater::offline::find_files(&roots)
+        Ok(crate::updater::offline::find_files(&roots, "posupdate")
             .into_iter()
             .map(|p| p.display().to_string())
             .filter(|p| !p.to_lowercase().contains(other))

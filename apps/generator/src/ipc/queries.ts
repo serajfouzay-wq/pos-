@@ -1,4 +1,5 @@
 import {
+  IpcError,
   isActiveBuild,
   type AssetKind,
   type BuildSettingsInput,
@@ -9,6 +10,7 @@ import {
   type ReleaseOptions,
 } from '@pos/shared';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useUiStore } from '../stores/ui';
 import { inTauri, ipc } from './index';
 
 export const queryKeys = {
@@ -80,6 +82,14 @@ export function useIssueLicense() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.licenses(request.client_id) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.clients });
     },
+  });
+}
+
+/** Saves an issued license as a `.poslicense` file for the USB stick. */
+export function useSaveLicenseFile() {
+  return useMutation({
+    mutationFn: (args: { client_id: string; device_name: string; token: string }) =>
+      ipc.call('save_license_file', args),
   });
 }
 
@@ -198,7 +208,18 @@ export function useBuilds(clientId: string | null) {
     queryFn: async () => {
       const list = await ipc.call('list_builds', { client_id: clientId });
       if (!list.some((b) => isActiveBuild(b.status))) return list;
-      const refreshed = await ipc.call('refresh_builds');
+      let refreshed;
+      try {
+        refreshed = await ipc.call('refresh_builds');
+        useUiStore.getState().setGithubOffline(false);
+      } catch (error) {
+        // No internet: show what is saved and try again on the next poll.
+        if (error instanceof IpcError && error.code === 'offline') {
+          useUiStore.getState().setGithubOffline(true);
+          return list;
+        }
+        throw error;
+      }
       if (refreshed.some((b) => !isActiveBuild(b.status))) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.clients });
       }

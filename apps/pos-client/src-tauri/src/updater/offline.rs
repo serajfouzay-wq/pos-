@@ -199,8 +199,9 @@ pub fn search_roots(downloads: Option<PathBuf>) -> Vec<PathBuf> {
     roots
 }
 
-/// `.posupdate` files under `roots`, newest first.
-pub fn find_files(roots: &[PathBuf]) -> Vec<PathBuf> {
+/// Files ending in `.<extension>` under `roots`, newest first: `.posupdate`
+/// here, `.poslicense` for activation.
+pub fn find_files(roots: &[PathBuf], extension: &str) -> Vec<PathBuf> {
     let mut found: Vec<(std::time::SystemTime, PathBuf)> = Vec::new();
     for root in roots {
         let mut budget = SEARCH_BUDGET;
@@ -228,7 +229,7 @@ pub fn find_files(roots: &[PathBuf]) -> Vec<PathBuf> {
                 } else if kind.is_file()
                     && path
                         .extension()
-                        .is_some_and(|e| e.eq_ignore_ascii_case("posupdate"))
+                        .is_some_and(|e| e.eq_ignore_ascii_case(extension))
                 {
                     let modified = entry
                         .metadata()

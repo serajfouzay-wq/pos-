@@ -1,9 +1,10 @@
-import type { BuildRecord } from '@pos/shared';
+import { isActiveBuild, type BuildRecord } from '@pos/shared';
 import { useTranslation } from 'react-i18next';
 import { BuildStatusBadge } from '../../components/BuildStatusBadge';
 import { ErrorText } from '../../components/ErrorText';
 import { useDownloadBuild, useOpenBuildRun, useRevealBuild } from '../../ipc/queries';
 import { formatBytes, formatDateTime } from '../../lib/format';
+import { useUiStore } from '../../stores/ui';
 
 function BuildRow({
   build,
@@ -104,10 +105,18 @@ export function BuildList({
   showClient: boolean;
 }) {
   const { t } = useTranslation();
+  const offline = useUiStore((s) => s.githubOffline);
   if (builds.length === 0) return <p className="muted">{t('builds.empty')}</p>;
   const latestDownload = builds.find((b) => b.download_path !== null)?.build_id;
+  const active = builds.some((b) => isActiveBuild(b.status));
   return (
-    <table className="table">
+    <>
+      {offline && active && (
+        <p className="warning" role="status">
+          {t('builds.offline')}
+        </p>
+      )}
+      <table className="table">
       <thead>
         <tr>
           {showClient && <th>{t('builds.columns.client')}</th>}
@@ -127,6 +136,7 @@ export function BuildList({
           />
         ))}
       </tbody>
-    </table>
+      </table>
+    </>
   );
 }

@@ -12,6 +12,7 @@
     "allow-lock-license-key",
     "allow-decode-activation-request",
     "allow-issue-license",
+    "allow-save-license-file",
     "allow-list-issued-licenses",
     "allow-list-clients",
     "allow-get-client",

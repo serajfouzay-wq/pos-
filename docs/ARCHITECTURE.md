@@ -797,6 +797,33 @@ serial) or CUPS queues (`lp -o raw`). The online channel has a
 `linux-x86_64` target. The generator itself is released for both systems
 by `release-generator.yml`.
 
+### D69 — Nothing at the shop needs the internet
+
+The shops are set up from a USB stick and may never be online. Both
+installers carry the WebView2 offline installer (`offlineInstaller`, about
+130 MB more): the setup installs it only where it is missing, which is
+often the case on older Windows 10 PCs. The binaries link the C runtime
+statically (tauri-build), so no Visual C++ package is needed. Fonts are
+system fonts on screen, and Tajawal is built in for printing. The till's
+online paths (license check, updates, sync) run only when a cloud is
+configured, and the offline grace period is off unless the generator sets
+it. Only the generator's builds need the internet (GitHub Actions). The
+installer download gets three hours, not the two minutes an API call gets,
+so slow connections finish. While GitHub is out of reach, the build list
+shows what is saved and says so; nothing else in the generator is online.
+
+### D70 — Activation by files on the USB stick
+
+The activation code and the license are long strings. To spare copying
+them by hand, the till saves its code as `<till>.posactivate` (save
+dialog). The generator opens that file into the license form, then saves
+the signed license as `<till>.poslicense` under
+`<Downloads>/POS Factory/<slug>/licenses/`, next to the installers. The
+till's activation screen keeps looking for `.poslicense` files on USB
+sticks and in Downloads, with the update-file search (D65), and activates
+with the one pressed. It reads only `.poslicense` files no bigger than a
+token. Pasting text still works.
+
 ## Open items for upcoming phases
 
 - **Multi-currency tenders.** Foreign-currency tenders are rejected with a
@@ -821,9 +848,9 @@ by `release-generator.yml`.
   CSV/PDF export for the accountant is still to add.
 - **History detail.** The detail panel shows lines, options and totals but
   not the line notes sent to the kitchen.
-- **Delivering tokens.** The activation code and token are still
-  copy-pasted. The generator could push issued tokens to Supabase so tills
-  fetch them online, with copy-paste as the offline fallback.
+- **Delivering tokens online.** Tokens go by USB file or copy-paste
+  (D70). The generator could also push issued tokens to Supabase so tills
+  with internet fetch them.
 - **Code signing.** Installers are unsigned, so SmartScreen warns once.
   Authenticode signing could be done by the generator after download, like
   update signing, with the certificate kept on the operator's PC.

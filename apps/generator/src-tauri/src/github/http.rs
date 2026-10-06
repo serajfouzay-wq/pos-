@@ -15,6 +15,10 @@ use super::{Artifact, GitHub, GitHubError, RepoCheck, RepoTarget, WorkflowRun};
 
 const MAX_JSON_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_ARTIFACT_BYTES: u64 = 1024 * 1024 * 1024;
+/// API calls: small answers, so a stall means the network is gone.
+const API_TIMEOUT: Duration = Duration::from_secs(120);
+/// The installers: hundreds of MB, over connections that can be slow.
+const ARTIFACT_TIMEOUT: Duration = Duration::from_secs(3 * 60 * 60);
 const PUBLISH_ATTEMPTS: usize = 3;
 
 pub struct HttpGitHub {
@@ -36,7 +40,7 @@ struct Reply {
 impl HttpGitHub {
     pub fn new() -> Self {
         let agent: Agent = Agent::config_builder()
-            .timeout_global(Some(Duration::from_secs(120)))
+            .timeout_global(Some(API_TIMEOUT))
             .tls_config(
                 TlsConfig::builder()
                     .root_certs(RootCerts::PlatformVerifier)
@@ -67,11 +71,19 @@ impl HttpGitHub {
         body: Option<&Value>,
         limit: u64,
     ) -> Result<Reply, GitHubError> {
+        let timeout = if limit > MAX_JSON_BYTES {
+            ARTIFACT_TIMEOUT
+        } else {
+            API_TIMEOUT
+        };
         let auth = format!("Bearer {token}");
         let result = match (method, body) {
             ("GET", _) => self
                 .agent
                 .get(url)
+                .config()
+                .timeout_global(Some(timeout))
+                .build()
                 .header("Authorization", &auth)
                 .header("Accept", "application/vnd.github+json")
                 .header("X-GitHub-Api-Version", "2022-11-28")

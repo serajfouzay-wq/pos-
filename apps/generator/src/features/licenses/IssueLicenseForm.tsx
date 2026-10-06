@@ -1,8 +1,13 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CopyButton } from '../../components/CopyButton';
 import { ErrorText } from '../../components/ErrorText';
-import { useClients, useDecodeActivation, useIssueLicense } from '../../ipc/queries';
+import {
+  useClients,
+  useDecodeActivation,
+  useIssueLicense,
+  useSaveLicenseFile,
+} from '../../ipc/queries';
 
 interface Props {
   /** Fixed client (client page); otherwise the operator picks one. */
@@ -16,7 +21,10 @@ export function IssueLicenseForm({ clientId, enabled }: Props) {
   const clients = useClients();
   const decode = useDecodeActivation();
   const issue = useIssueLicense();
+  const saveFile = useSaveLicenseFile();
+  const fileInput = useRef<HTMLInputElement>(null);
   const [code, setCode] = useState('');
+  const [readError, setReadError] = useState<Error | null>(null);
   const [picked, setPicked] = useState('');
   const [maxDevices, setMaxDevices] = useState(1);
   const [expiry, setExpiry] = useState('');
@@ -39,6 +47,42 @@ export function IssueLicenseForm({ clientId, enabled }: Props) {
         });
       }}
     >
+      <div className="row">
+        <button
+          type="button"
+          className="button"
+          disabled={!enabled}
+          onClick={() => fileInput.current?.click()}
+        >
+          {t('licenses.issue.openFile')}
+        </button>
+        <span className="muted small">{t('licenses.issue.openFileHelp')}</span>
+        <input
+          ref={fileInput}
+          type="file"
+          accept=".posactivate"
+          hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (!file) return;
+            setReadError(null);
+            file
+              .text()
+              .then((text) => {
+                const read = text.trim();
+                setCode(read);
+                issue.reset();
+                saveFile.reset();
+                if (read) decode.mutate(read);
+              })
+              .catch((error: unknown) => {
+                setReadError(error instanceof Error ? error : new Error(String(error)));
+              });
+          }}
+        />
+      </div>
+      <ErrorText error={readError} />
       <label>
         {t('licenses.issue.code')}
         <textarea
@@ -49,6 +93,7 @@ export function IssueLicenseForm({ clientId, enabled }: Props) {
           onChange={(e) => {
             setCode(e.target.value);
             issue.reset();
+            saveFile.reset();
           }}
           onPaste={(e) => {
             // Show which till and client the code is for at once.
@@ -144,7 +189,29 @@ export function IssueLicenseForm({ clientId, enabled }: Props) {
         <div className="form">
           <p className="muted">{t('licenses.issue.result')}</p>
           <textarea className="mono" readOnly rows={5} value={issue.data.token} />
-          <CopyButton text={issue.data.token} />
+          <div className="row">
+            <button
+              type="button"
+              className="button button--primary"
+              disabled={saveFile.isPending}
+              onClick={() => {
+                saveFile.mutate({
+                  client_id: issue.data.claims.sub,
+                  device_name: decode.data?.device_name ?? 'till',
+                  token: issue.data.token,
+                });
+              }}
+            >
+              {t('licenses.issue.saveFile')}
+            </button>
+            <CopyButton text={issue.data.token} />
+          </div>
+          {saveFile.data && (
+            <p className="ok-text">
+              {t('licenses.issue.savedFile')} <code dir="ltr">{saveFile.data}</code>
+            </p>
+          )}
+          <ErrorText error={saveFile.error} />
         </div>
       )}
     </form>
