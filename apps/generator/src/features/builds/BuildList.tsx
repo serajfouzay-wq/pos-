@@ -117,25 +117,25 @@ export function BuildList({
         </p>
       )}
       <table className="table">
-      <thead>
-        <tr>
-          {showClient && <th>{t('builds.columns.client')}</th>}
-          <th>{t('builds.columns.status')}</th>
-          <th>{t('builds.columns.requested')}</th>
-          <th>{t('builds.columns.size')}</th>
-          <th />
-        </tr>
-      </thead>
-      <tbody>
-        {builds.map((build) => (
-          <BuildRow
-            key={build.build_id}
-            build={build}
-            showClient={showClient}
-            latest={build.build_id === latestDownload}
-          />
-        ))}
-      </tbody>
+        <thead>
+          <tr>
+            {showClient && <th>{t('builds.columns.client')}</th>}
+            <th>{t('builds.columns.status')}</th>
+            <th>{t('builds.columns.requested')}</th>
+            <th>{t('builds.columns.size')}</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {builds.map((build) => (
+            <BuildRow
+              key={build.build_id}
+              build={build}
+              showClient={showClient}
+              latest={build.build_id === latestDownload}
+            />
+          ))}
+        </tbody>
       </table>
     </>
   );
